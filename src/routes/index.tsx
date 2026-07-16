@@ -22,13 +22,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Konsolidierte Übersicht aller europäischen Tachographen-Karten (G1, G2.1, G2.2): Hersteller, Chip-Plattformen, Zertifikate und Beschaffungsdaten.",
+          "Consolidated overview of all European tachograph cards (G1, G2.1, G2.2): manufacturers, chip platforms, certificates and procurement data.",
       },
       { property: "og:title", content: "Tachograph Cards Info Tool" },
       {
         property: "og:description",
         content:
-          "Durchsuche europäische Tachographen-Karten nach Land, Generation und Hersteller.",
+          "Search European tachograph cards by country, generation and manufacturer.",
       },
     ],
   }),
