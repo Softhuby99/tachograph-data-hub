@@ -421,12 +421,12 @@ function DetailView({ card }: { card: TachoCard }) {
         </CardContent>
       </Card>
 
-      {/* Antwort Gruppe 2 */}
+      {/* Group 2 */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Building2 className="h-4 w-4 text-primary" />
-            Beschaffung
+            Procurement
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
