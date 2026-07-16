@@ -154,12 +154,12 @@ function TachographTool() {
           <CardContent className="grid gap-3 pt-6 md:grid-cols-2 lg:grid-cols-5">
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Freitextsuche
+                Full-text search
               </label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="z. B. Thales, e4-0030-00, ANSSI…"
+                  placeholder="e.g. Thales, e4-0030-00, ANSSI…"
                   className="pl-9"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -172,10 +172,10 @@ function TachographTool() {
               </label>
               <Select value={country} onValueChange={setCountry}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Länder</SelectItem>
+                  <SelectItem value="all">All countries</SelectItem>
                   {countries.map((c) => {
                     const flag =
                       (cards ?? []).find((x) => x.country === c)
@@ -195,10 +195,10 @@ function TachographTool() {
               </label>
               <Select value={generation} onValueChange={setGeneration}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Generationen</SelectItem>
+                  <SelectItem value="all">All generations</SelectItem>
                   {generations.map((g) => (
                     <SelectItem key={g} value={g}>
                       {g}
@@ -213,10 +213,10 @@ function TachographTool() {
               </label>
               <Select value={manufacturer} onValueChange={setManufacturer}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Hersteller</SelectItem>
+                  <SelectItem value="all">All manufacturers</SelectItem>
                   {manufacturers.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
