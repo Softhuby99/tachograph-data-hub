@@ -4,5 +4,9 @@
   "description": "Tachograph Card Info Tool - offline standalone",
   "main": "main.cjs",
   "author": "Lovable",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@electron/packager": "^20.0.3",
+    "electron": "^43.1.1"
+  }
 }
