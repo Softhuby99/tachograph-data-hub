@@ -14,7 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      tachograph_cards: {
+        Row: {
+          application: string
+          certificate_holder: string
+          certified_security_platform: string
+          chip_certificate: string
+          chip_platform_vendor: string
+          country: string
+          country_flag: string
+          created_at: string
+          current_manufacturer: string
+          current_manufacturer_normalized: string
+          data_reference_date: string
+          date_status: string
+          distinction_from_manufacturer: string
+          functional_certificate_lab: string
+          generation: string
+          id: string
+          issued_by_authority: string
+          jrc_certificate_source: string
+          jrc_interoperability_status: string
+          latest_tender: string
+          primary_source: string
+          procurement_scope: string
+          procurement_status: string
+          security_certificate: string
+          security_certificate_lab: string
+          tachograph_application_os: string
+          tender_source: string
+          type_approval_number: string
+          updated_at: string
+          verification_note: string
+          winner_contractor: string
+        }
+        Insert: {
+          application?: string
+          certificate_holder?: string
+          certified_security_platform?: string
+          chip_certificate?: string
+          chip_platform_vendor?: string
+          country: string
+          country_flag?: string
+          created_at?: string
+          current_manufacturer?: string
+          current_manufacturer_normalized?: string
+          data_reference_date?: string
+          date_status?: string
+          distinction_from_manufacturer?: string
+          functional_certificate_lab?: string
+          generation?: string
+          id?: string
+          issued_by_authority?: string
+          jrc_certificate_source?: string
+          jrc_interoperability_status?: string
+          latest_tender?: string
+          primary_source?: string
+          procurement_scope?: string
+          procurement_status?: string
+          security_certificate?: string
+          security_certificate_lab?: string
+          tachograph_application_os?: string
+          tender_source?: string
+          type_approval_number?: string
+          updated_at?: string
+          verification_note?: string
+          winner_contractor?: string
+        }
+        Update: {
+          application?: string
+          certificate_holder?: string
+          certified_security_platform?: string
+          chip_certificate?: string
+          chip_platform_vendor?: string
+          country?: string
+          country_flag?: string
+          created_at?: string
+          current_manufacturer?: string
+          current_manufacturer_normalized?: string
+          data_reference_date?: string
+          date_status?: string
+          distinction_from_manufacturer?: string
+          functional_certificate_lab?: string
+          generation?: string
+          id?: string
+          issued_by_authority?: string
+          jrc_certificate_source?: string
+          jrc_interoperability_status?: string
+          latest_tender?: string
+          primary_source?: string
+          procurement_scope?: string
+          procurement_status?: string
+          security_certificate?: string
+          security_certificate_lab?: string
+          tachograph_application_os?: string
+          tender_source?: string
+          type_approval_number?: string
+          updated_at?: string
+          verification_note?: string
+          winner_contractor?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
