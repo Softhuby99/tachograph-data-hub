@@ -6,10 +6,15 @@
 <style>
   * { box-sizing: border-box; }
   body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f172a; color:#e2e8f0; height:100vh; overflow:hidden; }
-  header { padding:16px 24px; background:#1e293b; border-bottom:1px solid #334155; }
+  header { padding:12px 24px; background:#1e293b; border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center; gap:16px; }
   header h1 { margin:0; font-size:20px; }
   header p { margin:4px 0 0; font-size:13px; color:#94a3b8; }
-  .layout { display:grid; grid-template-columns: 420px 1fr; height:calc(100vh - 66px); }
+  .tabs { display:flex; gap:4px; }
+  .tabs button { background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .tabs button.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; font-weight:600; }
+  .view { display:none; height:calc(100vh - 74px); }
+  .view.active { display:block; }
+  .layout { display:grid; grid-template-columns: 420px 1fr; height:100%; }
   .sidebar { border-right:1px solid #334155; display:flex; flex-direction:column; }
   .filters { padding:16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid #334155; }
   .filters input, .filters select { width:100%; padding:8px 10px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; font-size:13px; }
@@ -30,40 +35,90 @@
   .detail-header h2 { margin:0; font-size:22px; }
   .detail-header .gen { color:#38bdf8; font-size:14px; }
   .section { margin-bottom:24px; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:16px; }
-  .section h3 { margin:0 0 12px; font-size:14px; color:#38bdf8; text-transform:uppercase; letter-spacing:0.05em; }
-  .field { display:grid; grid-template-columns: 220px 1fr; gap:12px; padding:6px 0; font-size:13px; border-bottom:1px dotted #334155; }
+  .section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .section h3 { margin:0; font-size:14px; color:#38bdf8; text-transform:uppercase; letter-spacing:0.05em; }
+  .btn { background:#0369a1; color:#e0f2fe; border:0; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; }
+  .btn:hover { background:#0284c7; }
+  .btn.secondary { background:#334155; color:#e2e8f0; }
+  .btn.secondary:hover { background:#475569; }
+  .btn.danger { background:#7f1d1d; color:#fecaca; }
+  .field { display:grid; grid-template-columns: 220px 1fr; gap:12px; padding:6px 0; font-size:13px; border-bottom:1px dotted #334155; align-items:start; }
   .field:last-child { border:0; }
-  .field .k { color:#94a3b8; }
+  .field .k { color:#94a3b8; padding-top:4px; }
   .field .v { word-break:break-word; }
   .field a { color:#7dd3fc; text-decoration:none; word-break:break-all; }
   .field a:hover { text-decoration:underline; }
+  .field textarea { width:100%; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:4px; padding:6px 8px; font-family:inherit; font-size:13px; min-height:32px; resize:vertical; }
+  .edit-badge { font-size:10px; background:#f59e0b; color:#0f172a; padding:2px 6px; border-radius:3px; margin-left:8px; }
   .empty { padding:40px; text-align:center; color:#64748b; }
+  /* Analytics */
+  .analytics { padding:24px 32px; overflow-y:auto; height:100%; }
+  .analytics h2 { margin:0 0 20px; font-size:22px; }
+  .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:20px; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:20px; }
+  .card h3 { margin:0 0 16px; font-size:14px; color:#38bdf8; text-transform:uppercase; letter-spacing:0.05em; }
+  .bar-row { display:grid; grid-template-columns: 60px 1fr 80px; gap:12px; align-items:center; padding:6px 0; cursor:pointer; }
+  .bar-row:hover .bar-track { background:#475569; }
+  .bar-row .label { font-size:13px; font-weight:600; }
+  .bar-track { height:22px; background:#334155; border-radius:4px; overflow:hidden; position:relative; }
+  .bar-fill { height:100%; background:linear-gradient(90deg,#0284c7,#38bdf8); border-radius:4px; }
+  .bar-row .val { font-size:12px; color:#94a3b8; text-align:right; }
+  table.mfg { width:100%; border-collapse:collapse; font-size:13px; }
+  table.mfg th, table.mfg td { text-align:left; padding:8px 6px; border-bottom:1px solid #334155; }
+  table.mfg th { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; font-weight:normal; }
+  table.mfg td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .drill { margin-top:14px; padding:12px; background:#0f172a; border:1px solid #334155; border-radius:6px; }
+  .drill h4 { margin:0 0 8px; font-size:12px; color:#f59e0b; text-transform:uppercase; letter-spacing:0.05em; }
+  .drill ul { margin:0; padding-left:20px; font-size:13px; column-count:3; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Tachograph Card Info Tool</h1>
-  <p>Consolidated certification &amp; procurement data — offline standalone edition</p>
+  <div>
+    <h1>Tachograph Card Info Tool</h1>
+    <p>Consolidated certification &amp; procurement data for European Tacho Card</p>
+  </div>
+  <div class="tabs">
+    <button id="tabData" class="active" onclick="switchTab('data')">Data</button>
+    <button id="tabAnalytics" onclick="switchTab('analytics')">Market Analytics</button>
+  </div>
 </header>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="filters">
-      <label>Full-text search</label>
-      <input id="q" placeholder="Search all fields..." />
-      <label>Country</label>
-      <select id="fCountry"><option value="">All</option></select>
-      <label>Generation</label>
-      <select id="fGen"><option value="">All</option><option>G1</option><option>G2.1</option><option>G2.2</option></select>
-      <label>Current Manufacturer</label>
-      <select id="fMan"><option value="">All</option></select>
-    </div>
-    <div class="count" id="count"></div>
-    <div class="results" id="results"></div>
-  </aside>
-  <main class="detail" id="detail"><div class="empty">Select a country from the list</div></main>
+
+<div id="viewData" class="view active">
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="filters">
+        <label>Full-text search</label>
+        <input id="q" placeholder="Search all fields..." />
+        <label>Country</label>
+        <select id="fCountry"><option value="">All</option></select>
+        <label>Generation</label>
+        <select id="fGen"><option value="">All</option><option>G1</option><option>G2.1</option><option>G2.2</option></select>
+        <label>Current Manufacturer</label>
+        <select id="fMan"><option value="">All</option></select>
+      </div>
+      <div class="count" id="count"></div>
+      <div class="results" id="results"></div>
+    </aside>
+    <main class="detail" id="detail"><div class="empty">Select a country from the list</div></main>
+  </div>
 </div>
+
+<div id="viewAnalytics" class="view">
+  <div class="analytics" id="analyticsContent"></div>
+</div>
+
 <script>
 const DATA = __DATA__;
+
+// Load per-id edits from localStorage
+const OVERRIDES_KEY = 'tacho-overrides-v1';
+function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}'); } catch { return {}; } }
+function saveOverrides(o) { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); }
+let overrides = loadOverrides();
+
+function merged(r) { return { ...r, ...(overrides[r.id] || {}) }; }
+
 const $ = id => document.getElementById(id);
 const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
 
@@ -105,6 +160,7 @@ fill($('fCountry'), uniq(DATA.map(r=>r.country)));
 fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
 
 let selectedId = null;
+let editing = false;
 
 function flagUrl(iso, big) {
   if (!iso) return '';
@@ -114,13 +170,11 @@ function flagUrl(iso, big) {
 function filter() {
   const q = $('q').value.toLowerCase().trim();
   const c = $('fCountry').value, g = $('fGen').value, m = $('fMan').value;
-  return DATA.filter(r => {
+  return DATA.map(merged).filter(r => {
     if (c && r.country !== c) return false;
     if (g && r.generation !== g) return false;
     if (m && (r.current_manufacturer_normalized||r.current_manufacturer) !== m) return false;
-    if (q) {
-      return Object.values(r).some(v => v && String(v).toLowerCase().includes(q));
-    }
+    if (q) return Object.values(r).some(v => v && String(v).toLowerCase().includes(q));
     return true;
   });
 }
@@ -134,8 +188,9 @@ function renderList() {
     const div = document.createElement('div');
     div.className = 'row' + (r.id===selectedId?' active':'');
     const flag = r.iso ? `<img src="${flagUrl(r.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:24px">${r.country_flag||''}</span>`;
-    div.innerHTML = `${flag}<div class="meta"><div class="country">${r.country}</div><div class="sub">${r.current_manufacturer_normalized||r.current_manufacturer||'—'}</div></div><span class="badge">${r.generation}</span>`;
-    div.onclick = () => { selectedId = r.id; renderList(); renderDetail(r); };
+    const edited = overrides[r.id] ? '<span class="edit-badge">edited</span>' : '';
+    div.innerHTML = `${flag}<div class="meta"><div class="country">${r.country}${edited}</div><div class="sub">${r.current_manufacturer_normalized||r.current_manufacturer||'—'}</div></div><span class="badge">${r.generation}</span>`;
+    div.onclick = () => { selectedId = r.id; editing = false; renderList(); renderDetail(); };
     box.appendChild(div);
   });
 }
@@ -149,19 +204,158 @@ function linkify(val) {
   return s;
 }
 
-function renderDetail(r) {
+function renderDetail() {
+  if (!selectedId) { $('detail').innerHTML = '<div class="empty">Select a country from the list</div>'; return; }
+  const base = DATA.find(x => x.id === selectedId);
+  const r = merged(base);
   const flag = r.iso ? `<img src="${flagUrl(r.iso,true)}" onerror="this.style.display='none'"/>` : `<span style="font-size:48px">${r.country_flag||''}</span>`;
-  const sec = (title, list) => `<div class="section"><h3>${title}</h3>${
-    list.map(([k,label]) => `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`).join('')
-  }</div>`;
+
+  const renderField = ([k,label]) => {
+    if (editing) {
+      const val = (r[k] ?? '').toString().replace(/</g,'&lt;');
+      return `<div class="field"><div class="k">${label}</div><div class="v"><textarea data-k="${k}">${val}</textarea></div></div>`;
+    }
+    return `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`;
+  };
+
+  const sec1Head = editing
+    ? `<div><button class="btn" onclick="saveEdits()">Save</button> <button class="btn secondary" onclick="cancelEdits()">Cancel</button> ${overrides[r.id]?'<button class="btn danger" onclick="resetEdits()">Reset to original</button>':''}</div>`
+    : `<button class="btn" onclick="startEdit()">Edit</button>`;
+
   $('detail').innerHTML = `
-    <div class="detail-header">${flag}<div><h2>${r.country}</h2><div class="gen">Generation ${r.generation}</div></div></div>
-    ${sec('Card &amp; Certification (Group 1)', fields1)}
-    ${sec('Procurement (Group 2)', fields2)}
+    <div class="detail-header">${flag}<div><h2>${r.country}${overrides[r.id]?'<span class="edit-badge">edited</span>':''}</h2><div class="gen">Generation ${r.generation}</div></div></div>
+    <div class="section">
+      <div class="section-head"><h3>Card &amp; Certification (Group 1)</h3>${sec1Head}</div>
+      ${fields1.map(renderField).join('')}
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>Procurement (Group 2)</h3></div>
+      ${fields2.map(([k,label]) => `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`).join('')}
+    </div>
   `;
 }
 
+function startEdit() { editing = true; renderDetail(); }
+function cancelEdits() { editing = false; renderDetail(); }
+function saveEdits() {
+  const base = DATA.find(x => x.id === selectedId);
+  const patch = {};
+  document.querySelectorAll('textarea[data-k]').forEach(t => {
+    const k = t.dataset.k;
+    if (t.value !== (base[k] ?? '')) patch[k] = t.value;
+  });
+  if (Object.keys(patch).length) overrides[selectedId] = { ...(overrides[selectedId]||{}), ...patch };
+  else delete overrides[selectedId];
+  saveOverrides(overrides);
+  editing = false;
+  renderList(); renderDetail();
+}
+function resetEdits() {
+  if (!confirm('Reset all edits for this record?')) return;
+  delete overrides[selectedId];
+  saveOverrides(overrides);
+  renderList(); renderDetail();
+}
+
 ['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', renderList));
+
+// ---------- Analytics ----------
+function switchTab(t) {
+  $('tabData').classList.toggle('active', t==='data');
+  $('tabAnalytics').classList.toggle('active', t==='analytics');
+  $('viewData').classList.toggle('active', t==='data');
+  $('viewAnalytics').classList.toggle('active', t==='analytics');
+  if (t==='analytics') renderAnalytics();
+}
+
+let drillGen = null;
+let drillMan = null;
+
+function renderAnalytics() {
+  const rows = DATA.map(merged);
+  const total = rows.length;
+
+  // By generation
+  const genCounts = {};
+  rows.forEach(r => { genCounts[r.generation] = (genCounts[r.generation]||0)+1; });
+  const gens = ['G1','G2.1','G2.2'].filter(g => genCounts[g]);
+  const genMax = Math.max(...Object.values(genCounts));
+
+  // By manufacturer: type approvals (=records) & unique countries
+  const mfgMap = {};
+  rows.forEach(r => {
+    const m = r.current_manufacturer_normalized || r.current_manufacturer || '—';
+    if (!mfgMap[m]) mfgMap[m] = { approvals:0, countries:new Set() };
+    mfgMap[m].approvals++;
+    mfgMap[m].countries.add(r.country);
+  });
+  const mfgList = Object.entries(mfgMap).map(([name,v]) => ({
+    name, approvals: v.approvals, countries: v.countries.size, share: v.approvals/total*100
+  })).sort((a,b) => b.approvals - a.approvals || b.countries - a.countries);
+  const mfgMax = mfgList[0]?.approvals || 1;
+
+  // Drill lists
+  const genDrill = drillGen ? rows.filter(r => r.generation===drillGen).map(r => `${r.country_flag||''} ${r.country}`).sort() : null;
+  const manDrill = drillMan ? rows.filter(r => (r.current_manufacturer_normalized||r.current_manufacturer)===drillMan).map(r => `${r.country_flag||''} ${r.country} (${r.generation})`).sort() : null;
+
+  $('analyticsContent').innerHTML = `
+    <h2>Market Analytics — ${total} records</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Countries per Generation</h3>
+        ${gens.map(g => `
+          <div class="bar-row" onclick="drillGen='${g}'; renderAnalytics();">
+            <div class="label">${g}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${genCounts[g]/genMax*100}%"></div></div>
+            <div class="val">${genCounts[g]} (${(genCounts[g]/total*100).toFixed(1)}%)</div>
+          </div>
+        `).join('')}
+        ${drillGen ? `
+          <div class="drill">
+            <h4>Countries with ${drillGen} <button class="btn secondary" style="float:right;padding:2px 8px" onclick="drillGen=null; renderAnalytics();">Close</button></h4>
+            <ul>${genDrill.map(c => `<li>${c}</li>`).join('')}</ul>
+          </div>` : ''}
+      </div>
+
+      <div class="card">
+        <h3>Market Share by Generation</h3>
+        ${gens.map(g => {
+          const pct = genCounts[g]/total*100;
+          return `<div class="bar-row" onclick="drillGen='${g}'; renderAnalytics();">
+            <div class="label">${g}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
+            <div class="val">${pct.toFixed(1)}%</div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="card" style="grid-column:1/-1;">
+        <h3>Manufacturers — Type Approvals &amp; Countries</h3>
+        <table class="mfg">
+          <thead><tr><th>Manufacturer</th><th class="n">Type Approvals</th><th class="n">Countries</th><th class="n">Market Share</th><th></th></tr></thead>
+          <tbody>
+            ${mfgList.map(m => `
+              <tr>
+                <td>${m.name}</td>
+                <td class="n">${m.approvals}</td>
+                <td class="n">${m.countries}</td>
+                <td class="n">${m.share.toFixed(1)}%</td>
+                <td style="width:200px"><div class="bar-track" style="height:14px"><div class="bar-fill" style="width:${m.approvals/mfgMax*100}%; background:linear-gradient(90deg,#059669,#34d399)"></div></div></td>
+              </tr>
+              <tr><td colspan="5" style="padding:0"><button class="btn secondary" style="margin:0 0 6px; padding:2px 8px; font-size:11px" onclick="drillMan=${JSON.stringify(m.name).replace(/"/g,'&quot;')}; renderAnalytics();">Show countries</button></td></tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ${drillMan ? `
+          <div class="drill">
+            <h4>${drillMan} — countries <button class="btn secondary" style="float:right;padding:2px 8px" onclick="drillMan=null; renderAnalytics();">Close</button></h4>
+            <ul>${manDrill.map(c => `<li>${c}</li>`).join('')}</ul>
+          </div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 renderList();
 </script>
 </body>
