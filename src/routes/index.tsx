@@ -263,42 +263,52 @@ function TachographTool() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  {filtered.length} Ergebnis{filtered.length === 1 ? "" : "se"}
+                  {filtered.length} result{filtered.length === 1 ? "" : "s"}
                 </p>
               </div>
               <ScrollArea className="h-[70vh] rounded-lg border bg-card">
                 <div className="divide-y">
                   {filtered.map((c) => {
                     const active = selected?.id === c.id;
+                    const fUrl = flagUrl(c.country, 40);
                     return (
                       <button
                         key={c.id}
                         onClick={() => setSelectedId(c.id)}
                         className={
-                          "flex w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors hover:bg-accent " +
+                          "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent " +
                           (active ? "bg-accent" : "")
                         }
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="font-medium">
-                            <span className="mr-1 text-lg">
-                              {c.country_flag}
-                            </span>
-                            {c.country}
-                          </span>
-                          <Badge variant="secondary">{c.generation}</Badge>
+                        {fUrl ? (
+                          <img
+                            src={fUrl}
+                            alt={`${c.country} flag`}
+                            width={32}
+                            height={24}
+                            loading="lazy"
+                            className="h-6 w-8 shrink-0 rounded-sm border object-cover shadow-sm"
+                          />
+                        ) : (
+                          <span className="text-2xl leading-none">{c.country_flag}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate font-medium">{c.country}</span>
+                            <Badge variant="secondary">{c.generation}</Badge>
+                          </div>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {c.current_manufacturer_normalized ||
+                              c.current_manufacturer ||
+                              "—"}
+                          </p>
                         </div>
-                        <p className="line-clamp-1 text-xs text-muted-foreground">
-                          {c.current_manufacturer_normalized ||
-                            c.current_manufacturer ||
-                            "—"}
-                        </p>
                       </button>
                     );
                   })}
                   {filtered.length === 0 && (
                     <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      Keine Treffer.
+                      No matches.
                     </p>
                   )}
                 </div>
@@ -311,7 +321,7 @@ function TachographTool() {
                 <DetailView card={selected} />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Wähle links ein Land aus.
+                  Select a country on the left.
                 </p>
               )}
             </div>
@@ -319,9 +329,9 @@ function TachographTool() {
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Datenstand:{" "}
-          {cards?.[0]?.data_reference_date ?? "—"} · Quelle: JRC, ANSSI, RDW,
-          nationale Behörden &amp; öffentliche Beschaffungsdaten.
+          Data as of:{" "}
+          {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
+          national authorities &amp; public procurement records.
         </footer>
       </main>
     </div>
