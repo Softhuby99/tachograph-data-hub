@@ -140,8 +140,8 @@ function TachographTool() {
                 Tachograph Cards Info Tool
               </h1>
               <p className="text-sm text-muted-foreground">
-                Konsolidierte Zertifikats- &amp; Beschaffungsdaten für
-                europäische Fahrerkarten (G1 · G2.1 · G2.2)
+                Consolidated certification &amp; procurement data for
+                European driver cards (G1 · G2.1 · G2.2)
               </p>
             </div>
           </div>
