@@ -22,13 +22,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Konsolidierte Übersicht aller europäischen Tachographen-Karten (G1, G2.1, G2.2): Hersteller, Chip-Plattformen, Zertifikate und Beschaffungsdaten.",
+          "Consolidated overview of all European tachograph cards (G1, G2.1, G2.2): manufacturers, chip platforms, certificates and procurement data.",
       },
       { property: "og:title", content: "Tachograph Cards Info Tool" },
       {
         property: "og:description",
         content:
-          "Durchsuche europäische Tachographen-Karten nach Land, Generation und Hersteller.",
+          "Search European tachograph cards by country, generation and manufacturer.",
       },
     ],
   }),
@@ -83,6 +83,26 @@ function useCards() {
 
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
+}
+
+const COUNTRY_ISO: Record<string, string> = {
+  Albania: "al", Armenia: "am", Austria: "at", Azerbaijan: "az", Belarus: "by",
+  Belgium: "be", "Bosnia and Herzegovina": "ba", Bulgaria: "bg", Croatia: "hr",
+  Cyprus: "cy", Czechia: "cz", Denmark: "dk", Estonia: "ee", Finland: "fi",
+  France: "fr", Georgia: "ge", Germany: "de", Greece: "gr", Hungary: "hu",
+  Iceland: "is", Ireland: "ie", Israel: "il", Italy: "it", Kazakhstan: "kz",
+  Kyrgyzstan: "kg", Latvia: "lv", Liechtenstein: "li", Lithuania: "lt",
+  Luxembourg: "lu", Malta: "mt", Moldova: "md", Monaco: "mc", Montenegro: "me",
+  Netherlands: "nl", "North Macedonia": "mk", Norway: "no", Poland: "pl",
+  Portugal: "pt", Romania: "ro", Russia: "ru", "San Marino": "sm", Serbia: "rs",
+  Slovakia: "sk", Slovenia: "si", Spain: "es", Sweden: "se", Switzerland: "ch",
+  Tajikistan: "tj", Turkmenistan: "tm", "Türkiye": "tr", Ukraine: "ua",
+  "United Kingdom": "gb", Uzbekistan: "uz",
+};
+
+function flagUrl(country: string, size: 40 | 80 = 40): string | null {
+  const code = COUNTRY_ISO[country];
+  return code ? `https://flagcdn.com/w${size}/${code}.png` : null;
 }
 
 function TachographTool() {
@@ -140,8 +160,8 @@ function TachographTool() {
                 Tachograph Cards Info Tool
               </h1>
               <p className="text-sm text-muted-foreground">
-                Konsolidierte Zertifikats- &amp; Beschaffungsdaten für
-                europäische Fahrerkarten (G1 · G2.1 · G2.2)
+                Consolidated certification &amp; procurement data for
+                European driver cards (G1 · G2.1 · G2.2)
               </p>
             </div>
           </div>
@@ -154,12 +174,12 @@ function TachographTool() {
           <CardContent className="grid gap-3 pt-6 md:grid-cols-2 lg:grid-cols-5">
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Freitextsuche
+                Full-text search
               </label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="z. B. Thales, e4-0030-00, ANSSI…"
+                  placeholder="e.g. Thales, e4-0030-00, ANSSI…"
                   className="pl-9"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -172,10 +192,10 @@ function TachographTool() {
               </label>
               <Select value={country} onValueChange={setCountry}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Länder</SelectItem>
+                  <SelectItem value="all">All countries</SelectItem>
                   {countries.map((c) => {
                     const flag =
                       (cards ?? []).find((x) => x.country === c)
@@ -195,10 +215,10 @@ function TachographTool() {
               </label>
               <Select value={generation} onValueChange={setGeneration}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Generationen</SelectItem>
+                  <SelectItem value="all">All generations</SelectItem>
                   {generations.map((g) => (
                     <SelectItem key={g} value={g}>
                       {g}
@@ -213,10 +233,10 @@ function TachographTool() {
               </label>
               <Select value={manufacturer} onValueChange={setManufacturer}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Hersteller</SelectItem>
+                  <SelectItem value="all">All manufacturers</SelectItem>
                   {manufacturers.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
@@ -243,42 +263,52 @@ function TachographTool() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  {filtered.length} Ergebnis{filtered.length === 1 ? "" : "se"}
+                  {filtered.length} result{filtered.length === 1 ? "" : "s"}
                 </p>
               </div>
               <ScrollArea className="h-[70vh] rounded-lg border bg-card">
                 <div className="divide-y">
                   {filtered.map((c) => {
                     const active = selected?.id === c.id;
+                    const fUrl = flagUrl(c.country, 40);
                     return (
                       <button
                         key={c.id}
                         onClick={() => setSelectedId(c.id)}
                         className={
-                          "flex w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors hover:bg-accent " +
+                          "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent " +
                           (active ? "bg-accent" : "")
                         }
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="font-medium">
-                            <span className="mr-1 text-lg">
-                              {c.country_flag}
-                            </span>
-                            {c.country}
-                          </span>
-                          <Badge variant="secondary">{c.generation}</Badge>
+                        {fUrl ? (
+                          <img
+                            src={fUrl}
+                            alt={`${c.country} flag`}
+                            width={32}
+                            height={24}
+                            loading="lazy"
+                            className="h-6 w-8 shrink-0 rounded-sm border object-cover shadow-sm"
+                          />
+                        ) : (
+                          <span className="text-2xl leading-none">{c.country_flag}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate font-medium">{c.country}</span>
+                            <Badge variant="secondary">{c.generation}</Badge>
+                          </div>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {c.current_manufacturer_normalized ||
+                              c.current_manufacturer ||
+                              "—"}
+                          </p>
                         </div>
-                        <p className="line-clamp-1 text-xs text-muted-foreground">
-                          {c.current_manufacturer_normalized ||
-                            c.current_manufacturer ||
-                            "—"}
-                        </p>
                       </button>
                     );
                   })}
                   {filtered.length === 0 && (
                     <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      Keine Treffer.
+                      No matches.
                     </p>
                   )}
                 </div>
@@ -291,7 +321,7 @@ function TachographTool() {
                 <DetailView card={selected} />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Wähle links ein Land aus.
+                  Select a country on the left.
                 </p>
               )}
             </div>
@@ -299,9 +329,9 @@ function TachographTool() {
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Datenstand:{" "}
-          {cards?.[0]?.data_reference_date ?? "—"} · Quelle: JRC, ANSSI, RDW,
-          nationale Behörden &amp; öffentliche Beschaffungsdaten.
+          Data as of:{" "}
+          {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
+          national authorities &amp; public procurement records.
         </footer>
       </main>
     </div>
@@ -311,8 +341,18 @@ function TachographTool() {
 function DetailView({ card }: { card: TachoCard }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-4xl leading-none">{card.country_flag}</span>
+      <div className="flex flex-wrap items-center gap-4">
+        {flagUrl(card.country, 80) ? (
+          <img
+            src={flagUrl(card.country, 80)!}
+            alt={`${card.country} flag`}
+            width={64}
+            height={48}
+            className="h-12 w-16 shrink-0 rounded-md border object-cover shadow-sm"
+          />
+        ) : (
+          <span className="text-4xl leading-none">{card.country_flag}</span>
+        )}
         <div>
           <h2 className="text-2xl font-semibold">{card.country}</h2>
           <div className="mt-1 flex flex-wrap gap-2">
@@ -324,16 +364,16 @@ function DetailView({ card }: { card: TachoCard }) {
         </div>
       </div>
 
-      {/* Antwort Gruppe 1 */}
+      {/* Group 1 */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Karte &amp; Zertifizierung
+            Card &amp; Certification
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
-          <Field label="Country" value={`${card.country_flag} ${card.country}`} />
+          <Field label="Country" value={card.country} />
           <Field label="Generation" value={card.generation} />
           <Field label="Application" value={card.application} />
           <Field
@@ -381,12 +421,12 @@ function DetailView({ card }: { card: TachoCard }) {
         </CardContent>
       </Card>
 
-      {/* Antwort Gruppe 2 */}
+      {/* Group 2 */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Building2 className="h-4 w-4 text-primary" />
-            Beschaffung
+            Procurement
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
