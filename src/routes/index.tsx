@@ -35,7 +35,7 @@ export const Route = createFileRoute("/")({
   component: TachographTool,
 });
 
-type Card = {
+type TachoCard = {
   id: string;
   country: string;
   country_flag: string;
@@ -70,13 +70,13 @@ type Card = {
 function useCards() {
   return useQuery({
     queryKey: ["tachograph_cards"],
-    queryFn: async (): Promise<Card[]> => {
+    queryFn: async (): Promise<TachoCard[]> => {
       const { data, error } = await supabase
         .from("tachograph_cards")
         .select("*")
         .order("country");
       if (error) throw error;
-      return data as Card[];
+      return data as TachoCard[];
     },
   });
 }
@@ -308,7 +308,7 @@ function TachographTool() {
   );
 }
 
-function DetailView({ card }: { card: Card }) {
+function DetailView({ card }: { card: TachoCard }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
