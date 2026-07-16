@@ -341,8 +341,18 @@ function TachographTool() {
 function DetailView({ card }: { card: TachoCard }) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-4xl leading-none">{card.country_flag}</span>
+      <div className="flex flex-wrap items-center gap-4">
+        {flagUrl(card.country, 80) ? (
+          <img
+            src={flagUrl(card.country, 80)!}
+            alt={`${card.country} flag`}
+            width={64}
+            height={48}
+            className="h-12 w-16 shrink-0 rounded-md border object-cover shadow-sm"
+          />
+        ) : (
+          <span className="text-4xl leading-none">{card.country_flag}</span>
+        )}
         <div>
           <h2 className="text-2xl font-semibold">{card.country}</h2>
           <div className="mt-1 flex flex-wrap gap-2">
@@ -354,16 +364,16 @@ function DetailView({ card }: { card: TachoCard }) {
         </div>
       </div>
 
-      {/* Antwort Gruppe 1 */}
+      {/* Group 1 */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Karte &amp; Zertifizierung
+            Card &amp; Certification
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
-          <Field label="Country" value={`${card.country_flag} ${card.country}`} />
+          <Field label="Country" value={card.country} />
           <Field label="Generation" value={card.generation} />
           <Field label="Application" value={card.application} />
           <Field
