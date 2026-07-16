@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Tachograph Card Info Tool</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f172a; color:#e2e8f0; height:100vh; overflow:hidden; }
+  header { padding:16px 24px; background:#1e293b; border-bottom:1px solid #334155; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; font-size:13px; color:#94a3b8; }
+  .layout { display:grid; grid-template-columns: 420px 1fr; height:calc(100vh - 66px); }
+  .sidebar { border-right:1px solid #334155; display:flex; flex-direction:column; }
+  .filters { padding:16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid #334155; }
+  .filters input, .filters select { width:100%; padding:8px 10px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; font-size:13px; }
+  .filters label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:-4px; }
+  .count { font-size:12px; color:#94a3b8; padding:0 16px 8px; }
+  .results { overflow-y:auto; flex:1; }
+  .row { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; border-bottom:1px solid #1e293b; }
+  .row:hover { background:#1e293b; }
+  .row.active { background:#334155; }
+  .row img { width:32px; height:24px; border-radius:2px; object-fit:cover; }
+  .row .meta { flex:1; min-width:0; }
+  .row .country { font-weight:600; font-size:14px; }
+  .row .sub { font-size:11px; color:#94a3b8; }
+  .badge { font-size:10px; padding:2px 6px; border-radius:4px; background:#0369a1; color:#e0f2fe; }
+  .detail { padding:20px 28px; overflow-y:auto; }
+  .detail-header { display:flex; align-items:center; gap:16px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #334155; }
+  .detail-header img { width:64px; height:48px; border-radius:4px; object-fit:cover; }
+  .detail-header h2 { margin:0; font-size:22px; }
+  .detail-header .gen { color:#38bdf8; font-size:14px; }
+  .section { margin-bottom:24px; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:16px; }
+  .section h3 { margin:0 0 12px; font-size:14px; color:#38bdf8; text-transform:uppercase; letter-spacing:0.05em; }
+  .field { display:grid; grid-template-columns: 220px 1fr; gap:12px; padding:6px 0; font-size:13px; border-bottom:1px dotted #334155; }
+  .field:last-child { border:0; }
+  .field .k { color:#94a3b8; }
+  .field .v { word-break:break-word; }
+  .field a { color:#7dd3fc; text-decoration:none; word-break:break-all; }
+  .field a:hover { text-decoration:underline; }
+  .empty { padding:40px; text-align:center; color:#64748b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tachograph Card Info Tool</h1>
+  <p>Consolidated certification &amp; procurement data — offline standalone edition</p>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="filters">
+      <label>Full-text search</label>
+      <input id="q" placeholder="Search all fields..." />
+      <label>Country</label>
+      <select id="fCountry"><option value="">All</option></select>
+      <label>Generation</label>
+      <select id="fGen"><option value="">All</option><option>G1</option><option>G2.1</option><option>G2.2</option></select>
+      <label>Current Manufacturer</label>
+      <select id="fMan"><option value="">All</option></select>
+    </div>
+    <div class="count" id="count"></div>
+    <div class="results" id="results"></div>
+  </aside>
+  <main class="detail" id="detail"><div class="empty">Select a country from the list</div></main>
+</div>
+<script>
+const DATA = __DATA__;
+const $ = id => document.getElementById(id);
+const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+
+const fields1 = [
+  ['generation','Generation'],
+  ['application','Application'],
+  ['tachograph_application_os','Tachograph Application OS'],
+  ['type_approval_number','Type Approval Number'],
+  ['issued_by_authority','Issued by Authority'],
+  ['date_status','Date / Status'],
+  ['certificate_holder','Certificate Holder'],
+  ['certified_security_platform','Certified Security Platform'],
+  ['chip_certificate','Chip Certificate'],
+  ['chip_platform_vendor','Chip / Platform Vendor'],
+  ['security_certificate','Security Certificate'],
+  ['security_certificate_lab','Security Certificate Lab'],
+  ['functional_certificate_lab','Functional Certificate Lab'],
+  ['jrc_interoperability_status','JRC Interoperability Status'],
+  ['jrc_certificate_source','JRC Certificate Source'],
+  ['primary_source','Primary Source'],
+];
+const fields2 = [
+  ['current_manufacturer','Current Manufacturer'],
+  ['current_manufacturer_normalized','Manufacturer (normalized)'],
+  ['distinction_from_manufacturer','Distinction from Manufacturer'],
+  ['winner_contractor','Winner / Contractor'],
+  ['latest_tender','Latest Tender'],
+  ['tender_source','Tender Source'],
+  ['procurement_scope','Procurement Scope'],
+  ['procurement_status','Procurement Status'],
+  ['verification_note','Verification Note'],
+  ['data_reference_date','Data Reference Date'],
+];
+
+function fill(sel, values) {
+  values.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+}
+fill($('fCountry'), uniq(DATA.map(r=>r.country)));
+fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
+
+let selectedId = null;
+
+function flagUrl(iso, big) {
+  if (!iso) return '';
+  return `https://flagcdn.com/${big?'64x48':'32x24'}/${iso}.png`;
+}
+
+function filter() {
+  const q = $('q').value.toLowerCase().trim();
+  const c = $('fCountry').value, g = $('fGen').value, m = $('fMan').value;
+  return DATA.filter(r => {
+    if (c && r.country !== c) return false;
+    if (g && r.generation !== g) return false;
+    if (m && (r.current_manufacturer_normalized||r.current_manufacturer) !== m) return false;
+    if (q) {
+      return Object.values(r).some(v => v && String(v).toLowerCase().includes(q));
+    }
+    return true;
+  });
+}
+
+function renderList() {
+  const rows = filter();
+  $('count').textContent = `${rows.length} result${rows.length===1?'':'s'}`;
+  const box = $('results');
+  box.innerHTML = '';
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'row' + (r.id===selectedId?' active':'');
+    const flag = r.iso ? `<img src="${flagUrl(r.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:24px">${r.country_flag||''}</span>`;
+    div.innerHTML = `${flag}<div class="meta"><div class="country">${r.country}</div><div class="sub">${r.current_manufacturer_normalized||r.current_manufacturer||'—'}</div></div><span class="badge">${r.generation}</span>`;
+    div.onclick = () => { selectedId = r.id; renderList(); renderDetail(r); };
+    box.appendChild(div);
+  });
+}
+
+function linkify(val) {
+  if (!val) return '—';
+  const s = String(val);
+  if (s.includes('http')) {
+    return s.split('|').map(p=>p.trim()).map(p => p.startsWith('http') ? `<a href="${p}" target="_blank">${p}</a>` : p).join(' | ');
+  }
+  return s;
+}
+
+function renderDetail(r) {
+  const flag = r.iso ? `<img src="${flagUrl(r.iso,true)}" onerror="this.style.display='none'"/>` : `<span style="font-size:48px">${r.country_flag||''}</span>`;
+  const sec = (title, list) => `<div class="section"><h3>${title}</h3>${
+    list.map(([k,label]) => `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`).join('')
+  }</div>`;
+  $('detail').innerHTML = `
+    <div class="detail-header">${flag}<div><h2>${r.country}</h2><div class="gen">Generation ${r.generation}</div></div></div>
+    ${sec('Card &amp; Certification (Group 1)', fields1)}
+    ${sec('Procurement (Group 2)', fields2)}
+  `;
+}
+
+['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', renderList));
+renderList();
+</script>
+</body>
+</html>

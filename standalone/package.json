@@ -1,0 +1,8 @@
+{
+  "name": "tachograph-card-info-tool",
+  "version": "1.0.0",
+  "description": "Tachograph Card Info Tool - offline standalone",
+  "main": "main.cjs",
+  "author": "Lovable",
+  "license": "UNLICENSED"
+}
