@@ -85,6 +85,26 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
 
+const COUNTRY_ISO: Record<string, string> = {
+  Albania: "al", Armenia: "am", Austria: "at", Azerbaijan: "az", Belarus: "by",
+  Belgium: "be", "Bosnia and Herzegovina": "ba", Bulgaria: "bg", Croatia: "hr",
+  Cyprus: "cy", Czechia: "cz", Denmark: "dk", Estonia: "ee", Finland: "fi",
+  France: "fr", Georgia: "ge", Germany: "de", Greece: "gr", Hungary: "hu",
+  Iceland: "is", Ireland: "ie", Israel: "il", Italy: "it", Kazakhstan: "kz",
+  Kyrgyzstan: "kg", Latvia: "lv", Liechtenstein: "li", Lithuania: "lt",
+  Luxembourg: "lu", Malta: "mt", Moldova: "md", Monaco: "mc", Montenegro: "me",
+  Netherlands: "nl", "North Macedonia": "mk", Norway: "no", Poland: "pl",
+  Portugal: "pt", Romania: "ro", Russia: "ru", "San Marino": "sm", Serbia: "rs",
+  Slovakia: "sk", Slovenia: "si", Spain: "es", Sweden: "se", Switzerland: "ch",
+  Tajikistan: "tj", Turkmenistan: "tm", "Türkiye": "tr", Ukraine: "ua",
+  "United Kingdom": "gb", Uzbekistan: "uz",
+};
+
+function flagUrl(country: string, size: 40 | 80 = 40): string | null {
+  const code = COUNTRY_ISO[country];
+  return code ? `https://flagcdn.com/w${size}/${code}.png` : null;
+}
+
 function TachographTool() {
   const { data: cards, isLoading, error } = useCards();
   const [country, setCountry] = useState("all");
