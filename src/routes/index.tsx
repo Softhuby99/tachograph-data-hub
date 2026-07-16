@@ -13,8 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Search, ExternalLink, MapPin, ShieldCheck, Cpu, FileText, Building2 } from "lucide-react";
+import { Search, ExternalLink, ShieldCheck, FileText, Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
