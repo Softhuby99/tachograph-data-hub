@@ -161,7 +161,7 @@ function TachographTool() {
               </h1>
               <p className="text-sm text-muted-foreground">
                 Consolidated certification &amp; procurement data for
-                European driver cards (G1 · G2.1 · G2.2)
+                European Tacho Card (G1 · G2.1 · G2.2)
               </p>
             </div>
           </div>
