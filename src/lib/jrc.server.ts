@@ -1,14 +1,23 @@
-// Server-only helpers: fetch + parse the JRC "Card status" page and diff it
-// against the tachograph_cards table.
+// Server-only helpers: fetch + parse the JRC pages and diff them against the
+// tachograph_cards table.
 
-export const JRC_CARD_STATUS_URL =
-  "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html";
+import {
+  JRC_SOURCES,
+  cellText,
+  extractRows,
+  fetchPage,
+  generationFromAttrs,
+  parseKeyManagement,
+  parseOtherCertificates,
+  parsePublicKeyCertificates,
+  parseSecurityUpdates,
+  type SourceKey,
+} from "./jrc-sources.server";
 
-const ANNEX_COLOR_TO_GENERATION: Record<string, string> = {
-  "6f9ccc": "G1", // Annex 1B
-  "2323dc": "G2.1", // Annex 1C
-  "ff9aff": "G2.2", // Annex 1C v2
-};
+export { JRC_SOURCES } from "./jrc-sources.server";
+export type { SourceKey } from "./jrc-sources.server";
+
+export const JRC_CARD_STATUS_URL = JRC_SOURCES.card_status.url;
 
 export type JrcRow = {
   manufacturer: string;
@@ -20,66 +29,17 @@ export type JrcRow = {
   generation: string;
 };
 
-function decodeEntities(input: string): string {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-    uuml: "ü",
-    ouml: "ö",
-    auml: "ä",
-    Uuml: "Ü",
-    Ouml: "Ö",
-    Auml: "Ä",
-    szlig: "ß",
-    eacute: "é",
-    egrave: "è",
-    agrave: "à",
-    ccedil: "ç",
-    iacute: "í",
-    oacute: "ó",
-    uacute: "ú",
-    aacute: "á",
-    ntilde: "ñ",
-  };
-  return input
-    .replace(/&#(\d+);/g, (_m, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h: string) =>
-      String.fromCodePoint(parseInt(h, 16)),
-    )
-    .replace(/&([a-zA-Z]+);/g, (m, name: string) => named[name] ?? m);
-}
-
-function cellText(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export function parseJrcCardStatus(html: string): JrcRow[] {
   const rows: JrcRow[] = [];
-  const trRe = /<tr[^>]*>([\s\S]*?)(?=<tr[^>]*>|<\/table>)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = trRe.exec(html)) !== null) {
-    const rowHtml = m[1];
-    const cells = Array.from(
-      rowHtml.matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi),
-    ).map((c) => ({ attrs: c[1] ?? "", html: c[2] ?? "" }));
-    if (cells.length < 8) continue;
+  for (const row of extractRows(html)) {
+    if (row.values.length < 8) continue;
 
     // A row header block ("Manufacturer | Card | ...") can be glued to the
     // data row; always take the last 8 cells of the block.
-    const data = cells.slice(-8);
-    const values = data.map((c) => cellText(c.html));
+    const values = row.values.slice(-8);
+    const attrs = row.attrs.slice(-8);
     if (values[0].toLowerCase() === "manufacturer") continue;
-
-    const colorMatch = /bgcolor="#([0-9a-fA-F]{6})"/i.exec(data[7].attrs);
-    const generation = colorMatch
-      ? (ANNEX_COLOR_TO_GENERATION[colorMatch[1].toLowerCase()] ?? "")
-      : "";
 
     const typeApproval = values[5];
     if (!typeApproval && !values[2]) continue;
@@ -91,21 +51,32 @@ export function parseJrcCardStatus(html: string): JrcRow[] {
       date: values[3],
       eov: values[4],
       typeApproval,
-      generation,
+      generation: generationFromAttrs(attrs[7]),
     });
   }
   return rows;
 }
 
 export async function fetchJrcRows(): Promise<JrcRow[]> {
-  const res = await fetch(JRC_CARD_STATUS_URL, {
-    headers: { "user-agent": "TachographCardsInfoTool/1.0" },
-  });
-  if (!res.ok) {
-    throw new Error(`JRC request failed [${res.status}]: ${res.statusText}`);
-  }
-  return parseJrcCardStatus(await res.text());
+  return parseJrcCardStatus(await fetchPage(JRC_CARD_STATUS_URL));
 }
+
+/** "Other certificates" page, reduced to its Card rows. */
+export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
+  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
+  return rows
+    .filter((r) => r.component.toLowerCase() === "card")
+    .map((r) => ({
+      manufacturer: r.manufacturer,
+      cardName: r.name,
+      certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
+      date: r.date,
+      eov: "",
+      typeApproval: r.typeApproval,
+      generation: r.generation,
+    }));
+}
+
 
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
@@ -231,6 +202,10 @@ export type ProposalInsert = {
   jrc_eov: string;
   jrc_type_approval: string;
   source_url: string;
+  source_type: string;
+  source_label: string;
+  title: string;
+  payload: Record<string, string>;
   changes: { fields: FieldChange[] };
   status: string;
 };
@@ -239,8 +214,10 @@ export function buildProposals(
   rows: JrcRow[],
   cards: CardRow[],
   sinceMs = 0,
+  source: SourceKey = "card_status",
 ): ProposalInsert[] {
   const out: ProposalInsert[] = [];
+  const meta = JRC_SOURCES[source];
   for (const row of latestPerApproval(rows)) {
     // Only consider JRC entries published after the data reference date —
     // older rows are already reflected in the dataset.
@@ -249,7 +226,7 @@ export function buildProposals(
     const changes = card ? diffRow(row, card) : [];
     if (card && changes.length === 0) continue;
     out.push({
-      fingerprint: fingerprintFor(row, card?.id ?? null),
+      fingerprint: `${source}:${fingerprintFor(row, card?.id ?? null)}`,
       kind: card ? "changed" : "new",
       card_id: card?.id ?? null,
       country: card?.country ?? "",
@@ -260,7 +237,13 @@ export function buildProposals(
       jrc_date: row.date,
       jrc_eov: row.eov,
       jrc_type_approval: row.typeApproval,
-      source_url: JRC_CARD_STATUS_URL,
+      source_url: meta.url,
+      source_type: source,
+      source_label: meta.label,
+      title: card
+        ? `${card.country} · ${row.typeApproval}`
+        : `New entry · ${row.typeApproval}`,
+      payload: {},
       changes: { fields: changes },
       status: "pending",
     });
@@ -268,10 +251,108 @@ export function buildProposals(
   return out;
 }
 
+// --------------------------------------------------------- info-only sources
+// Pages without a direct card-field mapping (country key certificates, key
+// management status, mandatory VU security updates). They are diffed against a
+// stored snapshot so the first run only records a baseline instead of flooding
+// the inbox, and later runs surface genuinely new or changed entries.
+
+type SnapshotEntry = {
+  key: string;
+  fingerprint: string;
+  country: string;
+  title: string;
+  payload: Record<string, string>;
+};
+
+const MAX_INFO_PER_SOURCE = 40;
+
+async function collectInfoEntries(
+  source: Exclude<SourceKey, "card_status" | "other_certificates">,
+): Promise<{ entries: SnapshotEntry[]; rowsParsed: number }> {
+  const html = await fetchPage(JRC_SOURCES[source].url);
+
+  if (source === "public_key_certificates") {
+    const rows = parsePublicKeyCertificates(html);
+    return {
+      rowsParsed: rows.length,
+      entries: rows.map((r) => ({
+        key: `${r.country}|${r.equipment}|${r.certificate}`,
+        fingerprint: `${r.endOfValidity}|${r.sha1}`,
+        country: r.country,
+        title: `${r.country} · ${r.equipment} certificate ${r.certificate}`,
+        payload: {
+          Country: r.country,
+          Equipment: r.equipment,
+          Certificate: r.certificate,
+          "End of validity": r.endOfValidity,
+          "SHA-1": r.sha1,
+        },
+      })),
+    };
+  }
+
+  if (source === "key_management") {
+    const rows = parseKeyManagement(html);
+    return {
+      rowsParsed: rows.length,
+      entries: rows.map((r) => ({
+        key: r.country,
+        fingerprint: [r.stateAuthority, r.policyApproved, r.tcc, r.kmwc, r.vuc, r.kmvu, r.km].join("|"),
+        country: r.country,
+        title: `${r.country} · key management status updated`,
+        payload: {
+          Country: r.country,
+          "State authority identified": r.stateAuthority,
+          "Policy approved": r.policyApproved,
+          "TC.C": r.tcc,
+          KmWC: r.kmwc,
+          "VU.C": r.vuc,
+          KmVU: r.kmvu,
+          Km: r.km,
+        },
+      })),
+    };
+  }
+
+  const rows = parseSecurityUpdates(html);
+  return {
+    rowsParsed: rows.length,
+    entries: rows.map((r) => ({
+      key: `${r.brand}|${r.model}`,
+      fingerprint: [r.versions, r.typeApprovals, r.vulnerableVersions, r.updateVersions, r.versionsAfter, r.approvalsAfter, r.mandatoryFrom, r.deadline].join("|"),
+      country: "",
+      title: `${r.brand} · ${r.model} — mandatory security update`,
+      payload: {
+        Brand: r.brand,
+        Model: r.model,
+        "Version(s)": r.versions,
+        "Type approval(s)": r.typeApprovals,
+        "Vulnerable version(s)": r.vulnerableVersions,
+        "Update to version(s)": r.updateVersions,
+        "Version(s) after update": r.versionsAfter,
+        "Type approval(s) after update": r.approvalsAfter,
+        "Mandatory as from": r.mandatoryFrom,
+        Deadline: r.deadline,
+      },
+    })),
+  };
+}
+
+
+type SourceResult = {
+  source: SourceKey;
+  label: string;
+  rowsParsed: number;
+  candidates: number;
+  created: number;
+  baseline: boolean;
+  error?: string;
+};
+
 export async function runJrcCheck() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const rows = await fetchJrcRows();
   const { data: cards, error } = await supabaseAdmin
     .from("tachograph_cards")
     .select(
@@ -285,36 +366,172 @@ export async function runJrcCheck() {
     return Number.isNaN(t) ? acc : Math.max(acc, t);
   }, 0);
 
-  const candidates = buildProposals(rows, cardRows, sinceMs);
-
   const { data: existing, error: exErr } = await supabaseAdmin
     .from("jrc_update_proposals")
     .select("fingerprint");
   if (exErr) throw new Error(exErr.message);
   const known = new Set((existing ?? []).map((e) => e.fingerprint as string));
 
-  const fresh = candidates.filter((c) => !known.has(c.fingerprint));
-  if (fresh.length > 0) {
-    const { error: insErr } = await supabaseAdmin
-      .from("jrc_update_proposals")
-      .insert(fresh);
-    if (insErr) throw new Error(insErr.message);
+  const results: SourceResult[] = [];
+
+  const insertProposals = async (items: ProposalInsert[]) => {
+    const fresh = items.filter((c) => !known.has(c.fingerprint));
+    for (const f of fresh) known.add(f.fingerprint);
+    if (fresh.length > 0) {
+      const { error: insErr } = await supabaseAdmin
+        .from("jrc_update_proposals")
+        .insert(fresh as never);
+      if (insErr) throw new Error(insErr.message);
+    }
+    return fresh.length;
+  };
+
+  // 1 + 2: card-mapped sources.
+  for (const source of ["card_status", "other_certificates"] as const) {
+    const meta = JRC_SOURCES[source];
+    try {
+      const rows =
+        source === "card_status"
+          ? await fetchJrcRows()
+          : await fetchOtherCertificateCardRows();
+      const candidates = buildProposals(rows, cardRows, sinceMs, source);
+      const created = await insertProposals(candidates);
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: rows.length,
+        candidates: candidates.length,
+        created,
+        baseline: false,
+      });
+    } catch (e) {
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: 0,
+        candidates: 0,
+        created: 0,
+        baseline: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
-  await supabaseAdmin.from("jrc_check_runs").insert({
-    source_url: JRC_CARD_STATUS_URL,
-    rows_parsed: rows.length,
-    proposals_created: fresh.length,
-    status: "ok",
-    message: `${rows.length} JRC rows scanned, ${candidates.length} newer than the dataset, ${fresh.length} new proposal(s)`,
-  });
+  // 3-5: informational sources, diffed against the stored snapshot.
+  for (const source of [
+    "public_key_certificates",
+    "key_management",
+    "security_updates",
+  ] as const) {
+    const meta = JRC_SOURCES[source];
+    try {
+      const { entries: rawEntries, rowsParsed } = await collectInfoEntries(source);
+      // A page can list the same key twice (e.g. re-issued certificates);
+      // upsert rejects duplicate keys inside one batch, so keep the last one.
+      const entries = [...new Map(rawEntries.map((e) => [e.key, e])).values()];
 
-  return {
-    rowsParsed: rows.length,
-    candidates: candidates.length,
-    created: fresh.length,
-  };
+
+      const { data: snapRows, error: snapErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .select("entry_key,fingerprint")
+        .eq("source_type", source);
+      if (snapErr) throw new Error(snapErr.message);
+      const snapshot = new Map(
+        (snapRows ?? []).map((s) => [s.entry_key as string, s.fingerprint as string]),
+      );
+      const baseline = snapshot.size === 0;
+
+      let created = 0;
+      let candidates = 0;
+      if (!baseline) {
+        const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
+        candidates = changed.length;
+        const items: ProposalInsert[] = changed
+          .slice(0, MAX_INFO_PER_SOURCE)
+          .map((e) => ({
+            fingerprint: `${source}:${e.key}:${e.fingerprint}`,
+            kind: "info",
+            card_id: null,
+            country: e.country,
+            generation: "",
+            jrc_manufacturer: "",
+            jrc_card_name: "",
+            jrc_certificate: "",
+            jrc_date: "",
+            jrc_eov: "",
+            jrc_type_approval: "",
+            source_url: meta.url,
+            source_type: source,
+            source_label: meta.label,
+            title: e.title,
+            payload: e.payload,
+            changes: { fields: [] },
+            status: "pending",
+          }));
+        created = await insertProposals(items);
+      }
+
+      const { error: upErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .upsert(
+          entries.map((e) => ({
+            source_type: source,
+            entry_key: e.key,
+            fingerprint: e.fingerprint,
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: "source_type,entry_key" },
+        );
+      if (upErr) throw new Error(upErr.message);
+
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed,
+        candidates,
+        created,
+        baseline,
+      });
+    } catch (e) {
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: 0,
+        candidates: 0,
+        created: 0,
+        baseline: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  const totals = results.reduce(
+    (acc, r) => ({
+      rowsParsed: acc.rowsParsed + r.rowsParsed,
+      candidates: acc.candidates + r.candidates,
+      created: acc.created + r.created,
+    }),
+    { rowsParsed: 0, candidates: 0, created: 0 },
+  );
+
+  await supabaseAdmin.from("jrc_check_runs").insert(
+    results.map((r) => ({
+      source_type: r.source,
+      source_url: JRC_SOURCES[r.source].url,
+      rows_parsed: r.rowsParsed,
+      proposals_created: r.created,
+      status: r.error ? "error" : "ok",
+      message: r.error
+        ? r.error
+        : r.baseline
+          ? `Baseline recorded from ${r.rowsParsed} row(s) — future changes will be reported`
+          : `${r.rowsParsed} row(s) scanned, ${r.candidates} relevant, ${r.created} new proposal(s)`,
+    })) as never,
+  );
+
+  return { ...totals, sources: results };
 }
+
 
 export async function approveProposal(id: string, country: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -330,7 +547,41 @@ export async function approveProposal(id: string, country: string) {
 
   const changes = (proposal.changes as { fields?: FieldChange[] } | null)?.fields ?? [];
 
-  if (proposal.card_id) {
+  if (proposal.kind === "info") {
+    // Informational sources have no direct card column. Applying them records
+    // the finding on the verification note of the matching country's cards.
+    const payload = (proposal.payload ?? {}) as Record<string, string>;
+    const note = [
+      `[${proposal.source_label}] ${proposal.title}`,
+      Object.entries(payload)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("; "),
+    ]
+      .filter(Boolean)
+      .join(" — ");
+
+    const target = (proposal.country || country).trim();
+    if (target) {
+      const { data: affected, error: selErr } = await supabaseAdmin
+        .from("tachograph_cards")
+        .select("id,verification_note")
+        .eq("country", target);
+      if (selErr) throw new Error(selErr.message);
+      for (const card of affected ?? []) {
+        const existingNote = (card.verification_note ?? "").trim();
+        if (existingNote.includes(note)) continue;
+        const { error: upErr } = await supabaseAdmin
+          .from("tachograph_cards")
+          .update({
+            verification_note: existingNote ? `${existingNote}\n${note}` : note,
+          } as never)
+          .eq("id", card.id);
+        if (upErr) throw new Error(upErr.message);
+      }
+    }
+  } else if (proposal.card_id) {
+
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
     if (Object.keys(patch).length > 0) {

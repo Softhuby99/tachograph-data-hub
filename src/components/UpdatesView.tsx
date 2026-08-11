@@ -16,6 +16,22 @@ import { toast } from "sonner";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
 
+const SOURCE_LABELS: Record<string, string> = {
+  card_status: "Card status",
+  other_certificates: "Other certificates",
+  public_key_certificates: "Public key certificates",
+  key_management: "Key management",
+  security_updates: "Security updates",
+};
+
+const SOURCE_URLS: Record<string, string> = {
+  card_status: "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
+  other_certificates: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
+  public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates.php.html",
+  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management.php.html",
+  security_updates: "https://dtc.jrc.ec.europa.eu/dtc_security_updates.php.html",
+};
+
 type Proposal = {
   id: string;
   kind: string;
@@ -29,6 +45,10 @@ type Proposal = {
   jrc_eov: string;
   jrc_type_approval: string;
   source_url: string;
+  source_type: string | null;
+  source_label: string | null;
+  title: string | null;
+  payload: Record<string, string> | null;
   changes: { fields?: FieldChange[] } | null;
   status: string;
   created_at: string;
@@ -37,15 +57,19 @@ type Proposal = {
 type CheckRun = {
   id: string;
   created_at: string;
+  source_type: string | null;
+  source_url: string;
   rows_parsed: number;
   proposals_created: number;
   status: string;
   message: string;
 };
 
+
 export function UpdatesView() {
   const qc = useQueryClient();
   const [showHandled, setShowHandled] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
 
   const proposals = useQuery({
@@ -60,18 +84,19 @@ export function UpdatesView() {
     },
   });
 
-  const lastRun = useQuery({
+  const lastRuns = useQuery({
     queryKey: ["jrc_last_run"],
-    queryFn: async (): Promise<CheckRun | null> => {
+    queryFn: async (): Promise<CheckRun[]> => {
       const { data, error } = await supabase
         .from("jrc_check_runs")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(20);
       if (error) throw error;
-      return (data?.[0] as unknown as CheckRun) ?? null;
+      return (data ?? []) as unknown as CheckRun[];
     },
   });
+
 
   const check = useServerFn(checkJrcUpdates);
   const approve = useServerFn(approveJrcProposal);
@@ -114,9 +139,19 @@ export function UpdatesView() {
   });
 
   const all = proposals.data ?? [];
-  const pending = all.filter((p) => p.status === "pending");
-  const handled = all.filter((p) => p.status !== "pending");
+  const bySource = (p: Proposal) =>
+    sourceFilter === "all" || (p.source_type ?? "card_status") === sourceFilter;
+  const pending = all.filter((p) => p.status === "pending" && bySource(p));
+  const handled = all.filter((p) => p.status !== "pending" && bySource(p));
   const list = showHandled ? handled : pending;
+
+  // One row per source: the newest run recorded for it.
+  const latestBySource = new Map<string, CheckRun>();
+  for (const run of lastRuns.data ?? []) {
+    const key = run.source_type ?? "card_status";
+    if (!latestBySource.has(key)) latestBySource.set(key, run);
+  }
+  const lastCheckAt = (lastRuns.data ?? [])[0]?.created_at;
 
   return (
     <div className="space-y-6">
@@ -124,8 +159,9 @@ export function UpdatesView() {
         <div>
           <h2 className="text-xl font-semibold">JRC Updates</h2>
           <p className="text-sm text-muted-foreground">
-            Checks the JRC card status page for new or changed certificate
-            entries. Nothing is written to the database until you approve it.
+            Monitors all JRC digital tachograph sources — card status, other
+            certificates, public key certificates, key management and security
+            updates. Nothing is written to the database until you approve it.
           </p>
         </div>
         <Button
@@ -139,25 +175,41 @@ export function UpdatesView() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <span>
-          Last check:{" "}
-          {lastRun.data
-            ? new Date(lastRun.data.created_at).toLocaleString()
-            : "never"}
-          {lastRun.data ? ` · ${lastRun.data.message}` : ""}
-        </span>
-        <a
-          className="inline-flex items-center gap-1 text-primary hover:underline"
-          href="https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Source <ExternalLink className="h-3 w-3" />
-        </a>
+      <div className="rounded-md border">
+        <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
+          <span>Monitored sources</span>
+          <span className="text-muted-foreground">
+            Last check:{" "}
+            {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
+          </span>
+        </div>
+        {Object.keys(SOURCE_LABELS).map((key) => {
+          const run = latestBySource.get(key);
+          return (
+            <div
+              key={key}
+              className="grid gap-1 border-b px-3 py-2 text-xs last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center"
+            >
+              <span className="font-medium">{SOURCE_LABELS[key]}</span>
+              <span className="text-muted-foreground">
+                {run
+                  ? run.message
+                  : "not checked yet"}
+              </span>
+              <a
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+                href={SOURCE_URLS[key]}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           variant={showHandled ? "outline" : "default"}
@@ -172,7 +224,26 @@ export function UpdatesView() {
         >
           Handled ({handled.length})
         </Button>
+        <span className="mx-1 h-8 w-px bg-border" />
+        <Button
+          size="sm"
+          variant={sourceFilter === "all" ? "secondary" : "ghost"}
+          onClick={() => setSourceFilter("all")}
+        >
+          All sources
+        </Button>
+        {Object.entries(SOURCE_LABELS).map(([key, label]) => (
+          <Button
+            key={key}
+            size="sm"
+            variant={sourceFilter === key ? "secondary" : "ghost"}
+            onClick={() => setSourceFilter(key)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
+
 
       {proposals.isLoading && (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -188,19 +259,25 @@ export function UpdatesView() {
       <div className="space-y-4">
         {list.map((p) => {
           const fields = p.changes?.fields ?? [];
+          const isInfo = p.kind === "info";
+          const payload = p.payload ?? {};
           return (
             <Card key={p.id}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base">
-                    {p.kind === "new"
-                      ? `New JRC entry · ${p.jrc_type_approval || "—"}`
-                      : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`}
+                    {p.title ||
+                      (p.kind === "new"
+                        ? `New JRC entry · ${p.jrc_type_approval || "—"}`
+                        : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`)}
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
+                    </Badge>
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
-                      {p.kind === "new" ? "New entry" : "Changed"}
+                      {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
                     </Badge>
                     {p.status !== "pending" && (
                       <Badge variant="secondary">{p.status}</Badge>
@@ -209,12 +286,21 @@ export function UpdatesView() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-1 text-sm sm:grid-cols-2">
-                  <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
-                  <Detail label="Card (JRC)" value={p.jrc_card_name} />
-                  <Detail label="Certificate" value={p.jrc_certificate} />
-                  <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
-                </div>
+                {isInfo ? (
+                  <div className="grid gap-1 text-sm sm:grid-cols-2">
+                    {Object.entries(payload).map(([k, v]) => (
+                      <Detail key={k} label={k} value={v} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-1 text-sm sm:grid-cols-2">
+                    <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
+                    <Detail label="Card (JRC)" value={p.jrc_card_name} />
+                    <Detail label="Certificate" value={p.jrc_certificate} />
+                    <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
+                  </div>
+                )}
+
 
                 {fields.length > 0 && (
                   <div className="rounded-md border">
@@ -240,10 +326,12 @@ export function UpdatesView() {
 
                 {p.status === "pending" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {p.kind === "new" && (
+                    {(p.kind === "new" || (isInfo && !p.country)) && (
                       <Input
                         className="h-9 w-56"
-                        placeholder="Country for new entry"
+                        placeholder={
+                          isInfo ? "Country to note this on" : "Country for new entry"
+                        }
                         value={newCountry[p.id] ?? ""}
                         onChange={(e) =>
                           setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))
@@ -260,8 +348,10 @@ export function UpdatesView() {
                       }
                       disabled={approveMutation.isPending}
                     >
-                      <Check className="mr-2 h-4 w-4" /> Approve &amp; apply
+                      <Check className="mr-2 h-4 w-4" />{" "}
+                      {isInfo ? "Acknowledge & note" : "Approve & apply"}
                     </Button>
+
                     <Button
                       size="sm"
                       variant="outline"
