@@ -69,6 +69,7 @@ type CheckRun = {
 export function UpdatesView() {
   const qc = useQueryClient();
   const [showHandled, setShowHandled] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
 
   const proposals = useQuery({
@@ -83,18 +84,19 @@ export function UpdatesView() {
     },
   });
 
-  const lastRun = useQuery({
+  const lastRuns = useQuery({
     queryKey: ["jrc_last_run"],
-    queryFn: async (): Promise<CheckRun | null> => {
+    queryFn: async (): Promise<CheckRun[]> => {
       const { data, error } = await supabase
         .from("jrc_check_runs")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(20);
       if (error) throw error;
-      return (data?.[0] as unknown as CheckRun) ?? null;
+      return (data ?? []) as unknown as CheckRun[];
     },
   });
+
 
   const check = useServerFn(checkJrcUpdates);
   const approve = useServerFn(approveJrcProposal);
