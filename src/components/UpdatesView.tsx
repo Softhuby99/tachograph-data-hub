@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   checkUpdates,
+  checkUpdateSource,
   approveJrcProposal,
   rejectJrcProposal,
 } from "@/lib/jrc.functions";
+
 import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
