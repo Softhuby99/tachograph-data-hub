@@ -151,9 +151,16 @@ export function UpdatesView() {
     } finally {
       setActiveSource(null);
       setRunning(false);
+      // Only sources with new findings stay highlighted; the rest go back to normal.
+      setSourceState((s) =>
+        Object.fromEntries(
+          Object.entries(s).filter(([, v]) => v === "updated" || v === "error"),
+        ),
+      );
       invalidate();
     }
   };
+
   void check;
 
 
