@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, ExternalLink, ShieldCheck, FileText, Building2, BarChart3, Pencil } from "lucide-react";
+import { UpdatesView } from "@/components/UpdatesView";
+import { Search, ExternalLink, ShieldCheck, FileText, Building2, BarChart3, Pencil, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -140,7 +141,7 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
-  const [tab, setTab] = useState<"data" | "analytics">("data");
+  const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
   const [overrides, setOverrides] = useState<Overrides>({});
 
   useEffect(() => {
@@ -209,6 +210,13 @@ function TachographTool() {
             >
               <BarChart3 className="mr-2 h-4 w-4" /> Market Analytics
             </Button>
+            <Button
+              variant={tab === "updates" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("updates")}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> JRC Updates
+            </Button>
           </div>
         </div>
       </header>
@@ -232,6 +240,7 @@ function TachographTool() {
         {!isLoading && !error && tab === "analytics" && (
           <AnalyticsView cards={cards} />
         )}
+        {tab === "updates" && <UpdatesView />}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
           Data as of:{" "}
