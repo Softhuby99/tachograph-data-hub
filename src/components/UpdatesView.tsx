@@ -103,8 +103,15 @@ export function UpdatesView() {
 
 
   const check = useServerFn(checkUpdates);
+  const checkOne = useServerFn(checkUpdateSource);
   const approve = useServerFn(approveJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
+
+  const [running, setRunning] = useState(false);
+  const [activeSource, setActiveSource] = useState<string | null>(null);
+  const [sourceState, setSourceState] = useState<
+    Record<string, "running" | "updated" | "clean" | "error">
+  >({});
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["jrc_proposals"] });
@@ -112,16 +119,41 @@ export function UpdatesView() {
     qc.invalidateQueries({ queryKey: ["tachograph_cards"] });
   };
 
-  const checkMutation = useMutation({
-    mutationFn: () => check(),
-    onSuccess: (res) => {
+  const runCheck = async () => {
+    setRunning(true);
+    setSourceState({});
+    let created = 0;
+    let rows = 0;
+    try {
+      for (const key of Object.keys(SOURCE_LABELS)) {
+        setActiveSource(key);
+        setSourceState((s) => ({ ...s, [key]: "running" }));
+        try {
+          const res = await checkOne({ data: { source: key } });
+          rows += res.rowsParsed ?? 0;
+          created += res.created ?? 0;
+          setSourceState((s) => ({
+            ...s,
+            [key]: res.error ? "error" : res.created > 0 ? "updated" : "clean",
+          }));
+        } catch (e) {
+          setSourceState((s) => ({ ...s, [key]: "error" }));
+          toast.error(
+            `${SOURCE_LABELS[key]} failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
       toast.success(
-        `JRC check finished — ${res.rowsParsed} rows read, ${res.created} new proposal(s).`,
+        `Check finished — ${rows} rows read, ${created} new proposal(s).`,
       );
+    } finally {
+      setActiveSource(null);
+      setRunning(false);
       invalidate();
-    },
-    onError: (e: Error) => toast.error(`Check failed: ${e.message}`),
-  });
+    }
+  };
+  void check;
+
 
   const approveMutation = useMutation({
     mutationFn: (vars: { id: string; country: string }) =>
