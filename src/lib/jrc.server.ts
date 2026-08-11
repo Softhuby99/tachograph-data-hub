@@ -340,10 +340,19 @@ async function collectInfoEntries(
 }
 
 
+type SourceResult = {
+  source: SourceKey;
+  label: string;
+  rowsParsed: number;
+  candidates: number;
+  created: number;
+  baseline: boolean;
+  error?: string;
+};
+
 export async function runJrcCheck() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const rows = await fetchJrcRows();
   const { data: cards, error } = await supabaseAdmin
     .from("tachograph_cards")
     .select(
@@ -357,36 +366,168 @@ export async function runJrcCheck() {
     return Number.isNaN(t) ? acc : Math.max(acc, t);
   }, 0);
 
-  const candidates = buildProposals(rows, cardRows, sinceMs);
-
   const { data: existing, error: exErr } = await supabaseAdmin
     .from("jrc_update_proposals")
     .select("fingerprint");
   if (exErr) throw new Error(exErr.message);
   const known = new Set((existing ?? []).map((e) => e.fingerprint as string));
 
-  const fresh = candidates.filter((c) => !known.has(c.fingerprint));
-  if (fresh.length > 0) {
-    const { error: insErr } = await supabaseAdmin
-      .from("jrc_update_proposals")
-      .insert(fresh);
-    if (insErr) throw new Error(insErr.message);
+  const results: SourceResult[] = [];
+
+  const insertProposals = async (items: ProposalInsert[]) => {
+    const fresh = items.filter((c) => !known.has(c.fingerprint));
+    for (const f of fresh) known.add(f.fingerprint);
+    if (fresh.length > 0) {
+      const { error: insErr } = await supabaseAdmin
+        .from("jrc_update_proposals")
+        .insert(fresh as never);
+      if (insErr) throw new Error(insErr.message);
+    }
+    return fresh.length;
+  };
+
+  // 1 + 2: card-mapped sources.
+  for (const source of ["card_status", "other_certificates"] as const) {
+    const meta = JRC_SOURCES[source];
+    try {
+      const rows =
+        source === "card_status"
+          ? await fetchJrcRows()
+          : await fetchOtherCertificateCardRows();
+      const candidates = buildProposals(rows, cardRows, sinceMs, source);
+      const created = await insertProposals(candidates);
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: rows.length,
+        candidates: candidates.length,
+        created,
+        baseline: false,
+      });
+    } catch (e) {
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: 0,
+        candidates: 0,
+        created: 0,
+        baseline: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
-  await supabaseAdmin.from("jrc_check_runs").insert({
-    source_url: JRC_CARD_STATUS_URL,
-    rows_parsed: rows.length,
-    proposals_created: fresh.length,
-    status: "ok",
-    message: `${rows.length} JRC rows scanned, ${candidates.length} newer than the dataset, ${fresh.length} new proposal(s)`,
-  });
+  // 3-5: informational sources, diffed against the stored snapshot.
+  for (const source of [
+    "public_key_certificates",
+    "key_management",
+    "security_updates",
+  ] as const) {
+    const meta = JRC_SOURCES[source];
+    try {
+      const { entries, rowsParsed } = await collectInfoEntries(source);
 
-  return {
-    rowsParsed: rows.length,
-    candidates: candidates.length,
-    created: fresh.length,
-  };
+      const { data: snapRows, error: snapErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .select("entry_key,fingerprint")
+        .eq("source_type", source);
+      if (snapErr) throw new Error(snapErr.message);
+      const snapshot = new Map(
+        (snapRows ?? []).map((s) => [s.entry_key as string, s.fingerprint as string]),
+      );
+      const baseline = snapshot.size === 0;
+
+      let created = 0;
+      let candidates = 0;
+      if (!baseline) {
+        const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
+        candidates = changed.length;
+        const items: ProposalInsert[] = changed
+          .slice(0, MAX_INFO_PER_SOURCE)
+          .map((e) => ({
+            fingerprint: `${source}:${e.key}:${e.fingerprint}`,
+            kind: "info",
+            card_id: null,
+            country: e.country,
+            generation: "",
+            jrc_manufacturer: "",
+            jrc_card_name: "",
+            jrc_certificate: "",
+            jrc_date: "",
+            jrc_eov: "",
+            jrc_type_approval: "",
+            source_url: meta.url,
+            source_type: source,
+            source_label: meta.label,
+            title: e.title,
+            payload: e.payload,
+            changes: { fields: [] },
+            status: "pending",
+          }));
+        created = await insertProposals(items);
+      }
+
+      const { error: upErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .upsert(
+          entries.map((e) => ({
+            source_type: source,
+            entry_key: e.key,
+            fingerprint: e.fingerprint,
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: "source_type,entry_key" },
+        );
+      if (upErr) throw new Error(upErr.message);
+
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed,
+        candidates,
+        created,
+        baseline,
+      });
+    } catch (e) {
+      results.push({
+        source,
+        label: meta.label,
+        rowsParsed: 0,
+        candidates: 0,
+        created: 0,
+        baseline: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  const totals = results.reduce(
+    (acc, r) => ({
+      rowsParsed: acc.rowsParsed + r.rowsParsed,
+      candidates: acc.candidates + r.candidates,
+      created: acc.created + r.created,
+    }),
+    { rowsParsed: 0, candidates: 0, created: 0 },
+  );
+
+  await supabaseAdmin.from("jrc_check_runs").insert(
+    results.map((r) => ({
+      source_type: r.source,
+      source_url: JRC_SOURCES[r.source].url,
+      rows_parsed: r.rowsParsed,
+      proposals_created: r.created,
+      status: r.error ? "error" : "ok",
+      message: r.error
+        ? r.error
+        : r.baseline
+          ? `Baseline recorded from ${r.rowsParsed} row(s) — future changes will be reported`
+          : `${r.rowsParsed} row(s) scanned, ${r.candidates} relevant, ${r.created} new proposal(s)`,
+    })) as never,
+  );
+
+  return { ...totals, sources: results };
 }
+
 
 export async function approveProposal(id: string, country: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
