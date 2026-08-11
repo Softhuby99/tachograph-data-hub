@@ -1,14 +1,23 @@
-// Server-only helpers: fetch + parse the JRC "Card status" page and diff it
-// against the tachograph_cards table.
+// Server-only helpers: fetch + parse the JRC pages and diff them against the
+// tachograph_cards table.
 
-export const JRC_CARD_STATUS_URL =
-  "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html";
+import {
+  JRC_SOURCES,
+  cellText,
+  extractRows,
+  fetchPage,
+  generationFromAttrs,
+  parseKeyManagement,
+  parseOtherCertificates,
+  parsePublicKeyCertificates,
+  parseSecurityUpdates,
+  type SourceKey,
+} from "./jrc-sources.server";
 
-const ANNEX_COLOR_TO_GENERATION: Record<string, string> = {
-  "6f9ccc": "G1", // Annex 1B
-  "2323dc": "G2.1", // Annex 1C
-  "ff9aff": "G2.2", // Annex 1C v2
-};
+export { JRC_SOURCES } from "./jrc-sources.server";
+export type { SourceKey } from "./jrc-sources.server";
+
+export const JRC_CARD_STATUS_URL = JRC_SOURCES.card_status.url;
 
 export type JrcRow = {
   manufacturer: string;
@@ -20,44 +29,6 @@ export type JrcRow = {
   generation: string;
 };
 
-function decodeEntities(input: string): string {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-    uuml: "ü",
-    ouml: "ö",
-    auml: "ä",
-    Uuml: "Ü",
-    Ouml: "Ö",
-    Auml: "Ä",
-    szlig: "ß",
-    eacute: "é",
-    egrave: "è",
-    agrave: "à",
-    ccedil: "ç",
-    iacute: "í",
-    oacute: "ó",
-    uacute: "ú",
-    aacute: "á",
-    ntilde: "ñ",
-  };
-  return input
-    .replace(/&#(\d+);/g, (_m, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h: string) =>
-      String.fromCodePoint(parseInt(h, 16)),
-    )
-    .replace(/&([a-zA-Z]+);/g, (m, name: string) => named[name] ?? m);
-}
-
-function cellText(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export function parseJrcCardStatus(html: string): JrcRow[] {
   const rows: JrcRow[] = [];
