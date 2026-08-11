@@ -32,25 +32,14 @@ export type JrcRow = {
 
 export function parseJrcCardStatus(html: string): JrcRow[] {
   const rows: JrcRow[] = [];
-  const trRe = /<tr[^>]*>([\s\S]*?)(?=<tr[^>]*>|<\/table>)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = trRe.exec(html)) !== null) {
-    const rowHtml = m[1];
-    const cells = Array.from(
-      rowHtml.matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi),
-    ).map((c) => ({ attrs: c[1] ?? "", html: c[2] ?? "" }));
-    if (cells.length < 8) continue;
+  for (const row of extractRows(html)) {
+    if (row.values.length < 8) continue;
 
     // A row header block ("Manufacturer | Card | ...") can be glued to the
     // data row; always take the last 8 cells of the block.
-    const data = cells.slice(-8);
-    const values = data.map((c) => cellText(c.html));
+    const values = row.values.slice(-8);
+    const attrs = row.attrs.slice(-8);
     if (values[0].toLowerCase() === "manufacturer") continue;
-
-    const colorMatch = /bgcolor="#([0-9a-fA-F]{6})"/i.exec(data[7].attrs);
-    const generation = colorMatch
-      ? (ANNEX_COLOR_TO_GENERATION[colorMatch[1].toLowerCase()] ?? "")
-      : "";
 
     const typeApproval = values[5];
     if (!typeApproval && !values[2]) continue;
@@ -62,21 +51,32 @@ export function parseJrcCardStatus(html: string): JrcRow[] {
       date: values[3],
       eov: values[4],
       typeApproval,
-      generation,
+      generation: generationFromAttrs(attrs[7]),
     });
   }
   return rows;
 }
 
 export async function fetchJrcRows(): Promise<JrcRow[]> {
-  const res = await fetch(JRC_CARD_STATUS_URL, {
-    headers: { "user-agent": "TachographCardsInfoTool/1.0" },
-  });
-  if (!res.ok) {
-    throw new Error(`JRC request failed [${res.status}]: ${res.statusText}`);
-  }
-  return parseJrcCardStatus(await res.text());
+  return parseJrcCardStatus(await fetchPage(JRC_CARD_STATUS_URL));
 }
+
+/** "Other certificates" page, reduced to its Card rows. */
+export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
+  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
+  return rows
+    .filter((r) => r.component.toLowerCase() === "card")
+    .map((r) => ({
+      manufacturer: r.manufacturer,
+      cardName: r.name,
+      certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
+      date: r.date,
+      eov: "",
+      typeApproval: r.typeApproval,
+      generation: r.generation,
+    }));
+}
+
 
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
