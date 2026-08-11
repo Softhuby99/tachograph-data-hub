@@ -183,11 +183,13 @@ function TachographTool() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <img
-              src={thalesLogo.url}
-              alt="Thales logo"
-              className="h-8 w-auto shrink-0 object-contain"
-            />
+            <div className="shrink-0 rounded-md bg-white px-2 py-1.5 shadow-sm ring-1 ring-border">
+              <img
+                src={thalesLogo.url}
+                alt="Thales logo"
+                className="h-7 w-auto object-contain"
+              />
+            </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
                 Tachograph Cards Info Tool
