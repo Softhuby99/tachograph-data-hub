@@ -1,0 +1,7 @@
+# test1: HTTP only, port 80, no TLS.
+services:
+  web:
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/test/http.conf:/etc/nginx/conf.d/site.conf:ro

@@ -1,0 +1,14 @@
+# Base compose for TDH (Tacho Data Hub).
+# Never start this alone - always via ./scripts/run.sh <mode>,
+# which adds docker-compose.<mode>.yml on top.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tdh-web:latest
+    container_name: tdh-web
+    restart: unless-stopped
+    environment:
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
