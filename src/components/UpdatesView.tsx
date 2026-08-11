@@ -16,6 +16,22 @@ import { toast } from "sonner";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
 
+const SOURCE_LABELS: Record<string, string> = {
+  card_status: "Card status",
+  other_certificates: "Other certificates",
+  public_key_certificates: "Public key certificates",
+  key_management: "Key management",
+  security_updates: "Security updates",
+};
+
+const SOURCE_URLS: Record<string, string> = {
+  card_status: "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
+  other_certificates: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
+  public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates.php.html",
+  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management.php.html",
+  security_updates: "https://dtc.jrc.ec.europa.eu/dtc_security_updates.php.html",
+};
+
 type Proposal = {
   id: string;
   kind: string;
@@ -29,6 +45,10 @@ type Proposal = {
   jrc_eov: string;
   jrc_type_approval: string;
   source_url: string;
+  source_type: string | null;
+  source_label: string | null;
+  title: string | null;
+  payload: Record<string, string> | null;
   changes: { fields?: FieldChange[] } | null;
   status: string;
   created_at: string;
@@ -37,11 +57,14 @@ type Proposal = {
 type CheckRun = {
   id: string;
   created_at: string;
+  source_type: string | null;
+  source_url: string;
   rows_parsed: number;
   proposals_created: number;
   status: string;
   message: string;
 };
+
 
 export function UpdatesView() {
   const qc = useQueryClient();
