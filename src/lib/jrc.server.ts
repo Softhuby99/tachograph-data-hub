@@ -503,18 +503,21 @@ export async function runUpdateCheck() {
         created = await insertProposals(items);
       }
 
-      const { error: upErr } = await supabaseAdmin
-        .from("jrc_source_snapshots")
-        .upsert(
-          entries.map((e) => ({
-            source_type: source,
-            entry_key: e.key,
-            fingerprint: e.fingerprint,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: "source_type,entry_key" },
-        );
-      if (upErr) throw new Error(upErr.message);
+      // Chunked: a single very large upsert is silently truncated.
+      const snapRowsToWrite = entries.map((e) => ({
+        source_type: source,
+        entry_key: e.key,
+        fingerprint: e.fingerprint,
+        updated_at: new Date().toISOString(),
+      }));
+      for (let i = 0; i < snapRowsToWrite.length; i += 200) {
+        const { error: upErr } = await supabaseAdmin
+          .from("jrc_source_snapshots")
+          .upsert(snapRowsToWrite.slice(i, i + 200), {
+            onConflict: "source_type,entry_key",
+          });
+        if (upErr) throw new Error(upErr.message);
+      }
 
       results.push({
         source,
