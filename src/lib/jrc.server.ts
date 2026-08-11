@@ -275,11 +275,17 @@ export async function runJrcCheck() {
   const { data: cards, error } = await supabaseAdmin
     .from("tachograph_cards")
     .select(
-      "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source",
+      "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source,data_reference_date",
     );
   if (error) throw new Error(error.message);
 
-  const candidates = buildProposals(rows, (cards ?? []) as CardRow[]);
+  const cardRows = (cards ?? []) as (CardRow & { data_reference_date: string })[];
+  const sinceMs = cardRows.reduce((acc, c) => {
+    const t = Date.parse(c.data_reference_date ?? "");
+    return Number.isNaN(t) ? acc : Math.max(acc, t);
+  }, 0);
+
+  const candidates = buildProposals(rows, cardRows, sinceMs);
 
   const { data: existing, error: exErr } = await supabaseAdmin
     .from("jrc_update_proposals")
@@ -300,7 +306,7 @@ export async function runJrcCheck() {
     rows_parsed: rows.length,
     proposals_created: fresh.length,
     status: "ok",
-    message: `${candidates.length} candidate(s), ${fresh.length} new`,
+    message: `${rows.length} JRC rows scanned, ${candidates.length} newer than the dataset, ${fresh.length} new proposal(s)`,
   });
 
   return {
