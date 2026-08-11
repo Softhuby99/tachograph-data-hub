@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
-  runJrcCheck,
+  runUpdateCheck,
   approveProposal,
   rejectProposal,
 } from "@/lib/jrc.server";
 
-export const checkJrcUpdates = createServerFn({ method: "POST" }).handler(
-  async () => runJrcCheck(),
+export const checkUpdates = createServerFn({ method: "POST" }).handler(
+  async () => runUpdateCheck(),
 );
 
 export const approveJrcProposal = createServerFn({ method: "POST" })

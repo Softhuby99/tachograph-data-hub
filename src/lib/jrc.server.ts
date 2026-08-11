@@ -8,6 +8,7 @@ import {
   fetchPage,
   generationFromAttrs,
   parseKeyManagement,
+  parseManufacturerCodes,
   parseOtherCertificates,
   parsePublicKeyCertificates,
   parseSecurityUpdates,
@@ -268,7 +269,7 @@ type SnapshotEntry = {
 const MAX_INFO_PER_SOURCE = 40;
 
 async function collectInfoEntries(
-  source: Exclude<SourceKey, "card_status" | "other_certificates">,
+  source: Exclude<SourceKey, "card_status" | "other_certificates" | "ted_procurement">,
 ): Promise<{ entries: SnapshotEntry[]; rowsParsed: number }> {
   const html = await fetchPage(JRC_SOURCES[source].url);
 
@@ -287,6 +288,24 @@ async function collectInfoEntries(
           Certificate: r.certificate,
           "End of validity": r.endOfValidity,
           "SHA-1": r.sha1,
+        },
+      })),
+    };
+  }
+
+  if (source === "manufacturer_codes") {
+    const rows = parseManufacturerCodes(html);
+    return {
+      rowsParsed: rows.length,
+      entries: rows.map((r) => ({
+        key: r.code,
+        fingerprint: `${r.manufacturer}|${r.date}`,
+        country: "",
+        title: `Manufacturer code ${r.code} · ${r.manufacturer}`,
+        payload: {
+          Manufacturer: r.manufacturer,
+          Code: r.code,
+          "Assigned on": r.date,
         },
       })),
     };
@@ -350,7 +369,7 @@ type SourceResult = {
   error?: string;
 };
 
-export async function runJrcCheck() {
+export async function runUpdateCheck() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: cards, error } = await supabaseAdmin
@@ -422,6 +441,7 @@ export async function runJrcCheck() {
     "public_key_certificates",
     "key_management",
     "security_updates",
+    "manufacturer_codes",
   ] as const) {
     const meta = JRC_SOURCES[source];
     try {
@@ -504,6 +524,44 @@ export async function runJrcCheck() {
       });
     }
   }
+
+  // 6: TED procurement notices.
+  try {
+    const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
+    const notices = await fetchTedNotices();
+    const { data: procCards, error: procErr } = await supabaseAdmin
+      .from("tachograph_cards")
+      .select(
+        "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
+      );
+    if (procErr) throw new Error(procErr.message);
+    const candidates = buildTedProposals(
+      notices,
+      (procCards ?? []) as never,
+      sinceMs,
+    );
+    const created = await insertProposals(candidates as unknown as ProposalInsert[]);
+    results.push({
+      source: "ted_procurement",
+      label: JRC_SOURCES.ted_procurement.label,
+      rowsParsed: notices.length,
+      candidates: candidates.length,
+      created,
+      baseline: false,
+    });
+  } catch (e) {
+    results.push({
+      source: "ted_procurement",
+      label: JRC_SOURCES.ted_procurement.label,
+      rowsParsed: 0,
+      candidates: 0,
+      created: 0,
+      baseline: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+
 
   const totals = results.reduce(
     (acc, r) => ({

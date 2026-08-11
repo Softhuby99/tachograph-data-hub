@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  checkJrcUpdates,
+  checkUpdates,
   approveJrcProposal,
   rejectJrcProposal,
 } from "@/lib/jrc.functions";
@@ -22,6 +22,8 @@ const SOURCE_LABELS: Record<string, string> = {
   public_key_certificates: "Public key certificates",
   key_management: "Key management",
   security_updates: "Security updates",
+  manufacturer_codes: "Manufacturer codes",
+  ted_procurement: "TED procurement",
 };
 
 const SOURCE_URLS: Record<string, string> = {
@@ -30,6 +32,8 @@ const SOURCE_URLS: Record<string, string> = {
   public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates.php.html",
   key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management.php.html",
   security_updates: "https://dtc.jrc.ec.europa.eu/dtc_security_updates.php.html",
+  manufacturer_codes: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
+  ted_procurement: "https://ted.europa.eu/en/search/result",
 };
 
 type Proposal = {
@@ -98,7 +102,7 @@ export function UpdatesView() {
   });
 
 
-  const check = useServerFn(checkJrcUpdates);
+  const check = useServerFn(checkUpdates);
   const approve = useServerFn(approveJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
 
