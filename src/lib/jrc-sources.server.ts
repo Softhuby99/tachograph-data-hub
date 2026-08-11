@@ -5,7 +5,9 @@ export type SourceKey =
   | "other_certificates"
   | "public_key_certificates"
   | "key_management"
-  | "security_updates";
+  | "security_updates"
+  | "manufacturer_codes"
+  | "ted_procurement";
 
 export const JRC_SOURCES: Record<SourceKey, { label: string; url: string }> = {
   card_status: {
@@ -27,6 +29,14 @@ export const JRC_SOURCES: Record<SourceKey, { label: string; url: string }> = {
   security_updates: {
     label: "Mandatory security updates",
     url: "https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html",
+  },
+  manufacturer_codes: {
+    label: "Manufacturer codes",
+    url: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
+  },
+  ted_procurement: {
+    label: "TED procurement",
+    url: "https://ted.europa.eu/en/search/result",
   },
 };
 
@@ -248,6 +258,27 @@ export function parseSecurityUpdates(html: string): SecurityUpdateRow[] {
       mandatoryFrom: padded[8] ?? "",
       deadline: padded[9] ?? "",
     });
+  }
+  return out;
+}
+
+// -------------------------------------------------------- manufacturer codes
+
+export type ManufacturerCodeRow = {
+  manufacturer: string;
+  code: string;
+  date: string;
+};
+
+/** JRC "Manufacturer code" page: Assignment | Value | Date. */
+export function parseManufacturerCodes(html: string): ManufacturerCodeRow[] {
+  const out: ManufacturerCodeRow[] = [];
+  for (const row of extractRows(html)) {
+    if (row.values.length < 3) continue;
+    const v = row.values.slice(-3);
+    if (!v[0] || v[0].toLowerCase() === "assignment") continue;
+    if (!/^[0-9a-f]{1,4}h?$/i.test(v[1].trim())) continue;
+    out.push({ manufacturer: v[0], code: v[1].trim(), date: v[2] });
   }
   return out;
 }
