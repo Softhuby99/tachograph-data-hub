@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   runUpdateCheck,
+  runUpdateCheckForSource,
   approveProposal,
   rejectProposal,
 } from "@/lib/jrc.server";
@@ -8,6 +9,13 @@ import {
 export const checkUpdates = createServerFn({ method: "POST" }).handler(
   async () => runUpdateCheck(),
 );
+
+export const checkUpdateSource = createServerFn({ method: "POST" })
+  .inputValidator((data: { source: string }) => ({
+    source: String(data?.source ?? ""),
+  }))
+  .handler(async ({ data }) => runUpdateCheckForSource(data.source as never));
+
 
 export const approveJrcProposal = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string; country?: string }) => ({

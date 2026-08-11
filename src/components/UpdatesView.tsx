@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   checkUpdates,
+  checkUpdateSource,
   approveJrcProposal,
   rejectJrcProposal,
 } from "@/lib/jrc.functions";
+
 import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
@@ -103,8 +105,15 @@ export function UpdatesView() {
 
 
   const check = useServerFn(checkUpdates);
+  const checkOne = useServerFn(checkUpdateSource);
   const approve = useServerFn(approveJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
+
+  const [running, setRunning] = useState(false);
+  const [activeSource, setActiveSource] = useState<string | null>(null);
+  const [sourceState, setSourceState] = useState<
+    Record<string, "running" | "updated" | "clean" | "error">
+  >({});
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["jrc_proposals"] });
@@ -112,16 +121,48 @@ export function UpdatesView() {
     qc.invalidateQueries({ queryKey: ["tachograph_cards"] });
   };
 
-  const checkMutation = useMutation({
-    mutationFn: () => check(),
-    onSuccess: (res) => {
+  const runCheck = async () => {
+    setRunning(true);
+    setSourceState({});
+    let created = 0;
+    let rows = 0;
+    try {
+      for (const key of Object.keys(SOURCE_LABELS)) {
+        setActiveSource(key);
+        setSourceState((s) => ({ ...s, [key]: "running" }));
+        try {
+          const res = await checkOne({ data: { source: key } });
+          rows += res.rowsParsed ?? 0;
+          created += res.created ?? 0;
+          setSourceState((s) => ({
+            ...s,
+            [key]: res.error ? "error" : res.created > 0 ? "updated" : "clean",
+          }));
+        } catch (e) {
+          setSourceState((s) => ({ ...s, [key]: "error" }));
+          toast.error(
+            `${SOURCE_LABELS[key]} failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
       toast.success(
-        `JRC check finished — ${res.rowsParsed} rows read, ${res.created} new proposal(s).`,
+        `Check finished — ${rows} rows read, ${created} new proposal(s).`,
+      );
+    } finally {
+      setActiveSource(null);
+      setRunning(false);
+      // Only sources with new findings stay highlighted; the rest go back to normal.
+      setSourceState((s) =>
+        Object.fromEntries(
+          Object.entries(s).filter(([, v]) => v === "updated" || v === "error"),
+        ),
       );
       invalidate();
-    },
-    onError: (e: Error) => toast.error(`Check failed: ${e.message}`),
-  });
+    }
+  };
+
+  void check;
+
 
   const approveMutation = useMutation({
     mutationFn: (vars: { id: string; country: string }) =>
@@ -168,14 +209,11 @@ export function UpdatesView() {
             updates. Nothing is written to the database until you approve it.
           </p>
         </div>
-        <Button
-          onClick={() => checkMutation.mutate()}
-          disabled={checkMutation.isPending}
-        >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${checkMutation.isPending ? "animate-spin" : ""}`}
-          />
-          {checkMutation.isPending ? "Checking…" : "Check for updates"}
+        <Button onClick={() => void runCheck()} disabled={running}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
+          {running
+            ? `Checking ${activeSource ? SOURCE_LABELS[activeSource] : ""}…`
+            : "Check for updates"}
         </Button>
       </div>
 
@@ -189,16 +227,35 @@ export function UpdatesView() {
         </div>
         {Object.keys(SOURCE_LABELS).map((key) => {
           const run = latestBySource.get(key);
+          const state = sourceState[key];
+          const rowClass =
+            state === "running"
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              : state === "updated"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : state === "error"
+                  ? "bg-destructive/10 text-destructive"
+                  : "";
           return (
             <div
               key={key}
-              className="grid gap-1 border-b px-3 py-2 text-xs last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center"
+              className={`grid gap-1 border-b px-3 py-2 text-xs transition-colors last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center ${rowClass}`}
             >
-              <span className="font-medium">{SOURCE_LABELS[key]}</span>
-              <span className="text-muted-foreground">
-                {run
-                  ? run.message
-                  : "not checked yet"}
+              <span className="flex items-center gap-2 font-medium">
+                {state === "running" && (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                )}
+                {state === "updated" && <Check className="h-3 w-3" />}
+                {SOURCE_LABELS[key]}
+              </span>
+              <span
+                className={state ? "" : "text-muted-foreground"}
+              >
+                {state === "running"
+                  ? "Checking…"
+                  : run
+                    ? run.message
+                    : "not checked yet"}
               </span>
               <a
                 className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -212,6 +269,7 @@ export function UpdatesView() {
           );
         })}
       </div>
+
 
       <div className="flex flex-wrap gap-2">
         <Button

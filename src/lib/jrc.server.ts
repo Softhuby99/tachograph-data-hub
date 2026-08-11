@@ -369,7 +369,19 @@ type SourceResult = {
   error?: string;
 };
 
-export async function runUpdateCheck() {
+export const UPDATE_SOURCE_ORDER = [
+  "card_status",
+  "other_certificates",
+  "public_key_certificates",
+  "key_management",
+  "security_updates",
+  "manufacturer_codes",
+  "ted_procurement",
+] as const;
+
+export async function runUpdateCheckForSource(
+  source: SourceKey,
+): Promise<SourceResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: cards, error } = await supabaseAdmin
@@ -396,8 +408,6 @@ export async function runUpdateCheck() {
     if (!existing || existing.length < 1000) break;
   }
 
-  const results: SourceResult[] = [];
-
   const insertProposals = async (items: ProposalInsert[]) => {
     const fresh = items.filter((c) => !known.has(c.fingerprint));
     for (const f of fresh) known.add(f.fingerprint);
@@ -410,51 +420,55 @@ export async function runUpdateCheck() {
     return fresh.length;
   };
 
-  // 1 + 2: card-mapped sources.
-  for (const source of ["card_status", "other_certificates"] as const) {
-    const meta = JRC_SOURCES[source];
-    try {
+  const meta = JRC_SOURCES[source];
+  let result: SourceResult;
+
+  try {
+    if (source === "card_status" || source === "other_certificates") {
       const rows =
         source === "card_status"
           ? await fetchJrcRows()
           : await fetchOtherCertificateCardRows();
       const candidates = buildProposals(rows, cardRows, sinceMs, source);
       const created = await insertProposals(candidates);
-      results.push({
+      result = {
         source,
         label: meta.label,
         rowsParsed: rows.length,
         candidates: candidates.length,
         created,
         baseline: false,
-      });
-    } catch (e) {
-      results.push({
+      };
+    } else if (source === "ted_procurement") {
+      const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
+      const notices = await fetchTedNotices();
+      const { data: procCards, error: procErr } = await supabaseAdmin
+        .from("tachograph_cards")
+        .select(
+          "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
+        );
+      if (procErr) throw new Error(procErr.message);
+      const candidates = buildTedProposals(
+        notices,
+        (procCards ?? []) as never,
+        sinceMs,
+      );
+      const created = await insertProposals(
+        candidates as unknown as ProposalInsert[],
+      );
+      result = {
         source,
         label: meta.label,
-        rowsParsed: 0,
-        candidates: 0,
-        created: 0,
+        rowsParsed: notices.length,
+        candidates: candidates.length,
+        created,
         baseline: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
-
-  // 3-5: informational sources, diffed against the stored snapshot.
-  for (const source of [
-    "public_key_certificates",
-    "key_management",
-    "security_updates",
-    "manufacturer_codes",
-  ] as const) {
-    const meta = JRC_SOURCES[source];
-    try {
+      };
+    } else {
       const { entries: rawEntries, rowsParsed } = await collectInfoEntries(source);
       // A page can list the same key twice (e.g. re-issued certificates);
       // upsert rejects duplicate keys inside one batch, so keep the last one.
       const entries = [...new Map(rawEntries.map((e) => [e.key, e])).values()];
-
 
       // PostgREST caps a select at 1000 rows — page through the snapshot,
       // otherwise unseen rows look "changed" on every run.
@@ -476,7 +490,9 @@ export async function runUpdateCheck() {
       let created = 0;
       let candidates = 0;
       if (!baseline) {
-        const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
+        const changed = entries.filter(
+          (e) => snapshot.get(e.key) !== e.fingerprint,
+        );
         candidates = changed.length;
         const items: ProposalInsert[] = changed
           .slice(0, MAX_INFO_PER_SOURCE)
@@ -519,64 +535,50 @@ export async function runUpdateCheck() {
         if (upErr) throw new Error(upErr.message);
       }
 
-      results.push({
+      result = {
         source,
         label: meta.label,
         rowsParsed,
         candidates,
         created,
         baseline,
-      });
-    } catch (e) {
-      results.push({
-        source,
-        label: meta.label,
-        rowsParsed: 0,
-        candidates: 0,
-        created: 0,
-        baseline: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
+      };
     }
-  }
-
-  // 6: TED procurement notices.
-  try {
-    const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
-    const notices = await fetchTedNotices();
-    const { data: procCards, error: procErr } = await supabaseAdmin
-      .from("tachograph_cards")
-      .select(
-        "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
-      );
-    if (procErr) throw new Error(procErr.message);
-    const candidates = buildTedProposals(
-      notices,
-      (procCards ?? []) as never,
-      sinceMs,
-    );
-    const created = await insertProposals(candidates as unknown as ProposalInsert[]);
-    results.push({
-      source: "ted_procurement",
-      label: JRC_SOURCES.ted_procurement.label,
-      rowsParsed: notices.length,
-      candidates: candidates.length,
-      created,
-      baseline: false,
-    });
   } catch (e) {
-    results.push({
-      source: "ted_procurement",
-      label: JRC_SOURCES.ted_procurement.label,
+    result = {
+      source,
+      label: meta.label,
       rowsParsed: 0,
       candidates: 0,
       created: 0,
       baseline: false,
       error: e instanceof Error ? e.message : String(e),
-    });
+    };
   }
 
+  await supabaseAdmin.from("jrc_check_runs").insert([
+    {
+      source_type: result.source,
+      source_url: meta.url,
+      rows_parsed: result.rowsParsed,
+      proposals_created: result.created,
+      status: result.error ? "error" : "ok",
+      message: result.error
+        ? result.error
+        : result.baseline
+          ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
+          : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
+    },
+  ] as never);
 
+  return result;
+}
+
+export async function runUpdateCheck() {
+  const results: SourceResult[] = [];
+  for (const source of UPDATE_SOURCE_ORDER) {
+    results.push(await runUpdateCheckForSource(source));
+  }
 
   const totals = results.reduce(
     (acc, r) => ({
@@ -587,23 +589,9 @@ export async function runUpdateCheck() {
     { rowsParsed: 0, candidates: 0, created: 0 },
   );
 
-  await supabaseAdmin.from("jrc_check_runs").insert(
-    results.map((r) => ({
-      source_type: r.source,
-      source_url: JRC_SOURCES[r.source].url,
-      rows_parsed: r.rowsParsed,
-      proposals_created: r.created,
-      status: r.error ? "error" : "ok",
-      message: r.error
-        ? r.error
-        : r.baseline
-          ? `Baseline recorded from ${r.rowsParsed} row(s) — future changes will be reported`
-          : `${r.rowsParsed} row(s) scanned, ${r.candidates} relevant, ${r.created} new proposal(s)`,
-    })) as never,
-  );
-
   return { ...totals, sources: results };
 }
+
 
 
 export async function approveProposal(id: string, country: string) {
