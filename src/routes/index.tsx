@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UpdatesView } from "@/components/UpdatesView";
 import { Search, ExternalLink, ShieldCheck, FileText, Building2, BarChart3, Pencil, RefreshCw } from "lucide-react";
+import thalesLogo from "@/assets/thales-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
