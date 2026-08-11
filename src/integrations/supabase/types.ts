@@ -21,6 +21,7 @@ export type Database = {
           message: string
           proposals_created: number
           rows_parsed: number
+          source_type: string
           source_url: string
           status: string
         }
@@ -30,6 +31,7 @@ export type Database = {
           message?: string
           proposals_created?: number
           rows_parsed?: number
+          source_type?: string
           source_url?: string
           status?: string
         }
@@ -39,6 +41,7 @@ export type Database = {
           message?: string
           proposals_created?: number
           rows_parsed?: number
+          source_type?: string
           source_url?: string
           status?: string
         }
@@ -60,8 +63,12 @@ export type Database = {
           jrc_manufacturer: string
           jrc_type_approval: string
           kind: string
+          payload: Json
+          source_label: string
+          source_type: string
           source_url: string
           status: string
+          title: string
           updated_at: string
         }
         Insert: {
@@ -79,8 +86,12 @@ export type Database = {
           jrc_manufacturer?: string
           jrc_type_approval?: string
           kind?: string
+          payload?: Json
+          source_label?: string
+          source_type?: string
           source_url?: string
           status?: string
+          title?: string
           updated_at?: string
         }
         Update: {
@@ -98,8 +109,12 @@ export type Database = {
           jrc_manufacturer?: string
           jrc_type_approval?: string
           kind?: string
+          payload?: Json
+          source_label?: string
+          source_type?: string
           source_url?: string
           status?: string
+          title?: string
           updated_at?: string
         }
         Relationships: [
