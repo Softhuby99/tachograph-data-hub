@@ -543,7 +543,41 @@ export async function approveProposal(id: string, country: string) {
 
   const changes = (proposal.changes as { fields?: FieldChange[] } | null)?.fields ?? [];
 
-  if (proposal.card_id) {
+  if (proposal.kind === "info") {
+    // Informational sources have no direct card column. Applying them records
+    // the finding on the verification note of the matching country's cards.
+    const payload = (proposal.payload ?? {}) as Record<string, string>;
+    const note = [
+      `[${proposal.source_label}] ${proposal.title}`,
+      Object.entries(payload)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("; "),
+    ]
+      .filter(Boolean)
+      .join(" — ");
+
+    const target = (proposal.country || country).trim();
+    if (target) {
+      const { data: affected, error: selErr } = await supabaseAdmin
+        .from("tachograph_cards")
+        .select("id,verification_note")
+        .eq("country", target);
+      if (selErr) throw new Error(selErr.message);
+      for (const card of affected ?? []) {
+        const existingNote = (card.verification_note ?? "").trim();
+        if (existingNote.includes(note)) continue;
+        const { error: upErr } = await supabaseAdmin
+          .from("tachograph_cards")
+          .update({
+            verification_note: existingNote ? `${existingNote}\n${note}` : note,
+          } as never)
+          .eq("id", card.id);
+        if (upErr) throw new Error(upErr.message);
+      }
+    }
+  } else if (proposal.card_id) {
+
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
     if (Object.keys(patch).length > 0) {
