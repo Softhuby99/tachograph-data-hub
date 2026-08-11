@@ -1,0 +1,1 @@
+DELETE FROM public.jrc_update_proposals WHERE source_type = 'public_key_certificates' AND status = 'pending';
