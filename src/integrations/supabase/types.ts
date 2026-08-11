@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      jrc_check_runs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          proposals_created: number
+          rows_parsed: number
+          source_url: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string
+          proposals_created?: number
+          rows_parsed?: number
+          source_url?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          proposals_created?: number
+          rows_parsed?: number
+          source_url?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      jrc_update_proposals: {
+        Row: {
+          card_id: string | null
+          changes: Json
+          country: string
+          created_at: string
+          fingerprint: string
+          generation: string
+          id: string
+          jrc_card_name: string
+          jrc_certificate: string
+          jrc_date: string
+          jrc_eov: string
+          jrc_manufacturer: string
+          jrc_type_approval: string
+          kind: string
+          source_url: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          card_id?: string | null
+          changes?: Json
+          country?: string
+          created_at?: string
+          fingerprint: string
+          generation?: string
+          id?: string
+          jrc_card_name?: string
+          jrc_certificate?: string
+          jrc_date?: string
+          jrc_eov?: string
+          jrc_manufacturer?: string
+          jrc_type_approval?: string
+          kind?: string
+          source_url?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string | null
+          changes?: Json
+          country?: string
+          created_at?: string
+          fingerprint?: string
+          generation?: string
+          id?: string
+          jrc_card_name?: string
+          jrc_certificate?: string
+          jrc_date?: string
+          jrc_eov?: string
+          jrc_manufacturer?: string
+          jrc_type_approval?: string
+          kind?: string
+          source_url?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jrc_update_proposals_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "tachograph_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tachograph_cards: {
         Row: {
           application: string
