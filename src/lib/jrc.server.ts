@@ -425,7 +425,11 @@ export async function runJrcCheck() {
   ] as const) {
     const meta = JRC_SOURCES[source];
     try {
-      const { entries, rowsParsed } = await collectInfoEntries(source);
+      const { entries: rawEntries, rowsParsed } = await collectInfoEntries(source);
+      // A page can list the same key twice (e.g. re-issued certificates);
+      // upsert rejects duplicate keys inside one batch, so keep the last one.
+      const entries = [...new Map(rawEntries.map((e) => [e.key, e])).values()];
+
 
       const { data: snapRows, error: snapErr } = await supabaseAdmin
         .from("jrc_source_snapshots")
