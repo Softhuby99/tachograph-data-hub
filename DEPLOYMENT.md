@@ -1,11 +1,19 @@
 # TDH = Tacho Data Hub
 
-Deployment des **Tachograph Cards Info Tool** als statische Web-App
-(nginx im Docker-Container, Debian 12 Host).
+Deployment des **Tachograph Cards Info Tool** (nginx im Docker-Container,
+Debian 12 Host).
 
-Die App unter `standalone/` ist vollstaendig eigenstaendig: HTML, UI-Logik und
-alle Datensaetze sind eingebettet, es wird keine Datenbank und kein Backend
-benoetigt. Der Container liefert lediglich diese Dateien per nginx aus.
+Es gibt zwei Betriebsarten:
+
+1. **Statisch (Default)** — Die App unter `standalone/` ist vollstaendig
+   eigenstaendig: HTML, UI-Logik und alle 53 Datensaetze sind eingebettet.
+   Keine Datenbank, kein Backend. Der Container liefert lediglich die Dateien
+   per nginx aus.
+
+2. **Mit lokaler PostgreSQL** — Zusaetzlich zum statischen Frontend laeuft ein
+   PostgreSQL-Container mit dem vollen Datenbankschema (4 Tabellen) und allen
+   53 Datensaetzen plus 1.283 JRC-Snapshot-Baselines. Damit ist die
+   JRC-/TED-Update-Pruefung lokal verfuegbar (siehe Abschnitt 11).
 
 ---
 
