@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UpdatesView } from "@/components/UpdatesView";
 import { Search, ExternalLink, ShieldCheck, FileText, Building2, BarChart3, Pencil, RefreshCw } from "lucide-react";
+import thalesLogo from "@/assets/thales-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -182,8 +183,12 @@ function TachographTool() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2 text-primary">
-              <ShieldCheck className="h-6 w-6" />
+            <div className="shrink-0 rounded-md bg-white px-2 py-1.5 shadow-sm ring-1 ring-border">
+              <img
+                src={thalesLogo.url}
+                alt="Thales logo"
+                className="h-7 w-auto object-contain"
+              />
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
