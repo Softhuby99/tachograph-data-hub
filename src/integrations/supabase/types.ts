@@ -47,6 +47,33 @@ export type Database = {
         }
         Relationships: []
       }
+      jrc_source_snapshots: {
+        Row: {
+          created_at: string
+          entry_key: string
+          fingerprint: string
+          id: string
+          source_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entry_key: string
+          fingerprint: string
+          id?: string
+          source_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entry_key?: string
+          fingerprint?: string
+          id?: string
+          source_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       jrc_update_proposals: {
         Row: {
           card_id: string | null
