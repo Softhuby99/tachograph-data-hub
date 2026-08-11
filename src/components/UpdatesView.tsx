@@ -202,14 +202,11 @@ export function UpdatesView() {
             updates. Nothing is written to the database until you approve it.
           </p>
         </div>
-        <Button
-          onClick={() => checkMutation.mutate()}
-          disabled={checkMutation.isPending}
-        >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${checkMutation.isPending ? "animate-spin" : ""}`}
-          />
-          {checkMutation.isPending ? "Checking…" : "Check for updates"}
+        <Button onClick={() => void runCheck()} disabled={running}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
+          {running
+            ? `Checking ${activeSource ? SOURCE_LABELS[activeSource] : ""}…`
+            : "Check for updates"}
         </Button>
       </div>
 
@@ -223,16 +220,35 @@ export function UpdatesView() {
         </div>
         {Object.keys(SOURCE_LABELS).map((key) => {
           const run = latestBySource.get(key);
+          const state = sourceState[key];
+          const rowClass =
+            state === "running"
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              : state === "updated"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : state === "error"
+                  ? "bg-destructive/10 text-destructive"
+                  : "";
           return (
             <div
               key={key}
-              className="grid gap-1 border-b px-3 py-2 text-xs last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center"
+              className={`grid gap-1 border-b px-3 py-2 text-xs transition-colors last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center ${rowClass}`}
             >
-              <span className="font-medium">{SOURCE_LABELS[key]}</span>
-              <span className="text-muted-foreground">
-                {run
-                  ? run.message
-                  : "not checked yet"}
+              <span className="flex items-center gap-2 font-medium">
+                {state === "running" && (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                )}
+                {state === "updated" && <Check className="h-3 w-3" />}
+                {SOURCE_LABELS[key]}
+              </span>
+              <span
+                className={state ? "" : "text-muted-foreground"}
+              >
+                {state === "running"
+                  ? "Checking…"
+                  : run
+                    ? run.message
+                    : "not checked yet"}
               </span>
               <a
                 className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -246,6 +262,7 @@ export function UpdatesView() {
           );
         })}
       </div>
+
 
       <div className="flex flex-wrap gap-2">
         <Button
