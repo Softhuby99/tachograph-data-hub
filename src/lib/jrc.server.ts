@@ -202,6 +202,10 @@ export type ProposalInsert = {
   jrc_eov: string;
   jrc_type_approval: string;
   source_url: string;
+  source_type: string;
+  source_label: string;
+  title: string;
+  payload: Record<string, string>;
   changes: { fields: FieldChange[] };
   status: string;
 };
@@ -210,8 +214,10 @@ export function buildProposals(
   rows: JrcRow[],
   cards: CardRow[],
   sinceMs = 0,
+  source: SourceKey = "card_status",
 ): ProposalInsert[] {
   const out: ProposalInsert[] = [];
+  const meta = JRC_SOURCES[source];
   for (const row of latestPerApproval(rows)) {
     // Only consider JRC entries published after the data reference date —
     // older rows are already reflected in the dataset.
@@ -220,7 +226,7 @@ export function buildProposals(
     const changes = card ? diffRow(row, card) : [];
     if (card && changes.length === 0) continue;
     out.push({
-      fingerprint: fingerprintFor(row, card?.id ?? null),
+      fingerprint: `${source}:${fingerprintFor(row, card?.id ?? null)}`,
       kind: card ? "changed" : "new",
       card_id: card?.id ?? null,
       country: card?.country ?? "",
@@ -231,13 +237,108 @@ export function buildProposals(
       jrc_date: row.date,
       jrc_eov: row.eov,
       jrc_type_approval: row.typeApproval,
-      source_url: JRC_CARD_STATUS_URL,
+      source_url: meta.url,
+      source_type: source,
+      source_label: meta.label,
+      title: card
+        ? `${card.country} · ${row.typeApproval}`
+        : `New entry · ${row.typeApproval}`,
+      payload: {},
       changes: { fields: changes },
       status: "pending",
     });
   }
   return out;
 }
+
+// --------------------------------------------------------- info-only sources
+// Pages without a direct card-field mapping (country key certificates, key
+// management status, mandatory VU security updates). They are diffed against a
+// stored snapshot so the first run only records a baseline instead of flooding
+// the inbox, and later runs surface genuinely new or changed entries.
+
+type SnapshotEntry = {
+  key: string;
+  fingerprint: string;
+  country: string;
+  title: string;
+  payload: Record<string, string>;
+};
+
+const MAX_INFO_PER_SOURCE = 40;
+
+async function collectInfoEntries(
+  source: Exclude<SourceKey, "card_status" | "other_certificates">,
+): Promise<{ entries: SnapshotEntry[]; rowsParsed: number }> {
+  const html = await fetchPage(JRC_SOURCES[source].url);
+
+  if (source === "public_key_certificates") {
+    const rows = parsePublicKeyCertificates(html);
+    return {
+      rowsParsed: rows.length,
+      entries: rows.map((r) => ({
+        key: `${r.country}|${r.equipment}|${r.certificate}`,
+        fingerprint: `${r.endOfValidity}|${r.sha1}`,
+        country: r.country,
+        title: `${r.country} · ${r.equipment} certificate ${r.certificate}`,
+        payload: {
+          Country: r.country,
+          Equipment: r.equipment,
+          Certificate: r.certificate,
+          "End of validity": r.endOfValidity,
+          "SHA-1": r.sha1,
+        },
+      })),
+    };
+  }
+
+  if (source === "key_management") {
+    const rows = parseKeyManagement(html);
+    return {
+      rowsParsed: rows.length,
+      entries: rows.map((r) => ({
+        key: r.country,
+        fingerprint: [r.stateAuthority, r.policyApproved, r.tcc, r.kmwc, r.vuc, r.kmvu, r.km].join("|"),
+        country: r.country,
+        title: `${r.country} · key management status updated`,
+        payload: {
+          Country: r.country,
+          "State authority identified": r.stateAuthority,
+          "Policy approved": r.policyApproved,
+          "TC.C": r.tcc,
+          KmWC: r.kmwc,
+          "VU.C": r.vuc,
+          KmVU: r.kmvu,
+          Km: r.km,
+        },
+      })),
+    };
+  }
+
+  const rows = parseSecurityUpdates(html);
+  return {
+    rowsParsed: rows.length,
+    entries: rows.map((r) => ({
+      key: `${r.brand}|${r.model}`,
+      fingerprint: [r.versions, r.typeApprovals, r.vulnerableVersions, r.updateVersions, r.versionsAfter, r.approvalsAfter, r.mandatoryFrom, r.deadline].join("|"),
+      country: "",
+      title: `${r.brand} · ${r.model} — mandatory security update`,
+      payload: {
+        Brand: r.brand,
+        Model: r.model,
+        "Version(s)": r.versions,
+        "Type approval(s)": r.typeApprovals,
+        "Vulnerable version(s)": r.vulnerableVersions,
+        "Update to version(s)": r.updateVersions,
+        "Version(s) after update": r.versionsAfter,
+        "Type approval(s) after update": r.approvalsAfter,
+        "Mandatory as from": r.mandatoryFrom,
+        Deadline: r.deadline,
+      },
+    })),
+  };
+}
+
 
 export async function runJrcCheck() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
