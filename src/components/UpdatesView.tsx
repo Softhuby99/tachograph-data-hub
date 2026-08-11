@@ -259,19 +259,25 @@ export function UpdatesView() {
       <div className="space-y-4">
         {list.map((p) => {
           const fields = p.changes?.fields ?? [];
+          const isInfo = p.kind === "info";
+          const payload = p.payload ?? {};
           return (
             <Card key={p.id}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base">
-                    {p.kind === "new"
-                      ? `New JRC entry · ${p.jrc_type_approval || "—"}`
-                      : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`}
+                    {p.title ||
+                      (p.kind === "new"
+                        ? `New JRC entry · ${p.jrc_type_approval || "—"}`
+                        : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`)}
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
+                    </Badge>
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
-                      {p.kind === "new" ? "New entry" : "Changed"}
+                      {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
                     </Badge>
                     {p.status !== "pending" && (
                       <Badge variant="secondary">{p.status}</Badge>
@@ -280,12 +286,21 @@ export function UpdatesView() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-1 text-sm sm:grid-cols-2">
-                  <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
-                  <Detail label="Card (JRC)" value={p.jrc_card_name} />
-                  <Detail label="Certificate" value={p.jrc_certificate} />
-                  <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
-                </div>
+                {isInfo ? (
+                  <div className="grid gap-1 text-sm sm:grid-cols-2">
+                    {Object.entries(payload).map(([k, v]) => (
+                      <Detail key={k} label={k} value={v} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-1 text-sm sm:grid-cols-2">
+                    <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
+                    <Detail label="Card (JRC)" value={p.jrc_card_name} />
+                    <Detail label="Certificate" value={p.jrc_certificate} />
+                    <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
+                  </div>
+                )}
+
 
                 {fields.length > 0 && (
                   <div className="rounded-md border">
