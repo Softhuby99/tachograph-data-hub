@@ -451,14 +451,21 @@ export async function runUpdateCheck() {
       const entries = [...new Map(rawEntries.map((e) => [e.key, e])).values()];
 
 
-      const { data: snapRows, error: snapErr } = await supabaseAdmin
-        .from("jrc_source_snapshots")
-        .select("entry_key,fingerprint")
-        .eq("source_type", source);
-      if (snapErr) throw new Error(snapErr.message);
-      const snapshot = new Map(
-        (snapRows ?? []).map((s) => [s.entry_key as string, s.fingerprint as string]),
-      );
+      // PostgREST caps a select at 1000 rows — page through the snapshot,
+      // otherwise unseen rows look "changed" on every run.
+      const snapshot = new Map<string, string>();
+      for (let from = 0; ; from += 1000) {
+        const { data: snapRows, error: snapErr } = await supabaseAdmin
+          .from("jrc_source_snapshots")
+          .select("entry_key,fingerprint")
+          .eq("source_type", source)
+          .range(from, from + 999);
+        if (snapErr) throw new Error(snapErr.message);
+        for (const s of snapRows ?? []) {
+          snapshot.set(s.entry_key as string, s.fingerprint as string);
+        }
+        if (!snapRows || snapRows.length < 1000) break;
+      }
       const baseline = snapshot.size === 0;
 
       let created = 0;
