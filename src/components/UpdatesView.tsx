@@ -326,10 +326,12 @@ export function UpdatesView() {
 
                 {p.status === "pending" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {p.kind === "new" && (
+                    {(p.kind === "new" || (isInfo && !p.country)) && (
                       <Input
                         className="h-9 w-56"
-                        placeholder="Country for new entry"
+                        placeholder={
+                          isInfo ? "Country to note this on" : "Country for new entry"
+                        }
                         value={newCountry[p.id] ?? ""}
                         onChange={(e) =>
                           setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))
@@ -346,8 +348,10 @@ export function UpdatesView() {
                       }
                       disabled={approveMutation.isPending}
                     >
-                      <Check className="mr-2 h-4 w-4" /> Approve &amp; apply
+                      <Check className="mr-2 h-4 w-4" />{" "}
+                      {isInfo ? "Acknowledge & note" : "Approve & apply"}
                     </Button>
+
                     <Button
                       size="sm"
                       variant="outline"
