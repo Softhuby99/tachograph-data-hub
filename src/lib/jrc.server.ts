@@ -385,11 +385,16 @@ export async function runUpdateCheck() {
     return Number.isNaN(t) ? acc : Math.max(acc, t);
   }, 0);
 
-  const { data: existing, error: exErr } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .select("fingerprint");
-  if (exErr) throw new Error(exErr.message);
-  const known = new Set((existing ?? []).map((e) => e.fingerprint as string));
+  const known = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data: existing, error: exErr } = await supabaseAdmin
+      .from("jrc_update_proposals")
+      .select("fingerprint")
+      .range(from, from + 999);
+    if (exErr) throw new Error(exErr.message);
+    for (const e of existing ?? []) known.add(e.fingerprint as string);
+    if (!existing || existing.length < 1000) break;
+  }
 
   const results: SourceResult[] = [];
 
