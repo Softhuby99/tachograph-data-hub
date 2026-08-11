@@ -1,0 +1,22 @@
+# test4: production with Let's Encrypt certificates.
+services:
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d/site.conf:/etc/nginx/conf.d/site.conf:ro
+      - ./letsencrypt:/etc/letsencrypt:ro
+      - ./certbot-www:/var/www/certbot:ro
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: tdh-certbot
+    restart: unless-stopped
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./certbot-www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+      while :; do certbot renew --webroot -w /var/www/certbot --quiet;
+      sleep 12h & wait $${!}; done"

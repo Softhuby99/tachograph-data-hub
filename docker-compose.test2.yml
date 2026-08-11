@@ -1,0 +1,9 @@
+# test2: self-signed HTTPS on 443 (plus redirect from 80).
+services:
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/test/https-selfsigned.conf:/etc/nginx/conf.d/site.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
