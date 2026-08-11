@@ -1,0 +1,35 @@
+# PostgreSQL database for TDH (Tacho Data Hub).
+# Can be started standalone or together with the web stack.
+#
+# Standalone (database only):
+#   docker compose -f docker-compose.db.yml up -d
+#
+# Combined with web stack (test1 + db):
+#   docker compose -f docker-compose.yml -f docker-compose.test1.yml -f docker-compose.db.yml up -d
+#
+# On first start, db/init.sql is executed automatically (creates schema + seed data).
+# To re-import: remove the volume first:
+#   docker compose -f docker-compose.db.yml down -v
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tdh-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tdh}
+      POSTGRES_USER: ${POSTGRES_USER:-tdh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tdh_secret}
+    volumes:
+      - tdh_pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tdh} -d ${POSTGRES_DB:-tdh}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tdh_pgdata:

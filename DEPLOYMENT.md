@@ -1,11 +1,19 @@
 # TDH = Tacho Data Hub
 
-Deployment des **Tachograph Cards Info Tool** als statische Web-App
-(nginx im Docker-Container, Debian 12 Host).
+Deployment des **Tachograph Cards Info Tool** (nginx im Docker-Container,
+Debian 12 Host).
 
-Die App unter `standalone/` ist vollstaendig eigenstaendig: HTML, UI-Logik und
-alle Datensaetze sind eingebettet, es wird keine Datenbank und kein Backend
-benoetigt. Der Container liefert lediglich diese Dateien per nginx aus.
+Es gibt zwei Betriebsarten:
+
+1. **Statisch (Default)** — Die App unter `standalone/` ist vollstaendig
+   eigenstaendig: HTML, UI-Logik und alle 53 Datensaetze sind eingebettet.
+   Keine Datenbank, kein Backend. Der Container liefert lediglich die Dateien
+   per nginx aus.
+
+2. **Mit lokaler PostgreSQL** — Zusaetzlich zum statischen Frontend laeuft ein
+   PostgreSQL-Container mit dem vollen Datenbankschema (4 Tabellen) und allen
+   53 Datensaetzen plus 1.283 JRC-Snapshot-Baselines. Damit ist die
+   JRC-/TED-Update-Pruefung lokal verfuegbar (siehe Abschnitt 11).
 
 ---
 
@@ -196,10 +204,213 @@ docker compose -f docker-compose.yml -f docker-compose.test4.yml exec web nginx 
 | TLS-Warnung im Browser (test2)   | Erwartet — self-signed Zertifikat, Ausnahme im Browser bestaetigen                       |
 | certbot schlaegt fehl (test4)    | DNS-A-Record und Erreichbarkeit von Port 80 pruefen: `curl http://<domain>/.well-known/acme-challenge/test` |
 
+---
+
+# 11. Lokale PostgreSQL-Datenbank
+
+Dieser Abschnitt beschreibt, wie du eine eigene PostgreSQL-Datenbank lokal
+(oder im Docker-Stack) betreibst, das Schema anlegst und die 53 Datensaetze
+plus JRC-Snapshot-Baseline importierst.
+
+## Was wird benoetigt?
+
+| Komponente | Version | Zweck |
+| ---------- | ------- | ----- |
+| PostgreSQL | 14+ (16 empfohlen) | Datenbank-Server |
+| `db/init.sql` | aus diesem Repo | Schema + Seed-Daten (53 Karten + 1.283 Snapshots) |
+| `docker-compose.db.yml` | aus diesem Repo | Docker-Container fuer PostgreSQL (optional) |
+
+Die Datei `db/init.sql` ist vollstaendig eigenstaendig: sie enthaelt das
+komplette Schema (4 Tabellen, Indizes, Trigger-Funktion) **und** alle
+Seed-Daten in Form von `INSERT`-Statements. Keine externen Abhaengigkeiten.
+
+## 11.1 Tabellen-Uebersicht
+
+| Tabelle | Datensaetze | Inhalt |
+| ------- | ----------- | ------ |
+| `tachograph_cards` | 53 | Konsolidierte Karten-Daten (Land, Generation, Hersteller, Zertifikate, Beschaffung) |
+| `jrc_source_snapshots` | 1.283 | Fingerabdruecke aller JRC-Eintraege — dient als Diff-Baseline fuer die Update-Pruefung |
+| `jrc_update_proposals` | 0 (runtime) | Ausstehende Update-Vorschlaege — wird bei jeder Pruefung gefuellt |
+| `jrc_check_runs` | 0 (runtime) | Verlauf der bisherigen Update-Pruefungen — wird bei jeder Pruefung gefuellt |
+
+Die beiden letzten Tabellen starten leer und fuellen sich beim ersten
+„Check for updates"-Lauf.
+
+## 11.2 Option A: PostgreSQL im Docker-Container (empfohlen)
+
+### 11.2.1 Nur die Datenbank starten
+
+```bash
+cd /opt/TDH
+docker compose -f docker-compose.db.yml up -d
+```
+
+Beim ersten Start wird `db/init.sql` automatisch ausgefuehrt (Schema +
+Seed-Daten). Danach ist die Datenbank unter `localhost:5432` verfuegbar.
+
+### 11.2.2 Web-Stack + Datenbank zusammen starten
+
+```bash
+cd /opt/TDH
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.test1.yml \
+  -f docker-compose.db.yml \
+  up -d
+```
+
+Das Frontend laeuft auf Port 80, die Datenbank auf Port 5432.
+
+### 11.2.3 Verbindung testen
+
+```bash
+docker exec -it tdh-db psql -U tdh -d tdh -c "SELECT count(*) FROM tachograph_cards;"
+# Erwartet: 53
+
+docker exec -it tdh-db psql -U tdh -d tdh -c "SELECT count(*) FROM jrc_source_snapshots;"
+# Erwartet: 1283
+```
+
+### 11.2.4 Daten neu importieren (Reset)
+
+Um das Schema und die Seed-Daten neu aufzubauen (z. B. nach einer
+Aktualisierung von `db/init.sql`):
+
+```bash
+docker compose -f docker-compose.db.yml down -v   # Volume loeschen
+docker compose -f docker-compose.db.yml up -d     # neu starten, init.sql laeuft automatisch
+```
+
+> **Achtung:** `down -v` loescht alle Daten im Volume, including runtime-
+> Daten (`jrc_update_proposals`, `jrc_check_runs`). Nur ausfuehren, wenn du
+> die Datenbank neu aufbauen willst.
+
+### 11.2.5 Zugangsdaten anpassen
+
+In `.env` ergaenzen (oder beim `docker compose`-Befehl `-e` verwenden):
+
+```bash
+POSTGRES_DB=tdh
+POSTGRES_USER=tdh
+POSTGRES_PASSWORD=tdh_secret          # bitte aendern!
+```
+
+## 11.3 Option B: PostgreSQL direkt auf dem Host (ohne Docker)
+
+### 11.3.1 PostgreSQL installieren (Debian 12)
+
+```bash
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+sudo systemctl enable --now postgresql
+```
+
+### 11.3.2 Datenbank und User anlegen
+
+```bash
+sudo -u postgres psql << 'SQL'
+CREATE USER tdh WITH PASSWORD 'tdh_secret';
+CREATE DATABASE tdh OWNER tdh;
+SQL
+```
+
+### 11.3.3 Schema + Seed-Daten importieren
+
+```bash
+psql -U tdh -d tdh -h localhost -f db/init.sql
+```
+
+Wenn du nach dem Passwort gefragt wirst, `tdh_secret` eingeben.
+
+### 11.3.4 Import verifizieren
+
+```bash
+psql -U tdh -d tdh -h localhost -c "SELECT count(*) FROM tachograph_cards;"
+psql -U tdh -d tdh -h localhost -c "SELECT count(*) FROM jrc_source_snapshots;"
+```
+
+### 11.3.5 Daten aktualisieren
+
+Um die Seed-Daten zu aktualisieren (z. B. neue Version von `db/init.sql`):
+
+```bash
+# Tabellen leeren, dann neu importieren
+psql -U tdh -d tdh -h localhost -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+psql -U tdh -d tdh -h localhost -f db/init.sql
+```
+
+## 11.4 Daten manuell exportieren (CSV)
+
+Fuer Backups oder den Transfer auf einen anderen Server:
+
+```bash
+# Docker
+docker exec tdh-db psql -U tdh -d tdh \
+  -c "COPY tachograph_cards TO STDOUT WITH CSV HEADER" > backup_cards.csv
+
+# Host
+psql -U tdh -d tdh -h localhost \
+  -c "COPY tachograph_cards TO STDOUT WITH CSV HEADER" > backup_cards.csv
+```
+
+## 11.5 Verbindung aus der App
+
+Die statische Frontend-App (`standalone/index.html`) arbeitet eingebettet
+und benoetigt keine Datenbank. Die lokale PostgreSQL-Datenbank ist fuer den
+Betrieb der **JRC-/TED-Update-Pruefung** gedacht: Die Server-Funktionen des
+Tools verbinden sich mit der Datenbank, lesen die Snapshots, vergleichen mit
+den JRC-Quellen und schreiben neue Vorschlaege in `jrc_update_proposals`.
+
+Damit die Server-Funktionen die lokale Datenbank erreichen, folgende
+Umgebungsvariablen setzen (in `.env` oder beim Start):
+
+```bash
+# Fuer die lokale PostgreSQL (statt Lovable Cloud)
+DB_HOST=localhost          # bzw. tdh-db im Docker-Netzwerk
+DB_PORT=5432
+DB_NAME=tdh
+DB_USER=tdh
+DB_PASSWORD=tdh_secret
+```
+
+> **Hinweis:** Die Server-Funktionen muessen angepasst werden, um die lokale
+> PostgreSQL-Verbindung statt des Supabase-Clients zu verwenden. Das
+> Frontend (Data-View, Market Analytics) funktioniert auch ohne Datenbank,
+> da es die eingebetteten `data.json`-Daten verwendet.
+
+## 11.6 Datenbank-Wartung
+
+### Backup (Dump)
+
+```bash
+# Docker
+docker exec tdh-db pg_dump -U tdh tdh > backup_$(date +%Y%m%d).sql
+
+# Host
+pg_dump -U tdh -h localhost tdh > backup_$(date +%Y%m%d).sql
+```
+
+### Restore
+
+```bash
+psql -U tdh -d tdh -h localhost -f backup_20260811.sql
+# bzw. im Container:
+docker exec -i tdh-db psql -U tdh -d tdh < backup_20260811.sql
+```
+
+### Indizes neu aufbauen (bei Performance-Rueckgang)
+
+```bash
+docker exec tdh-db psql -U tdh -d tdh -c "REINDEX DATABASE tdh;"
+```
+
+---
+
 ## Hinweise
 
 - Manuelle Edits in „Card & Certification" werden pro Browser im `localStorage`
   gespeichert, nicht serverseitig. Fuer geteilte Aenderungen `standalone/data.json`
   aktualisieren und neu deployen.
-- Die JRC-/TED-Update-Pruefung ist Teil der Cloud-Version des Tools und in
-  diesem statischen Deployment nicht enthalten.
+- Die JRC-/TED-Update-Pruefung benoetigt die lokale PostgreSQL-Datenbank
+  (Abschnitt 11). Ohne Datenbank ist die statische App voll funktionsfaehig,
+  jedoch ohne Update-Monitoring.
