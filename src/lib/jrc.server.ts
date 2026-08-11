@@ -175,16 +175,21 @@ export function diffRow(
 ): FieldChange[] {
   const proposed: Record<string, string> = {
     generation: row.generation,
-    tachograph_application_os: row.cardName,
     type_approval_number: row.typeApproval,
-    jrc_interoperability_status: jrcStatusText(row),
-    jrc_certificate_source: JRC_CARD_STATUS_URL,
   };
+
+  // Only flag the certificate when the certificate ID itself is new — the
+  // "issued / EOV" suffix alone is formatting noise.
+  const certKey = normApproval(row.certificate);
+  const currentStatus = normApproval(card.jrc_interoperability_status || "");
+  if (certKey && !currentStatus.includes(certKey)) {
+    proposed.jrc_interoperability_status = jrcStatusText(row);
+  }
 
   const manuOld = (card.current_manufacturer || "").toLowerCase();
   const manuNew = row.manufacturer.toLowerCase();
   const manuToken = manuNew.split(/[\s/–-]/)[0];
-  if (manuNew && !manuOld.includes(manuToken)) {
+  if (manuNew && manuToken.length > 2 && !manuOld.includes(manuToken)) {
     proposed.current_manufacturer = row.manufacturer;
   }
 
