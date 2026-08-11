@@ -238,9 +238,13 @@ export type ProposalInsert = {
 export function buildProposals(
   rows: JrcRow[],
   cards: CardRow[],
+  sinceMs = 0,
 ): ProposalInsert[] {
   const out: ProposalInsert[] = [];
   for (const row of latestPerApproval(rows)) {
+    // Only consider JRC entries published after the data reference date —
+    // older rows are already reflected in the dataset.
+    if (sinceMs && parseJrcDate(row.date) < sinceMs) continue;
     const card = matchCard(row, cards);
     const changes = card ? diffRow(row, card) : [];
     if (card && changes.length === 0) continue;
