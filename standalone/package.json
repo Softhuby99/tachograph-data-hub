@@ -5,8 +5,32 @@
   "main": "main.cjs",
   "author": "Lovable",
   "license": "UNLICENSED",
+  "build": {
+    "appId": "com.lovable.tachograph-card-info-tool",
+    "productName": "TachographCardsInfoTool",
+    "files": [
+      "main.cjs",
+      "index.html",
+      "data.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "TachographCardsInfoTool-Portable.exe"
+    },
+    "directories": {
+      "output": "release"
+    }
+  },
   "devDependencies": {
     "@electron/packager": "^20.0.3",
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "electron-builder": "^25.1.8"
   }
 }
