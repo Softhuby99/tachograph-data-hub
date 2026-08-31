@@ -249,6 +249,28 @@ function TachographTool() {
 
   const resetOverride = (id: string) => resetMutation.mutate(id);
 
+  // One-time migration: push edits that still live in this browser's localStorage
+  // into the shared database, then clear them locally.
+  useEffect(() => {
+    if (!auth.session || !rawCards?.length) return;
+    const raw = localStorage.getItem("tacho-overrides-v1");
+    if (!raw) return;
+    localStorage.removeItem("tacho-overrides-v1");
+    try {
+      const legacy = JSON.parse(raw) as Record<string, Record<string, string>>;
+      for (const [cardId, patch] of Object.entries(legacy)) {
+        if (patch && Object.keys(patch).length > 0) {
+          saveMutation.mutate({ cardId, patch });
+        }
+      }
+    } catch {
+      /* ignore malformed legacy data */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.session, rawCards?.length]);
+
+
+
 
 
   return (
