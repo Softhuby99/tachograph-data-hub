@@ -17,7 +17,16 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UpdatesView } from "@/components/UpdatesView";
-import { Search, ExternalLink, ShieldCheck, FileText, Building2, BarChart3, Pencil, RefreshCw } from "lucide-react";
+import {
+  Search,
+  ExternalLink,
+  ShieldCheck,
+  FileText,
+  Building2,
+  BarChart3,
+  Pencil,
+  RefreshCw,
+} from "lucide-react";
 import thalesLogo from "@/assets/thales-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
@@ -32,8 +41,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Tachograph Cards Info Tool" },
       {
         property: "og:description",
-        content:
-          "Search European tachograph cards by country, generation and manufacturer.",
+        content: "Search European tachograph cards by country, generation and manufacturer.",
       },
     ],
   }),
@@ -88,10 +96,7 @@ function useCards() {
   return useQuery({
     queryKey: ["tachograph_cards"],
     queryFn: async (): Promise<TachoCard[]> => {
-      const { data, error } = await supabase
-        .from("tachograph_cards")
-        .select("*")
-        .order("country");
+      const { data, error } = await supabase.from("tachograph_cards").select("*").order("country");
       if (error) throw error;
       return data as TachoCard[];
     },
@@ -103,18 +108,59 @@ function uniq(arr: string[]): string[] {
 }
 
 const COUNTRY_ISO: Record<string, string> = {
-  Albania: "al", Armenia: "am", Austria: "at", Azerbaijan: "az", Belarus: "by",
-  Belgium: "be", "Bosnia and Herzegovina": "ba", Bulgaria: "bg", Croatia: "hr",
-  Cyprus: "cy", Czechia: "cz", Denmark: "dk", Estonia: "ee", Finland: "fi",
-  France: "fr", Georgia: "ge", Germany: "de", Greece: "gr", Hungary: "hu",
-  Iceland: "is", Ireland: "ie", Israel: "il", Italy: "it", Kazakhstan: "kz",
-  Kyrgyzstan: "kg", Latvia: "lv", Liechtenstein: "li", Lithuania: "lt",
-  Luxembourg: "lu", Malta: "mt", Moldova: "md", Monaco: "mc", Montenegro: "me",
-  Netherlands: "nl", "North Macedonia": "mk", Norway: "no", Poland: "pl",
-  Portugal: "pt", Romania: "ro", Russia: "ru", "San Marino": "sm", Serbia: "rs",
-  Slovakia: "sk", Slovenia: "si", Spain: "es", Sweden: "se", Switzerland: "ch",
-  Tajikistan: "tj", Turkmenistan: "tm", "Türkiye": "tr", Ukraine: "ua",
-  "United Kingdom": "gb", Uzbekistan: "uz",
+  Albania: "al",
+  Armenia: "am",
+  Austria: "at",
+  Azerbaijan: "az",
+  Belarus: "by",
+  Belgium: "be",
+  "Bosnia and Herzegovina": "ba",
+  Bulgaria: "bg",
+  Croatia: "hr",
+  Cyprus: "cy",
+  Czechia: "cz",
+  Denmark: "dk",
+  Estonia: "ee",
+  Finland: "fi",
+  France: "fr",
+  Georgia: "ge",
+  Germany: "de",
+  Greece: "gr",
+  Hungary: "hu",
+  Iceland: "is",
+  Ireland: "ie",
+  Israel: "il",
+  Italy: "it",
+  Kazakhstan: "kz",
+  Kyrgyzstan: "kg",
+  Latvia: "lv",
+  Liechtenstein: "li",
+  Lithuania: "lt",
+  Luxembourg: "lu",
+  Malta: "mt",
+  Moldova: "md",
+  Monaco: "mc",
+  Montenegro: "me",
+  Netherlands: "nl",
+  "North Macedonia": "mk",
+  Norway: "no",
+  Poland: "pl",
+  Portugal: "pt",
+  Romania: "ro",
+  Russia: "ru",
+  "San Marino": "sm",
+  Serbia: "rs",
+  Slovakia: "sk",
+  Slovenia: "si",
+  Spain: "es",
+  Sweden: "se",
+  Switzerland: "ch",
+  Tajikistan: "tj",
+  Turkmenistan: "tm",
+  Türkiye: "tr",
+  Ukraine: "ua",
+  "United Kingdom": "gb",
+  Uzbekistan: "uz",
 };
 
 function flagUrl(country: string, size: 40 | 80 = 40): string | null {
@@ -152,8 +198,7 @@ function TachographTool() {
   }, []);
 
   const cards = useMemo(
-    () =>
-      (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
+    () => (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
     [rawCards, overrides],
   );
 
@@ -186,19 +231,13 @@ function TachographTool() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-md bg-white px-2 py-1.5 shadow-sm ring-1 ring-border">
-              <img
-                src={thalesLogo.url}
-                alt="Thales logo"
-                className="h-7 w-auto object-contain"
-              />
+              <img src={thalesLogo.url} alt="Thales logo" className="h-7 w-auto object-contain" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Tachograph Cards Info Tool
-              </h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Tachograph Cards Info Tool</h1>
               <p className="text-sm text-muted-foreground">
-                Consolidated certification &amp; procurement data for
-                European Tacho Card (G1 · G2.1 · G2.2)
+                Consolidated certification &amp; procurement data for European Tacho Card (G1 · G2.1
+                · G2.2)
               </p>
             </div>
           </div>
@@ -240,11 +279,7 @@ function TachographTool() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-        {error && (
-          <p className="text-sm text-destructive">
-            Error loading: {String(error)}
-          </p>
-        )}
+        {error && <p className="text-sm text-destructive">Error loading: {String(error)}</p>}
 
         {!isLoading && !error && tab === "data" && (
           <DataView
@@ -254,15 +289,12 @@ function TachographTool() {
             onReset={resetOverride}
           />
         )}
-        {!isLoading && !error && tab === "analytics" && (
-          <AnalyticsView cards={cards} />
-        )}
+        {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Data as of:{" "}
-          {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
-          national authorities &amp; public procurement records.
+          Data as of: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
+          authorities &amp; public procurement records.
         </footer>
       </main>
     </div>
@@ -298,9 +330,14 @@ function DataView({
     return cards.filter((c) => {
       if (country !== "all" && c.country !== country) return false;
       if (generation !== "all" && c.generation !== generation) return false;
-      if (manufacturer !== "all" && c.current_manufacturer_normalized !== manufacturer) return false;
+      if (manufacturer !== "all" && c.current_manufacturer_normalized !== manufacturer)
+        return false;
       if (!q) return true;
-      return Object.values(c).some((v) => String(v ?? "").toLowerCase().includes(q));
+      return Object.values(c).some((v) =>
+        String(v ?? "")
+          .toLowerCase()
+          .includes(q),
+      );
     });
   }, [cards, country, generation, manufacturer, search]);
 
@@ -327,35 +364,51 @@ function DataView({
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Country</label>
             <Select value={country} onValueChange={setCountry}>
-              <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All countries</SelectItem>
                 {countries.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Generation</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Generation
+            </label>
             <Select value={generation} onValueChange={setGeneration}>
-              <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All generations</SelectItem>
                 {generations.map((g) => (
-                  <SelectItem key={g} value={g}>{g}</SelectItem>
+                  <SelectItem key={g} value={g}>
+                    {g}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Current Manufacturer</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Current Manufacturer
+            </label>
             <Select value={manufacturer} onValueChange={setManufacturer}>
-              <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All manufacturers</SelectItem>
                 {manufacturers.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -402,7 +455,9 @@ function DataView({
                         <span className="truncate font-medium">
                           {c.country}
                           {edited && (
-                            <Badge variant="outline" className="ml-2 text-[10px]">edited</Badge>
+                            <Badge variant="outline" className="ml-2 text-[10px]">
+                              edited
+                            </Badge>
                           )}
                         </span>
                         <Badge variant="secondary">{c.generation}</Badge>
@@ -415,9 +470,7 @@ function DataView({
                 );
               })}
               {filtered.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No matches.
-                </p>
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">No matches.</p>
               )}
             </div>
           </ScrollArea>
@@ -467,7 +520,10 @@ function DetailView({
     setDraft(d);
     setEditing(true);
   };
-  const cancel = () => { setEditing(false); setDraft({}); };
+  const cancel = () => {
+    setEditing(false);
+    setDraft({});
+  };
   const save = () => {
     onSave(draft as Partial<TachoCard>);
     setEditing(false);
@@ -490,7 +546,11 @@ function DetailView({
         <div>
           <h2 className="text-2xl font-semibold">
             {card.country}
-            {edited && <Badge variant="outline" className="ml-2 align-middle text-xs">edited</Badge>}
+            {edited && (
+              <Badge variant="outline" className="ml-2 align-middle text-xs">
+                edited
+              </Badge>
+            )}
           </h2>
           <div className="mt-1 flex flex-wrap gap-2">
             <Badge>{card.generation || "—"}</Badge>
@@ -517,10 +577,16 @@ function DetailView({
               )}
               {editing && (
                 <>
-                  <Button size="sm" onClick={save}>Save</Button>
-                  <Button size="sm" variant="outline" onClick={cancel}>Cancel</Button>
+                  <Button size="sm" onClick={save}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={cancel}>
+                    Cancel
+                  </Button>
                   {edited && (
-                    <Button size="sm" variant="ghost" onClick={onReset}>Reset</Button>
+                    <Button size="sm" variant="ghost" onClick={onReset}>
+                      Reset
+                    </Button>
                   )}
                 </>
               )}
@@ -608,7 +674,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
 
   const genCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    cards.forEach((c) => { m[c.generation] = (m[c.generation] ?? 0) + 1; });
+    cards.forEach((c) => {
+      m[c.generation] = (m[c.generation] ?? 0) + 1;
+    });
     return m;
   }, [cards]);
   const gens = ["G1", "G2.1", "G2.2"].filter((g) => genCounts[g]);
@@ -634,7 +702,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
   const mfgMax = mfgList[0]?.approvals || 1;
 
   const genDrillCountries = drillGen
-    ? cards.filter((c) => c.generation === drillGen).map((c) => `${c.country_flag ?? ""} ${c.country}`).sort()
+    ? cards
+        .filter((c) => c.generation === drillGen)
+        .map((c) => `${c.country_flag ?? ""} ${c.country}`)
+        .sort()
     : [];
   const manDrillCountries = drillMan
     ? cards
@@ -647,7 +718,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">Market Analytics</h2>
-        <p className="text-sm text-muted-foreground">{total} records across {gens.length} generation(s)</p>
+        <p className="text-sm text-muted-foreground">
+          {total} records across {gens.length} generation(s)
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -680,10 +753,14 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                   <span className="text-xs font-semibold uppercase tracking-wide">
                     Countries with {drillGen}
                   </span>
-                  <Button size="sm" variant="ghost" onClick={() => setDrillGen(null)}>Close</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDrillGen(null)}>
+                    Close
+                  </Button>
                 </div>
                 <ul className="grid grid-cols-2 gap-x-4 text-sm md:grid-cols-3">
-                  {genDrillCountries.map((c) => <li key={c}>{c}</li>)}
+                  {genDrillCountries.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -722,7 +799,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Manufacturers — Type Approvals &amp; Countries</CardTitle>
+          <CardTitle className="text-base">
+            Manufacturers — Type Approvals &amp; Countries
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -772,10 +851,14 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                 <span className="text-xs font-semibold uppercase tracking-wide">
                   {drillMan} — countries
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => setDrillMan(null)}>Close</Button>
+                <Button size="sm" variant="ghost" onClick={() => setDrillMan(null)}>
+                  Close
+                </Button>
               </div>
               <ul className="grid grid-cols-2 gap-x-4 text-sm md:grid-cols-3">
-                {manDrillCountries.map((c) => <li key={c}>{c}</li>)}
+                {manDrillCountries.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
               </ul>
             </div>
           )}
@@ -818,7 +901,10 @@ function LinkField({
   value?: string;
   className?: string;
 }) {
-  const links = (value ?? "").split("|").map((s) => s.trim()).filter(Boolean);
+  const links = (value ?? "")
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return (
     <div className={className}>
       <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -841,7 +927,9 @@ function LinkField({
                 <span className="break-all">{l}</span>
               </a>
             ) : (
-              <span key={l} className="text-sm">{l}</span>
+              <span key={l} className="text-sm">
+                {l}
+              </span>
             ),
           )}
         </div>

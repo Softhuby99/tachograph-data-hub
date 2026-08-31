@@ -108,9 +108,7 @@ function AuthPage() {
             className="w-full text-xs text-muted-foreground hover:underline"
             onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
           >
-            {mode === "signin"
-              ? "No account yet? Create one"
-              : "Already have an account? Sign in"}
+            {mode === "signin" ? "No account yet? Create one" : "Already have an account? Sign in"}
           </button>
           <Button variant="ghost" className="w-full" onClick={() => void navigate({ to: "/" })}>
             Back to the tool

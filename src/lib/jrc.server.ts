@@ -30,7 +30,6 @@ export type JrcRow = {
   generation: string;
 };
 
-
 export function parseJrcCardStatus(html: string): JrcRow[] {
   const rows: JrcRow[] = [];
   for (const row of extractRows(html)) {
@@ -77,7 +76,6 @@ export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
       generation: r.generation,
     }));
 }
-
 
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
@@ -141,10 +139,7 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   });
 }
 
-export function diffRow(
-  row: JrcRow,
-  card: CardRow,
-): FieldChange[] {
+export function diffRow(row: JrcRow, card: CardRow): FieldChange[] {
   const proposed: Record<string, string> = {
     generation: row.generation,
     type_approval_number: row.typeApproval,
@@ -241,9 +236,7 @@ export function buildProposals(
       source_url: meta.url,
       source_type: source,
       source_label: meta.label,
-      title: card
-        ? `${card.country} · ${row.typeApproval}`
-        : `New entry · ${row.typeApproval}`,
+      title: card ? `${card.country} · ${row.typeApproval}` : `New entry · ${row.typeApproval}`,
       payload: {},
       changes: { fields: changes },
       status: "pending",
@@ -317,7 +310,9 @@ async function collectInfoEntries(
       rowsParsed: rows.length,
       entries: rows.map((r) => ({
         key: r.country,
-        fingerprint: [r.stateAuthority, r.policyApproved, r.tcc, r.kmwc, r.vuc, r.kmvu, r.km].join("|"),
+        fingerprint: [r.stateAuthority, r.policyApproved, r.tcc, r.kmwc, r.vuc, r.kmvu, r.km].join(
+          "|",
+        ),
         country: r.country,
         title: `${r.country} · key management status updated`,
         payload: {
@@ -339,7 +334,16 @@ async function collectInfoEntries(
     rowsParsed: rows.length,
     entries: rows.map((r) => ({
       key: `${r.brand}|${r.model}`,
-      fingerprint: [r.versions, r.typeApprovals, r.vulnerableVersions, r.updateVersions, r.versionsAfter, r.approvalsAfter, r.mandatoryFrom, r.deadline].join("|"),
+      fingerprint: [
+        r.versions,
+        r.typeApprovals,
+        r.vulnerableVersions,
+        r.updateVersions,
+        r.versionsAfter,
+        r.approvalsAfter,
+        r.mandatoryFrom,
+        r.deadline,
+      ].join("|"),
       country: "",
       title: `${r.brand} · ${r.model} — mandatory security update`,
       payload: {
@@ -357,7 +361,6 @@ async function collectInfoEntries(
     })),
   };
 }
-
 
 type SourceResult = {
   source: SourceKey;
@@ -379,9 +382,7 @@ export const UPDATE_SOURCE_ORDER = [
   "ted_procurement",
 ] as const;
 
-export async function runUpdateCheckForSource(
-  source: SourceKey,
-): Promise<SourceResult> {
+export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: cards, error } = await supabaseAdmin
@@ -426,9 +427,7 @@ export async function runUpdateCheckForSource(
   try {
     if (source === "card_status" || source === "other_certificates") {
       const rows =
-        source === "card_status"
-          ? await fetchJrcRows()
-          : await fetchOtherCertificateCardRows();
+        source === "card_status" ? await fetchJrcRows() : await fetchOtherCertificateCardRows();
       const candidates = buildProposals(rows, cardRows, sinceMs, source);
       const created = await insertProposals(candidates);
       result = {
@@ -448,14 +447,8 @@ export async function runUpdateCheckForSource(
           "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
         );
       if (procErr) throw new Error(procErr.message);
-      const candidates = buildTedProposals(
-        notices,
-        (procCards ?? []) as never,
-        sinceMs,
-      );
-      const created = await insertProposals(
-        candidates as unknown as ProposalInsert[],
-      );
+      const candidates = buildTedProposals(notices, (procCards ?? []) as never, sinceMs);
+      const created = await insertProposals(candidates as unknown as ProposalInsert[]);
       result = {
         source,
         label: meta.label,
@@ -490,32 +483,28 @@ export async function runUpdateCheckForSource(
       let created = 0;
       let candidates = 0;
       if (!baseline) {
-        const changed = entries.filter(
-          (e) => snapshot.get(e.key) !== e.fingerprint,
-        );
+        const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
         candidates = changed.length;
-        const items: ProposalInsert[] = changed
-          .slice(0, MAX_INFO_PER_SOURCE)
-          .map((e) => ({
-            fingerprint: `${source}:${e.key}:${e.fingerprint}`,
-            kind: "info",
-            card_id: null,
-            country: e.country,
-            generation: "",
-            jrc_manufacturer: "",
-            jrc_card_name: "",
-            jrc_certificate: "",
-            jrc_date: "",
-            jrc_eov: "",
-            jrc_type_approval: "",
-            source_url: meta.url,
-            source_type: source,
-            source_label: meta.label,
-            title: e.title,
-            payload: e.payload,
-            changes: { fields: [] },
-            status: "pending",
-          }));
+        const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => ({
+          fingerprint: `${source}:${e.key}:${e.fingerprint}`,
+          kind: "info",
+          card_id: null,
+          country: e.country,
+          generation: "",
+          jrc_manufacturer: "",
+          jrc_card_name: "",
+          jrc_certificate: "",
+          jrc_date: "",
+          jrc_eov: "",
+          jrc_type_approval: "",
+          source_url: meta.url,
+          source_type: source,
+          source_label: meta.label,
+          title: e.title,
+          payload: e.payload,
+          changes: { fields: [] },
+          status: "pending",
+        }));
         created = await insertProposals(items);
       }
 
@@ -592,8 +581,6 @@ export async function runUpdateCheck() {
   return { ...totals, sources: results };
 }
 
-
-
 export async function approveProposal(id: string, country: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -642,7 +629,6 @@ export async function approveProposal(id: string, country: string) {
       }
     }
   } else if (proposal.card_id) {
-
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
     if (Object.keys(patch).length > 0) {

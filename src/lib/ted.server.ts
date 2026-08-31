@@ -100,7 +100,7 @@ const NOTICE_TYPE_LABEL: Record<string, string> = {
   "can-standard": "Contract award notice",
   "can-social": "Contract award notice",
   "can-modif": "Contract modification notice",
-  "veat": "Voluntary ex-ante transparency notice",
+  veat: "Voluntary ex-ante transparency notice",
 };
 
 function noticeTypeLabel(value: string): string {
@@ -141,12 +141,12 @@ const QUERIES = [
  * somewhere (staffing, bus fleets, ...). Keep only notices whose title or
  * buyer points at card issuing / tachograph procurement.
  */
-const RELEVANT = /tachograph|tachygraph|tachograf|fahrerkarte|driver card|driving licence|driver licence|driving license|conducteur|kartenherstell|kartenpersonalis|smart ?card|chip ?card|kaart|karte/i;
+const RELEVANT =
+  /tachograph|tachygraph|tachograf|fahrerkarte|driver card|driving licence|driver licence|driving license|conducteur|kartenherstell|kartenpersonalis|smart ?card|chip ?card|kaart|karte/i;
 
 export function isRelevant(notice: TedNotice): boolean {
   return RELEVANT.test(`${notice.title} ${notice.buyer}`);
 }
-
 
 async function searchTed(query: string, limit = 50): Promise<RawNotice[]> {
   const res = await fetch(TED_SEARCH_API, {

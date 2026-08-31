@@ -43,7 +43,7 @@ export const JRC_SOURCES: Record<SourceKey, { label: string; url: string }> = {
 export const ANNEX_COLOR_TO_GENERATION: Record<string, string> = {
   "6f9ccc": "G1", // Annex 1B
   "2323dc": "G2.1", // Annex 1C
-  "ff9aff": "G2.2", // Annex 1C v2
+  ff9aff: "G2.2", // Annex 1C v2
 };
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -74,9 +74,7 @@ const NAMED_ENTITIES: Record<string, string> = {
 export function decodeEntities(input: string): string {
   return input
     .replace(/&#(\d+);/g, (_m, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h: string) =>
-      String.fromCodePoint(parseInt(h, 16)),
-    )
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h: string) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&([a-zA-Z]+);/g, (m, name: string) => NAMED_ENTITIES[name] ?? m);
 }
 
@@ -94,9 +92,7 @@ export function extractRows(html: string): RawRow[] {
   const trRe = /<tr[^>]*>([\s\S]*?)(?=<tr[^>]*>|<\/table>)/gi;
   let m: RegExpExecArray | null;
   while ((m = trRe.exec(html)) !== null) {
-    const cells = Array.from(
-      (m[1] ?? "").matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi),
-    );
+    const cells = Array.from((m[1] ?? "").matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi));
     if (cells.length === 0) continue;
     out.push({
       values: cells.map((c) => cellText(c[2] ?? "")),
