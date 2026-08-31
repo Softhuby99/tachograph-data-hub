@@ -1,7 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { saveCardOverride, resetCardOverride } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -80,16 +83,23 @@ type TachoCard = {
   data_reference_date: string;
 };
 
-const OVERRIDES_KEY = "tacho-overrides-v1";
 type Overrides = Record<string, Partial<TachoCard>>;
 
-function loadOverrides(): Overrides {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}");
-  } catch {
-    return {};
-  }
+function useOverrides() {
+  return useQuery({
+    queryKey: ["tachograph_card_overrides"],
+    queryFn: async (): Promise<Overrides> => {
+      const { data, error } = await supabase
+        .from("tachograph_card_overrides")
+        .select("card_id, patch");
+      if (error) throw error;
+      const map: Overrides = {};
+      for (const row of data ?? []) {
+        map[row.card_id] = (row.patch ?? {}) as Partial<TachoCard>;
+      }
+      return map;
+    },
+  });
 }
 
 function useCards() {
@@ -190,40 +200,73 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
+  const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
-  const [overrides, setOverrides] = useState<Overrides>({});
+  const overridesQuery = useOverrides();
+  const overrides = overridesQuery.data ?? {};
 
-  useEffect(() => {
-    setOverrides(loadOverrides());
-  }, []);
+  const saveOverrideFn = useServerFn(saveCardOverride);
+  const resetOverrideFn = useServerFn(resetCardOverride);
 
   const cards = useMemo(
     () => (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
     [rawCards, overrides],
   );
 
+  const saveMutation = useMutation({
+    mutationFn: (vars: { cardId: string; patch: Record<string, string> }) =>
+      saveOverrideFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Changes saved for everyone.");
+      void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    },
+    onError: (e: Error) => toast.error(`Save failed: ${e.message}`),
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: (cardId: string) => resetOverrideFn({ data: { cardId } }),
+    onSuccess: () => {
+      toast.success("Manual edits removed.");
+      void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    },
+    onError: (e: Error) => toast.error(`Reset failed: ${e.message}`),
+  });
+
   const saveOverride = (id: string, patch: Partial<TachoCard>) => {
     const base = rawCards?.find((c) => c.id === id);
     if (!base) return;
-    const cleanedPatch: Partial<TachoCard> = {};
+    const cleanedPatch: Record<string, string> = {};
     for (const [k, v] of Object.entries(patch)) {
-      if (v !== (base as Record<string, unknown>)[k]) {
-        (cleanedPatch as Record<string, unknown>)[k] = v;
-      }
+      if (v !== (base as Record<string, unknown>)[k]) cleanedPatch[k] = String(v ?? "");
     }
-    const next = { ...overrides };
-    if (Object.keys(cleanedPatch).length === 0) delete next[id];
-    else next[id] = { ...(next[id] ?? {}), ...cleanedPatch };
-    setOverrides(next);
-    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next));
+    if (Object.keys(cleanedPatch).length === 0) {
+      if (overrides[id]) resetMutation.mutate(id);
+      return;
+    }
+    saveMutation.mutate({ cardId: id, patch: cleanedPatch });
   };
 
-  const resetOverride = (id: string) => {
-    const next = { ...overrides };
-    delete next[id];
-    setOverrides(next);
-    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next));
-  };
+  const resetOverride = (id: string) => resetMutation.mutate(id);
+
+  // One-time migration: push edits that still live in this browser's localStorage
+  // into the shared database, then clear them locally.
+  useEffect(() => {
+    if (!auth.session || !rawCards?.length) return;
+    const raw = localStorage.getItem("tacho-overrides-v1");
+    if (!raw) return;
+    localStorage.removeItem("tacho-overrides-v1");
+    try {
+      const legacy = JSON.parse(raw) as Record<string, Record<string, string>>;
+      for (const [cardId, patch] of Object.entries(legacy)) {
+        if (patch && Object.keys(patch).length > 0) {
+          saveMutation.mutate({ cardId, patch });
+        }
+      }
+    } catch {
+      /* ignore malformed legacy data */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.session, rawCards?.length]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -285,6 +328,7 @@ function TachographTool() {
           <DataView
             cards={cards}
             overrides={overrides}
+            canEdit={!!auth.session}
             onSave={saveOverride}
             onReset={resetOverride}
           />
@@ -304,11 +348,13 @@ function TachographTool() {
 function DataView({
   cards,
   overrides,
+  canEdit,
   onSave,
   onReset,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
+  canEdit: boolean;
   onSave: (id: string, patch: Partial<TachoCard>) => void;
   onReset: (id: string) => void;
 }) {
@@ -481,6 +527,7 @@ function DataView({
             <DetailView
               card={selected}
               edited={!!overrides[selected.id]}
+              canEdit={canEdit}
               onSave={(patch) => onSave(selected.id, patch)}
               onReset={() => onReset(selected.id)}
             />
@@ -496,11 +543,13 @@ function DataView({
 function DetailView({
   card,
   edited,
+  canEdit,
   onSave,
   onReset,
 }: {
   card: TachoCard;
   edited: boolean;
+  canEdit: boolean;
   onSave: (patch: Partial<TachoCard>) => void;
   onReset: () => void;
 }) {
@@ -570,10 +619,13 @@ function DetailView({
               Card &amp; Certification
             </CardTitle>
             <div className="flex gap-2">
-              {!editing && (
+              {!editing && canEdit && (
                 <Button size="sm" variant="outline" onClick={startEdit}>
                   <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                 </Button>
+              )}
+              {!editing && !canEdit && (
+                <span className="text-xs text-muted-foreground">Sign in to edit</span>
               )}
               {editing && (
                 <>
