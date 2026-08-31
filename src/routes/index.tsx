@@ -311,6 +311,7 @@ function TachographTool() {
           <DataView
             cards={cards}
             overrides={overrides}
+            canEdit={!!auth.session}
             onSave={saveOverride}
             onReset={resetOverride}
           />
@@ -330,11 +331,13 @@ function TachographTool() {
 function DataView({
   cards,
   overrides,
+  canEdit,
   onSave,
   onReset,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
+  canEdit: boolean;
   onSave: (id: string, patch: Partial<TachoCard>) => void;
   onReset: (id: string) => void;
 }) {
@@ -507,6 +510,7 @@ function DataView({
             <DetailView
               card={selected}
               edited={!!overrides[selected.id]}
+              canEdit={canEdit}
               onSave={(patch) => onSave(selected.id, patch)}
               onReset={() => onReset(selected.id)}
             />
@@ -522,11 +526,13 @@ function DataView({
 function DetailView({
   card,
   edited,
+  canEdit,
   onSave,
   onReset,
 }: {
   card: TachoCard;
   edited: boolean;
+  canEdit: boolean;
   onSave: (patch: Partial<TachoCard>) => void;
   onReset: () => void;
 }) {
