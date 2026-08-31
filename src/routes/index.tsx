@@ -143,6 +143,7 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
+  const auth = useAuth();
   const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
   const [overrides, setOverrides] = useState<Overrides>({});
 
