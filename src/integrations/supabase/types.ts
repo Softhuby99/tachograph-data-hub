@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      cron_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          endpoint: string
+          id: boolean
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          endpoint: string
+          id?: boolean
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          endpoint?: string
+          id?: boolean
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       jrc_check_runs: {
         Row: {
           created_at: string
