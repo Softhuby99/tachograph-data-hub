@@ -198,40 +198,55 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
+  const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
-  const [overrides, setOverrides] = useState<Overrides>({});
+  const overridesQuery = useOverrides();
+  const overrides = overridesQuery.data ?? {};
 
-  useEffect(() => {
-    setOverrides(loadOverrides());
-  }, []);
+  const saveOverrideFn = useServerFn(saveCardOverride);
+  const resetOverrideFn = useServerFn(resetCardOverride);
 
   const cards = useMemo(
     () => (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
     [rawCards, overrides],
   );
 
+  const saveMutation = useMutation({
+    mutationFn: (vars: { cardId: string; patch: Record<string, string> }) =>
+      saveOverrideFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Changes saved for everyone.");
+      void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    },
+    onError: (e: Error) => toast.error(`Save failed: ${e.message}`),
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: (cardId: string) => resetOverrideFn({ data: { cardId } }),
+    onSuccess: () => {
+      toast.success("Manual edits removed.");
+      void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    },
+    onError: (e: Error) => toast.error(`Reset failed: ${e.message}`),
+  });
+
   const saveOverride = (id: string, patch: Partial<TachoCard>) => {
     const base = rawCards?.find((c) => c.id === id);
     if (!base) return;
-    const cleanedPatch: Partial<TachoCard> = {};
+    const cleanedPatch: Record<string, string> = {};
     for (const [k, v] of Object.entries(patch)) {
-      if (v !== (base as Record<string, unknown>)[k]) {
-        (cleanedPatch as Record<string, unknown>)[k] = v;
-      }
+      if (v !== (base as Record<string, unknown>)[k]) cleanedPatch[k] = String(v ?? "");
     }
-    const next = { ...overrides };
-    if (Object.keys(cleanedPatch).length === 0) delete next[id];
-    else next[id] = { ...(next[id] ?? {}), ...cleanedPatch };
-    setOverrides(next);
-    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next));
+    if (Object.keys(cleanedPatch).length === 0) {
+      if (overrides[id]) resetMutation.mutate(id);
+      return;
+    }
+    saveMutation.mutate({ cardId: id, patch: cleanedPatch });
   };
 
-  const resetOverride = (id: string) => {
-    const next = { ...overrides };
-    delete next[id];
-    setOverrides(next);
-    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next));
-  };
+  const resetOverride = (id: string) => resetMutation.mutate(id);
+
+
 
   return (
     <div className="min-h-screen bg-background">
