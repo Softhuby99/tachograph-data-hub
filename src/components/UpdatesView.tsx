@@ -31,9 +31,11 @@ const SOURCE_LABELS: Record<string, string> = {
 const SOURCE_URLS: Record<string, string> = {
   card_status: "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   other_certificates: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
-  public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates.php.html",
-  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management.php.html",
-  security_updates: "https://dtc.jrc.ec.europa.eu/dtc_security_updates.php.html",
+  public_key_certificates:
+    "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates_dt.php.html",
+  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html",
+  security_updates:
+    "https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html",
   manufacturer_codes: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
   ted_procurement: "https://ted.europa.eu/en/search/result",
 };
@@ -202,7 +204,7 @@ export function UpdatesView() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">JRC Updates</h2>
+          <h2 className="text-xl font-semibold">Update Monitor</h2>
           <p className="text-sm text-muted-foreground">
             Monitors all JRC digital tachograph sources — card status, other
             certificates, public key certificates, key management and security
