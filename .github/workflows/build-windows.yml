@@ -1,0 +1,46 @@
+name: Build Windows Portable EXE
+
+# Builds a single portable Windows .exe of the standalone Tachograph Card
+# Info Tool whenever a change is pushed to the standalone/ app, or manually.
+#
+# Result: a portable EXE that runs on Windows without installation or admin
+# rights. Download it from the run's "Artifacts" section.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: standalone
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: standalone/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build portable EXE
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TachographCardsInfoTool-Windows-Portable
+          path: standalone/release/TachographCardsInfoTool-Portable.exe
+          if-no-files-found: error
+          retention-days: 30
