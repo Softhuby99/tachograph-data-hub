@@ -15,6 +15,8 @@ import {
 
 import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
 
@@ -76,6 +78,8 @@ type CheckRun = {
 
 export function UpdatesView() {
   const qc = useQueryClient();
+  const { session, loading: authLoading } = useAuth();
+  const signedIn = !!session;
   const [showHandled, setShowHandled] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
@@ -211,13 +215,25 @@ export function UpdatesView() {
             updates. Nothing is written to the database until you approve it.
           </p>
         </div>
-        <Button onClick={() => void runCheck()} disabled={running}>
+        <Button onClick={() => void runCheck()} disabled={running || !signedIn}>
           <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
           {running
             ? `Checking ${activeSource ? SOURCE_LABELS[activeSource] : ""}…`
             : "Check for updates"}
         </Button>
       </div>
+
+      {!authLoading && !signedIn && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed bg-muted/40 px-4 py-3 text-sm">
+          <span className="text-muted-foreground">
+            Sign in to run update checks and approve or dismiss proposals. The list below stays
+            readable without signing in.
+          </span>
+          <Button size="sm" asChild>
+            <Link to="/auth">Sign in</Link>
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
@@ -410,7 +426,7 @@ export function UpdatesView() {
                           country: newCountry[p.id] ?? "",
                         })
                       }
-                      disabled={approveMutation.isPending}
+                      disabled={approveMutation.isPending || !signedIn}
                     >
                       <Check className="mr-2 h-4 w-4" />{" "}
                       {isInfo ? "Acknowledge & note" : "Approve & apply"}
@@ -420,7 +436,7 @@ export function UpdatesView() {
                       size="sm"
                       variant="outline"
                       onClick={() => rejectMutation.mutate(p.id)}
-                      disabled={rejectMutation.isPending}
+                      disabled={rejectMutation.isPending || !signedIn}
                     >
                       <X className="mr-2 h-4 w-4" /> Dismiss
                     </Button>
