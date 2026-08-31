@@ -80,17 +80,25 @@ type TachoCard = {
   data_reference_date: string;
 };
 
-const OVERRIDES_KEY = "tacho-overrides-v1";
 type Overrides = Record<string, Partial<TachoCard>>;
 
-function loadOverrides(): Overrides {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}");
-  } catch {
-    return {};
-  }
+function useOverrides() {
+  return useQuery({
+    queryKey: ["tachograph_card_overrides"],
+    queryFn: async (): Promise<Overrides> => {
+      const { data, error } = await supabase
+        .from("tachograph_card_overrides")
+        .select("card_id, patch");
+      if (error) throw error;
+      const map: Overrides = {};
+      for (const row of data ?? []) {
+        map[row.card_id] = (row.patch ?? {}) as Partial<TachoCard>;
+      }
+      return map;
+    },
+  });
 }
+
 
 function useCards() {
   return useQuery({
