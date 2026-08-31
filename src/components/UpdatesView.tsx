@@ -229,7 +229,8 @@ export function UpdatesView() {
         <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
           <span>Monitored sources</span>
           <span className="text-muted-foreground">
-            Last check: {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
+            Auto-check daily 03:00 UTC · Last check:{" "}
+            {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
           </span>
         </div>
         {Object.keys(SOURCE_LABELS).map((key) => {
