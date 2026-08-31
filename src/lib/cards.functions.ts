@@ -37,7 +37,10 @@ export const saveCardOverride = createServerFn({ method: "POST" })
 
     const { error } = await supabase
       .from("tachograph_card_overrides")
-      .upsert({ card_id: data.cardId, patch: merged, edited_by: userId }, { onConflict: "card_id" });
+      .upsert(
+        { card_id: data.cardId, patch: merged, edited_by: userId },
+        { onConflict: "card_id" },
+      );
     if (error) throw new Error(error.message);
     return { ok: true, cleared: false };
   });

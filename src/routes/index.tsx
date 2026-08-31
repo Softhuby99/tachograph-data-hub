@@ -102,7 +102,6 @@ function useOverrides() {
   });
 }
 
-
 function useCards() {
   return useQuery({
     queryKey: ["tachograph_cards"],
@@ -268,10 +267,6 @@ function TachographTool() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.session, rawCards?.length]);
-
-
-
-
 
   return (
     <div className="min-h-screen bg-background">

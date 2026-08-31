@@ -11,10 +11,7 @@ async function handle(request: Request) {
     "";
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: config } = await supabaseAdmin
-    .from("cron_config")
-    .select("token")
-    .maybeSingle();
+  const { data: config } = await supabaseAdmin.from("cron_config").select("token").maybeSingle();
 
   const accepted = [process.env["CRON_SECRET"], config?.token].filter(
     (t): t is string => typeof t === "string" && t.length > 0,
@@ -33,7 +30,6 @@ async function handle(request: Request) {
       headers: { "content-type": "application/json" },
     });
   }
-
 
   const { runUpdateCheck } = await import("@/lib/jrc.server");
   try {
