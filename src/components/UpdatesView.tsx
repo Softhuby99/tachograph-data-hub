@@ -15,6 +15,8 @@ import {
 
 import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
 
@@ -31,9 +33,9 @@ const SOURCE_LABELS: Record<string, string> = {
 const SOURCE_URLS: Record<string, string> = {
   card_status: "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   other_certificates: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
-  public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates.php.html",
-  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management.php.html",
-  security_updates: "https://dtc.jrc.ec.europa.eu/dtc_security_updates.php.html",
+  public_key_certificates: "https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates_dt.php.html",
+  key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html",
+  security_updates: "https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html",
   manufacturer_codes: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
   ted_procurement: "https://ted.europa.eu/en/search/result",
 };
@@ -71,9 +73,10 @@ type CheckRun = {
   message: string;
 };
 
-
 export function UpdatesView() {
   const qc = useQueryClient();
+  const { session, loading: authLoading } = useAuth();
+  const signedIn = !!session;
   const [showHandled, setShowHandled] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
@@ -102,7 +105,6 @@ export function UpdatesView() {
       return (data ?? []) as unknown as CheckRun[];
     },
   });
-
 
   const check = useServerFn(checkUpdates);
   const checkOne = useServerFn(checkUpdateSource);
@@ -145,17 +147,13 @@ export function UpdatesView() {
           );
         }
       }
-      toast.success(
-        `Check finished — ${rows} rows read, ${created} new proposal(s).`,
-      );
+      toast.success(`Check finished — ${rows} rows read, ${created} new proposal(s).`);
     } finally {
       setActiveSource(null);
       setRunning(false);
       // Only sources with new findings stay highlighted; the rest go back to normal.
       setSourceState((s) =>
-        Object.fromEntries(
-          Object.entries(s).filter(([, v]) => v === "updated" || v === "error"),
-        ),
+        Object.fromEntries(Object.entries(s).filter(([, v]) => v === "updated" || v === "error")),
       );
       invalidate();
     }
@@ -163,10 +161,8 @@ export function UpdatesView() {
 
   void check;
 
-
   const approveMutation = useMutation({
-    mutationFn: (vars: { id: string; country: string }) =>
-      approve({ data: vars }),
+    mutationFn: (vars: { id: string; country: string }) => approve({ data: vars }),
     onSuccess: () => {
       toast.success("Update applied to the database.");
       invalidate();
@@ -202,14 +198,14 @@ export function UpdatesView() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">JRC Updates</h2>
+          <h2 className="text-xl font-semibold">Update Monitor</h2>
           <p className="text-sm text-muted-foreground">
-            Monitors all JRC digital tachograph sources — card status, other
-            certificates, public key certificates, key management and security
-            updates. Nothing is written to the database until you approve it.
+            Monitors all JRC digital tachograph sources — card status, other certificates, public
+            key certificates, key management and security updates. Nothing is written to the
+            database until you approve it.
           </p>
         </div>
-        <Button onClick={() => void runCheck()} disabled={running}>
+        <Button onClick={() => void runCheck()} disabled={running || !signedIn}>
           <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
           {running
             ? `Checking ${activeSource ? SOURCE_LABELS[activeSource] : ""}…`
@@ -217,12 +213,23 @@ export function UpdatesView() {
         </Button>
       </div>
 
+      {!authLoading && !signedIn && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed bg-muted/40 px-4 py-3 text-sm">
+          <span className="text-muted-foreground">
+            Sign in to run update checks and approve or dismiss proposals. The list below stays
+            readable without signing in.
+          </span>
+          <Button size="sm" asChild>
+            <Link to="/auth">Sign in</Link>
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-md border">
         <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
           <span>Monitored sources</span>
           <span className="text-muted-foreground">
-            Last check:{" "}
-            {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
+            Last check: {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
           </span>
         </div>
         {Object.keys(SOURCE_LABELS).map((key) => {
@@ -242,20 +249,12 @@ export function UpdatesView() {
               className={`grid gap-1 border-b px-3 py-2 text-xs transition-colors last:border-b-0 sm:grid-cols-[200px_1fr_auto] sm:items-center ${rowClass}`}
             >
               <span className="flex items-center gap-2 font-medium">
-                {state === "running" && (
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                )}
+                {state === "running" && <RefreshCw className="h-3 w-3 animate-spin" />}
                 {state === "updated" && <Check className="h-3 w-3" />}
                 {SOURCE_LABELS[key]}
               </span>
-              <span
-                className={state ? "" : "text-muted-foreground"}
-              >
-                {state === "running"
-                  ? "Checking…"
-                  : run
-                    ? run.message
-                    : "not checked yet"}
+              <span className={state ? "" : "text-muted-foreground"}>
+                {state === "running" ? "Checking…" : run ? run.message : "not checked yet"}
               </span>
               <a
                 className="inline-flex items-center gap-1 text-primary hover:underline"
@@ -269,7 +268,6 @@ export function UpdatesView() {
           );
         })}
       </div>
-
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -306,10 +304,7 @@ export function UpdatesView() {
         ))}
       </div>
 
-
-      {proposals.isLoading && (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      )}
+      {proposals.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!proposals.isLoading && list.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {showHandled
@@ -341,9 +336,7 @@ export function UpdatesView() {
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
                     </Badge>
-                    {p.status !== "pending" && (
-                      <Badge variant="secondary">{p.status}</Badge>
-                    )}
+                    {p.status !== "pending" && <Badge variant="secondary">{p.status}</Badge>}
                   </div>
                 </div>
               </CardHeader>
@@ -363,7 +356,6 @@ export function UpdatesView() {
                   </div>
                 )}
 
-
                 {fields.length > 0 && (
                   <div className="rounded-md border">
                     <div className="grid grid-cols-3 gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium">
@@ -377,9 +369,7 @@ export function UpdatesView() {
                         className="grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0"
                       >
                         <span className="font-medium">{f.label}</span>
-                        <span className="text-muted-foreground line-through">
-                          {f.old || "—"}
-                        </span>
+                        <span className="text-muted-foreground line-through">{f.old || "—"}</span>
                         <span className="text-foreground">{f.new}</span>
                       </div>
                     ))}
@@ -391,13 +381,9 @@ export function UpdatesView() {
                     {(p.kind === "new" || (isInfo && !p.country)) && (
                       <Input
                         className="h-9 w-56"
-                        placeholder={
-                          isInfo ? "Country to note this on" : "Country for new entry"
-                        }
+                        placeholder={isInfo ? "Country to note this on" : "Country for new entry"}
                         value={newCountry[p.id] ?? ""}
-                        onChange={(e) =>
-                          setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))
-                        }
+                        onChange={(e) => setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))}
                       />
                     )}
                     <Button
@@ -408,7 +394,7 @@ export function UpdatesView() {
                           country: newCountry[p.id] ?? "",
                         })
                       }
-                      disabled={approveMutation.isPending}
+                      disabled={approveMutation.isPending || !signedIn}
                     >
                       <Check className="mr-2 h-4 w-4" />{" "}
                       {isInfo ? "Acknowledge & note" : "Approve & apply"}
@@ -418,7 +404,7 @@ export function UpdatesView() {
                       size="sm"
                       variant="outline"
                       onClick={() => rejectMutation.mutate(p.id)}
-                      disabled={rejectMutation.isPending}
+                      disabled={rejectMutation.isPending || !signedIn}
                     >
                       <X className="mr-2 h-4 w-4" /> Dismiss
                     </Button>
