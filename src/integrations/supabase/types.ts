@@ -154,6 +154,41 @@ export type Database = {
           },
         ]
       }
+      tachograph_card_overrides: {
+        Row: {
+          card_id: string
+          created_at: string
+          edited_by: string | null
+          id: string
+          patch: Json
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          patch?: Json
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          patch?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tachograph_card_overrides_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: true
+            referencedRelation: "tachograph_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tachograph_cards: {
         Row: {
           application: string
