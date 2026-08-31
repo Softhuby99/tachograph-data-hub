@@ -602,10 +602,13 @@ function DetailView({
               Card &amp; Certification
             </CardTitle>
             <div className="flex gap-2">
-              {!editing && (
+              {!editing && canEdit && (
                 <Button size="sm" variant="outline" onClick={startEdit}>
                   <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
                 </Button>
+              )}
+              {!editing && !canEdit && (
+                <span className="text-xs text-muted-foreground">Sign in to edit</span>
               )}
               {editing && (
                 <>
