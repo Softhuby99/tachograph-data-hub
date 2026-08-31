@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -220,8 +221,18 @@ function TachographTool() {
               size="sm"
               onClick={() => setTab("updates")}
             >
-              <RefreshCw className="mr-2 h-4 w-4" /> JRC Updates
+              <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
+            <span className="mx-1 h-8 w-px bg-border" />
+            {auth.session ? (
+              <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
+                Sign out
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>
