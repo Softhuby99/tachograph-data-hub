@@ -586,8 +586,13 @@ function parseCardStatus(html) {
 function parseOtherCertificateCards(html) {
   const out = [];
   for (const row of parseTableRows(html)) {
-    if (row.values.length < 7) continue;
-    const v = row.values.slice(-7), g = row.gens.slice(-7);
+    // Older rows have 6 columns; newer ones add "Mandatory security updates".
+    const width = row.values.length;
+    if (width < 6) continue;
+    const raw = width >= 7 ? row.values.slice(-7) : row.values.slice(-6);
+    const rawGens = width >= 7 ? row.gens.slice(-7) : row.gens.slice(-6);
+    const v = width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], '', raw[5]];
+    const gen = width >= 7 ? rawGens[6] : rawGens[5];
     if (v[0].toLowerCase().startsWith('manufacturer')) continue;
     const sep = v[1].indexOf(' - ');
     const component = sep > 0 ? v[1].slice(0, sep).trim() : v[1].trim();
@@ -597,11 +602,12 @@ function parseOtherCertificateCards(html) {
     out.push({
       manufacturer: v[0], cardName: name,
       certificate: /^n\.?\/?a\.?$/i.test(v[2]) ? '' : v[2],
-      date: v[4], eov: '', typeApproval: v[3], generation: g[6] || '',
+      date: v[4], eov: '', typeApproval: v[3], generation: gen || '',
     });
   }
   return out;
 }
+
 
 const FIELD_LABELS = {
   generation: 'Generation',
