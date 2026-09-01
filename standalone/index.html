@@ -90,6 +90,10 @@
   .prop input.country { background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:6px 8px; font-size:12px; width:220px; }
   .drill ul { margin:0; padding-left:20px; font-size:13px; column-count:3; }
   .version-badge { border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-right:8px; align-self:center; }
+  .view-switch { display:inline-flex; align-items:center; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; margin-right:8px; align-self:center; font-size:12px; font-weight:600; }
+  .view-switch .active { background:#1d4ed8; color:#fff; padding:4px 10px; }
+  .view-switch a { padding:4px 10px; color:#1d4ed8; text-decoration:none; background:#fff; }
+  .view-switch a:hover { background:#eff6ff; }
 </style>
 </head>
 <body>
@@ -102,6 +106,7 @@
   </div>
   </div>
   <div class="tabs">
+    <span class="view-switch"><span class="active">Offline</span><a id="webVersionLink" href="/" target="_blank" rel="noreferrer" style="display:none;">Web</a></span>
     <span id="versionBadge" class="version-badge" title="App version"></span>
     <button id="tabData" class="active" onclick="switchTab('data')">Data</button>
     <button id="tabAnalytics" onclick="switchTab('analytics')">Market Analytics</button>
@@ -162,6 +167,7 @@
 <script>
 const APP_VERSION = "1.1";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
+if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
 const EXTRA_KEY = 'tacho-extra-rows-v1';
 function loadExtra() { try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch { return []; } }
