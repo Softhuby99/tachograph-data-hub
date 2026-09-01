@@ -198,7 +198,7 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["jrc_interoperability_status", "JRC Interoperability Status"],
   ["jrc_certificate_source", "JRC / Certificate Source"],
   ["primary_source", "Primary Source"],
-  ["card_quantities", "Kartenmengen (Card Quantities)"],
+  ["card_quantities", "Card Quantities"],
 ];
 
 function TachographTool() {
