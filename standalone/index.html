@@ -463,6 +463,10 @@ function parseTableRows(html) {
   }).filter(r => r.values.length);
 }
 
+function jrcDate(v) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(v || '').trim());
+  return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+}
 const normApproval = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function parseCardStatus(html) {
@@ -543,7 +547,16 @@ async function checkCardSource(key) {
   const rows = key === 'card_status' ? parseCardStatus(html) : parseOtherCertificateCards(html);
   const cards = DATA.map(merged);
   let created = 0;
+  // Keep only the most recent JRC entry per type approval number.
+  const latest = new Map();
   for (const row of rows) {
+    const k = normApproval(row.typeApproval);
+    if (!k) continue;
+    const cur = latest.get(k);
+    if (!cur || jrcDate(row.date) > jrcDate(cur.date)) latest.set(k, row);
+  }
+  const cutoff = Date.now() - 3 * 365 * 24 * 3600 * 1000;
+  for (const row of latest.values()) {
     const k = normApproval(row.typeApproval);
     if (!k) continue;
     const card = cards.find(c => normApproval(c.type_approval_number).length && normApproval(c.type_approval_number).includes(k));
@@ -553,6 +566,8 @@ async function checkCardSource(key) {
       if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes,
         fingerprint: hashString(key + '|' + card.id + '|' + changes.map(c => c.field + c.new).join('|')) })) created++;
     } else {
+      // Historic entries with no counterpart are not actionable — only report recent ones.
+      if (jrcDate(row.date) && jrcDate(row.date) < cutoff) continue;
       if (addProposal({ kind: 'new', source: key, cardId: null, country: '', row, changes: [],
         fingerprint: hashString(key + '|new|' + k + '|' + row.certificate + row.date) })) created++;
     }
