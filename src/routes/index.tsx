@@ -184,6 +184,7 @@ function flagUrl(country: string, size: 40 | 80 = 40): string | null {
 }
 
 const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
+  ["country", "Country"],
   ["generation", "Generation"],
   ["application", "Application"],
   ["tachograph_application_os", "Tachograph Application / OS"],
