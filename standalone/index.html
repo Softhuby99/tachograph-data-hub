@@ -231,16 +231,29 @@
 </div>
 
 <script>
-const APP_VERSION = "2.1";
+const APP_VERSION = "2.2";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
+// Ensure every row has a stable id (embedded data may lack one). Keyed by
+// country + type approval + generation so ids survive data regeneration.
+function ensureIds(rows) {
+  const seen = {};
+  rows.forEach((r, i) => {
+    if (r.id) return;
+    let base = 'row-' + hashString((r.country || '') + '|' + (r.type_approval_number || '') + '|' + (r.generation || ''));
+    if (seen[base] != null) base = base + '-' + (++seen[base]); else seen[base] = 0;
+    r.id = base || ('row-' + i);
+  });
+}
 const EXTRA_KEY = 'tacho-extra-rows-v1';
 function loadExtra() { try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch { return []; } }
 function saveExtra(rows) { localStorage.setItem(EXTRA_KEY, JSON.stringify(rows)); }
 let extraRows = loadExtra();
+ensureIds(BASE_DATA); ensureIds(extraRows);
 let DATA = BASE_DATA.concat(extraRows);
 function rebuildData() {
+  ensureIds(BASE_DATA); ensureIds(extraRows);
   DATA = BASE_DATA.concat(extraRows);
   fill($('fCountry'), uniq(DATA.map(r=>r.country)));
   fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
