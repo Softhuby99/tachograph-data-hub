@@ -77,6 +77,47 @@ export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
     }));
 }
 
+/**
+ * "Other certificates" page, non-card entries (VU, MS, DSRC, M1N1, Paper, ...).
+ * The Annex column colour maps to the generation: Annex 1B = G1,
+ * Annex 1C (dark blue) = G2.1, Annex 1C v2 (pink) = G2.2.
+ */
+export async function fetchOtherCertificateInfoEntries(): Promise<{
+  entries: SnapshotEntry[];
+  rowsParsed: number;
+}> {
+  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
+  const others = rows.filter((r) => r.component.toLowerCase() !== "card");
+  return {
+    rowsParsed: rows.length,
+    entries: others.map((r) => ({
+      key: `${r.component}|${r.manufacturer}|${r.name}|${r.typeApproval}`,
+      fingerprint: [r.interopCertificate, r.date, r.mandatoryUpdates, r.generation].join("|"),
+      country: "",
+      generation: r.generation,
+      title: `${r.component} · ${r.name || r.typeApproval} — ${r.manufacturer}${
+        r.generation ? ` (${r.generation})` : ""
+      }`,
+      payload: {
+        Component: r.component,
+        Manufacturer: r.manufacturer,
+        Name: r.name,
+        "Interoperability certificate": r.interopCertificate,
+        "Type approval certificate": r.typeApproval,
+        "Date of approval": r.date,
+        "Mandatory security updates": r.mandatoryUpdates,
+        Annex: r.generation
+          ? `${r.generation} (${
+              r.generation === "G1" ? "Annex 1B" : r.generation === "G2.1" ? "Annex 1C" : "Annex 1C v2"
+            })`
+          : "",
+      },
+    })),
+  };
+}
+
+
+
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
   if (!m) return 0;
@@ -257,6 +298,7 @@ type SnapshotEntry = {
   country: string;
   title: string;
   payload: Record<string, string>;
+  generation?: string;
 };
 
 const MAX_INFO_PER_SOURCE = 40;
@@ -424,19 +466,104 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
   const meta = JRC_SOURCES[source];
   let result: SourceResult;
 
+  /** Snapshot-diff a list of info entries and turn changes into proposals. */
+  const runInfoDiff = async (entries0: SnapshotEntry[]) => {
+    // A page can list the same key twice (e.g. re-issued certificates);
+    // upsert rejects duplicate keys inside one batch, so keep the last one.
+    const entries = [...new Map(entries0.map((e) => [e.key, e])).values()];
+
+    // PostgREST caps a select at 1000 rows — page through the snapshot,
+    // otherwise unseen rows look "changed" on every run.
+    const snapshot = new Map<string, string>();
+    for (let from = 0; ; from += 1000) {
+      const { data: snapRows, error: snapErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .select("entry_key,fingerprint")
+        .eq("source_type", source)
+        .range(from, from + 999);
+      if (snapErr) throw new Error(snapErr.message);
+      for (const s of snapRows ?? []) {
+        snapshot.set(s.entry_key as string, s.fingerprint as string);
+      }
+      if (!snapRows || snapRows.length < 1000) break;
+    }
+    const baseline = snapshot.size === 0;
+
+    let created = 0;
+    let candidates = 0;
+    if (!baseline) {
+      const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
+      candidates = changed.length;
+      const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => ({
+        fingerprint: `${source}:${e.key}:${e.fingerprint}`,
+        kind: "info",
+        card_id: null,
+        country: e.country,
+        generation: e.generation ?? "",
+        jrc_manufacturer: "",
+        jrc_card_name: "",
+        jrc_certificate: "",
+        jrc_date: "",
+        jrc_eov: "",
+        jrc_type_approval: "",
+        source_url: meta.url,
+        source_type: source,
+        source_label: meta.label,
+        title: e.title,
+        payload: e.payload,
+        changes: { fields: [] },
+        status: "pending",
+      }));
+      created = await insertProposals(items);
+    }
+
+    // Chunked: a single very large upsert is silently truncated.
+    const snapRowsToWrite = entries.map((e) => ({
+      source_type: source,
+      entry_key: e.key,
+      fingerprint: e.fingerprint,
+      updated_at: new Date().toISOString(),
+    }));
+    for (let i = 0; i < snapRowsToWrite.length; i += 200) {
+      const { error: upErr } = await supabaseAdmin
+        .from("jrc_source_snapshots")
+        .upsert(snapRowsToWrite.slice(i, i + 200), {
+          onConflict: "source_type,entry_key",
+        });
+      if (upErr) throw new Error(upErr.message);
+    }
+
+    return { candidates, created, baseline };
+  };
+
   try {
     if (source === "card_status" || source === "other_certificates") {
       const rows =
         source === "card_status" ? await fetchJrcRows() : await fetchOtherCertificateCardRows();
       const candidates = buildProposals(rows, cardRows, sinceMs, source);
-      const created = await insertProposals(candidates);
+      let created = await insertProposals(candidates);
+      let extraCandidates = 0;
+      let extraRows = 0;
+      let baseline = false;
+
+      if (source === "other_certificates") {
+        // Every non-card entry (VU, MS, DSRC, M1N1, Paper, ...) is tracked as an
+        // info proposal, with the Annex generation taken from the legend colour.
+        const { entries, rowsParsed } = await fetchOtherCertificateInfoEntries();
+        extraRows = rowsParsed;
+        const info = await runInfoDiff(entries);
+        extraCandidates = info.candidates;
+        created += info.created;
+        baseline = info.baseline;
+      }
+
       result = {
         source,
         label: meta.label,
-        rowsParsed: rows.length,
-        candidates: candidates.length,
+        rowsParsed: Math.max(rows.length, extraRows),
+        candidates: candidates.length + extraCandidates,
         created,
-        baseline: false,
+        baseline,
       };
     } else if (source === "ted_procurement") {
       const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
@@ -458,79 +585,15 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
         baseline: false,
       };
     } else {
-      const { entries: rawEntries, rowsParsed } = await collectInfoEntries(source);
-      // A page can list the same key twice (e.g. re-issued certificates);
-      // upsert rejects duplicate keys inside one batch, so keep the last one.
-      const entries = [...new Map(rawEntries.map((e) => [e.key, e])).values()];
-
-      // PostgREST caps a select at 1000 rows — page through the snapshot,
-      // otherwise unseen rows look "changed" on every run.
-      const snapshot = new Map<string, string>();
-      for (let from = 0; ; from += 1000) {
-        const { data: snapRows, error: snapErr } = await supabaseAdmin
-          .from("jrc_source_snapshots")
-          .select("entry_key,fingerprint")
-          .eq("source_type", source)
-          .range(from, from + 999);
-        if (snapErr) throw new Error(snapErr.message);
-        for (const s of snapRows ?? []) {
-          snapshot.set(s.entry_key as string, s.fingerprint as string);
-        }
-        if (!snapRows || snapRows.length < 1000) break;
-      }
-      const baseline = snapshot.size === 0;
-
-      let created = 0;
-      let candidates = 0;
-      if (!baseline) {
-        const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
-        candidates = changed.length;
-        const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => ({
-          fingerprint: `${source}:${e.key}:${e.fingerprint}`,
-          kind: "info",
-          card_id: null,
-          country: e.country,
-          generation: "",
-          jrc_manufacturer: "",
-          jrc_card_name: "",
-          jrc_certificate: "",
-          jrc_date: "",
-          jrc_eov: "",
-          jrc_type_approval: "",
-          source_url: meta.url,
-          source_type: source,
-          source_label: meta.label,
-          title: e.title,
-          payload: e.payload,
-          changes: { fields: [] },
-          status: "pending",
-        }));
-        created = await insertProposals(items);
-      }
-
-      // Chunked: a single very large upsert is silently truncated.
-      const snapRowsToWrite = entries.map((e) => ({
-        source_type: source,
-        entry_key: e.key,
-        fingerprint: e.fingerprint,
-        updated_at: new Date().toISOString(),
-      }));
-      for (let i = 0; i < snapRowsToWrite.length; i += 200) {
-        const { error: upErr } = await supabaseAdmin
-          .from("jrc_source_snapshots")
-          .upsert(snapRowsToWrite.slice(i, i + 200), {
-            onConflict: "source_type,entry_key",
-          });
-        if (upErr) throw new Error(upErr.message);
-      }
-
+      const { entries, rowsParsed } = await collectInfoEntries(source);
+      const info = await runInfoDiff(entries);
       result = {
         source,
         label: meta.label,
         rowsParsed,
-        candidates,
-        created,
-        baseline,
+        candidates: info.candidates,
+        created: info.created,
+        baseline: info.baseline,
       };
     }
   } catch (e) {
