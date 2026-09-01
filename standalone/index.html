@@ -102,7 +102,7 @@
   </div>
   </div>
   <div class="tabs">
-    <span class="version-badge" title="App version">V1.1</span>
+    <span id="versionBadge" class="version-badge" title="App version"></span>
     <button id="tabData" class="active" onclick="switchTab('data')">Data</button>
     <button id="tabAnalytics" onclick="switchTab('analytics')">Market Analytics</button>
     <button id="tabUpdates" onclick="switchTab('updates')">Updates</button>
@@ -161,6 +161,7 @@
 
 <script>
 const APP_VERSION = "1.1";
+document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 const BASE_DATA = __DATA__;
 const EXTRA_KEY = 'tacho-extra-rows-v1';
 function loadExtra() { try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch { return []; } }
