@@ -256,12 +256,15 @@ export function buildProposals(
   const out: ProposalInsert[] = [];
   const meta = JRC_SOURCES[source];
   for (const row of latestPerApproval(rows)) {
-    // Only consider JRC entries published after the data reference date —
-    // older rows are already reflected in the dataset.
-    if (sinceMs && parseJrcDate(row.date) < sinceMs) continue;
     const card = matchCard(row, cards);
+    // Rows already represented in the dataset are only re-checked when they
+    // were published after the data reference date. Entries with no matching
+    // card (typically older G1 approvals missing from the dataset) are always
+    // proposed, regardless of their publication date.
+    if (card && sinceMs && parseJrcDate(row.date) < sinceMs) continue;
     const changes = card ? diffRow(row, card) : [];
     if (card && changes.length === 0) continue;
+
     out.push({
       fingerprint: `${source}:${fingerprintFor(row, card?.id ?? null)}`,
       kind: card ? "changed" : "new",
