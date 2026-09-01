@@ -123,6 +123,16 @@
   .map-wrap g.lbl.sel text.n { fill:#0f172a; }
   .map-wrap g.lbl text.cn { fill:#e2e8f0; font-size:9px; font-weight:600; text-anchor:middle; }
   .map-wrap g.lbl text.ta { fill:#94a3b8; font-size:8px; text-anchor:middle; }
+  .map-wrap g.lbl text.ta.link { fill:#38bdf8; cursor:pointer; text-decoration:underline; }
+  .map-wrap g.lbl text.ta.link:hover { fill:#7dd3fc; }
+  .ta-link { color:#38bdf8; text-decoration:underline; cursor:pointer; }
+  .ta-link:hover { color:#7dd3fc; }
+  .card-modal { position:fixed; top:80px; left:50%; transform:translateX(-50%); width:560px; height:70vh; min-width:320px; min-height:200px; max-width:95vw; max-height:90vh; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.45); z-index:1000; display:flex; flex-direction:column; resize:both; overflow:hidden; }
+  .card-modal .cm-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#0f172a; color:#e2e8f0; border-radius:10px 10px 0 0; cursor:move; user-select:none; flex:0 0 auto; }
+  .card-modal .cm-title { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-modal .cm-close { background:none; border:none; color:#94a3b8; font-size:22px; line-height:1; cursor:pointer; padding:0 4px; }
+  .card-modal .cm-close:hover { color:#ffffff; }
+  .card-modal .cm-body { flex:1; overflow-y:auto; overflow-x:auto; padding:14px; }
   .version-badge { border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-right:8px; align-self:center; }
   .view-switch { display:inline-flex; align-items:center; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; margin-right:8px; align-self:center; font-size:12px; font-weight:600; }
   .view-switch .active { background:#1d4ed8; color:#fff; padding:4px 10px; }
@@ -221,7 +231,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.0";
+const APP_VERSION = "2.1";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -925,13 +935,61 @@ function mapLabel(country, xy, cards, showNumbers) {
   if (showNumbers) {
     extra += '<text class="cn" y="24">' + esc(country) + '</text>';
     cards.slice(0,4).forEach((c,i) => {
-      extra += '<text class="ta" y="' + (34 + i*10) + '">' + esc(c.type_approval_number || c.generation) + '</text>';
+      extra += '<text class="ta link" y="' + (34 + i*10) + '"' +
+        ' onclick="event.stopPropagation();openCardModal(\'' + c.id + '\')">' +
+        '<title>Click for full details</title>' + esc(c.type_approval_number || c.generation) + '</text>';
     });
   }
   return '<g class="lbl' + (sel ? ' sel' : '') + '" transform="translate(' + xy[0] + ',' + xy[1] + ') scale(' + (1/mapZoomLevel) + ')"' +
     ' onclick="mapSelect(' + JSON.stringify(country).replace(/"/g,'&quot;') + ')">' +
     '<circle r="11"></circle><text class="n" dy="0.35em">' + cards.length + '</text>' + extra + '</g>';
 }
+
+// ---------- Card info modal (draggable, resizable, scrollable) ----------
+function openCardModal(id) {
+  closeCardModal();
+  const base = DATA.find(x => x.id === id);
+  if (!base) return;
+  const r = merged(base);
+  const flag = r.iso ? '<img src="' + flagUrl(r.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
+  const fieldHtml = ([k,label]) =>
+    '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
+  const win = document.createElement('div');
+  win.className = 'card-modal';
+  win.id = 'cardModal';
+  win.innerHTML =
+    '<div class="cm-head" id="cardModalHead">' +
+      flag + '<div class="cm-title"><b>' + esc(r.country) + '</b> · ' + esc(r.type_approval_number || '—') +
+      ' <span class="badge">' + esc(r.generation || '') + '</span></div>' +
+      '<button class="cm-close" onclick="closeCardModal()" title="Close">&times;</button>' +
+    '</div>' +
+    '<div class="cm-body">' +
+      '<div class="section"><div class="section-head"><h3>Card &amp; Certification (Group 1)</h3></div>' +
+        fields1.map(fieldHtml).join('') + '</div>' +
+      '<div class="section"><div class="section-head"><h3>Procurement (Group 2)</h3></div>' +
+        fields2.map(fieldHtml).join('') + '</div>' +
+    '</div>';
+  document.body.appendChild(win);
+  const head = win.querySelector('#cardModalHead');
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cm-close')) return;
+    const rect = win.getBoundingClientRect();
+    const drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const move = ev => {
+      win.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - drag.dx)) + 'px';
+      win.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - drag.dy)) + 'px';
+      win.style.transform = 'none';
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+}
+function closeCardModal() {
+  const m = document.getElementById('cardModal');
+  if (m) m.remove();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCardModal(); });
 
 function renderMapDetail(counts) {
   const list = mapSelected ? (counts[mapSelected] || []) : [];
@@ -943,7 +1001,7 @@ function renderMapDetail(counts) {
   if (!list.length) { $('mapDetail').innerHTML = '<p style="color:#64748b;font-size:13px;">No data for this country.</p>'; return; }
   $('mapDetail').innerHTML = '<table class="mfg"><thead><tr><th>Type Approval</th><th>Generation</th><th>Manufacturer</th><th>Authority</th><th>Date / Status</th><th>Chip / Platform</th></tr></thead><tbody>' +
     list.map(c => '<tr>' +
-      '<td>' + esc(c.type_approval_number || '\u2014') + '</td>' +
+      '<td><a href="#" class="ta-link" onclick="event.preventDefault();openCardModal(\'' + c.id + '\')">' + esc(c.type_approval_number || '\u2014') + '</a></td>' +
       '<td><span class="badge">' + esc(c.generation || '\u2014') + '</span></td>' +
       '<td>' + esc(c.current_manufacturer_normalized || c.current_manufacturer || '\u2014') + '</td>' +
       '<td>' + esc(c.issued_by_authority || '\u2014') + '</td>' +
