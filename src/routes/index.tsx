@@ -365,6 +365,7 @@ function TachographTool() {
             onReset={resetOverride}
           />
         )}
+        {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} />}
         {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
 
