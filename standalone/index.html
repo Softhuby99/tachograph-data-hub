@@ -14,8 +14,9 @@
   .tabs button.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; font-weight:600; }
   .view { display:none; height:calc(100vh - 74px); }
   .view.active { display:block; }
-  .layout { display:grid; grid-template-columns: 420px 1fr; height:100%; }
-  .sidebar { border-right:1px solid #334155; display:flex; flex-direction:column; }
+  .layout { display:grid; grid-template-columns: 420px minmax(0,1fr); grid-template-rows: minmax(0,1fr); height:100%; }
+  .layout > * { min-height:0; min-width:0; }
+  .sidebar { border-right:1px solid #334155; display:flex; flex-direction:column; overflow:hidden; }
   .filters { padding:16px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid #334155; }
   .filters input, .filters select { width:100%; padding:8px 10px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; font-size:13px; }
   .filters label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:-4px; }
@@ -165,7 +166,7 @@
 </div>
 
 <script>
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
