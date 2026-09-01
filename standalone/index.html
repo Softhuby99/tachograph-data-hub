@@ -559,7 +559,12 @@ async function checkCardSource(key) {
   for (const row of latest.values()) {
     const k = normApproval(row.typeApproval);
     if (!k) continue;
-    const card = cards.find(c => normApproval(c.type_approval_number).length && normApproval(c.type_approval_number).includes(k));
+    // Short approval numbers must match exactly; longer ones may match inside a combined field.
+    const card = cards.find(c => {
+      const hay = normApproval(c.type_approval_number);
+      if (!hay) return false;
+      return k.length >= 5 ? hay.includes(k) : hay === k;
+    });
     if (card) {
       const changes = diffAgainstCard(row, card);
       if (!changes.length) continue;
