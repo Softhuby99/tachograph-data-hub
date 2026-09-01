@@ -304,6 +304,7 @@ const TIMELINE_FIELDS = [
   ['procurement_status','Procurement Status'],
 ];
 let tlOpenId = null;
+let tlSort = 'date';
 function parseApprovalDate(text) {
   if (!text) return null;
   const s = String(text);
