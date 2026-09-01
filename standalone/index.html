@@ -104,6 +104,10 @@
   .tl-detail { display:grid; grid-template-columns:repeat(2,1fr); gap:8px 24px; background:#0f172a; border:1px solid #334155; border-radius:6px; padding:12px 16px; margin-top:4px; font-size:13px; }
   .tl-detail dt { font-size:11px; color:#94a3b8; }
   .tl-detail dd { margin:2px 0 0; word-break:break-word; }
+  .tl-sort { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:11px; color:#94a3b8; }
+  .tl-sort-btn { background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px 8px; cursor:pointer; font-size:11px; }
+  .tl-sort-btn:hover { background:#334155; }
+  .tl-sort-btn.active { background:#1d4ed8; color:#fff; border-color:#1d4ed8; }
   .version-badge { border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-right:8px; align-self:center; }
   .view-switch { display:inline-flex; align-items:center; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; margin-right:8px; align-self:center; font-size:12px; font-weight:600; }
   .view-switch .active { background:#1d4ed8; color:#fff; padding:4px 10px; }
@@ -180,7 +184,7 @@
 </div>
 
 <script>
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.5";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -304,6 +308,7 @@ const TIMELINE_FIELDS = [
   ['procurement_status','Procurement Status'],
 ];
 let tlOpenId = null;
+let tlSort = 'date';
 function parseApprovalDate(text) {
   if (!text) return null;
   const s = String(text);
@@ -317,15 +322,21 @@ function parseApprovalDate(text) {
 }
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toggleTl(id) { tlOpenId = (tlOpenId === id) ? null : id; renderDetail(); }
+function setTlSort(mode) { tlSort = mode; renderDetail(); }
 function renderTimeline(manufacturer) {
   if (!manufacturer) return '';
   const entries = DATA.map(merged)
     .filter(r => (r.current_manufacturer_normalized || r.current_manufacturer) === manufacturer)
-    .map(r => ({ card: r, date: parseApprovalDate(r.date_status) }))
-    .sort((a, b) => (!a.date ? 1 : !b.date ? -1 : a.date - b.date));
+    .map(r => ({ card: r, date: parseApprovalDate(r.date_status) }));
+  if (tlSort === 'name') {
+    entries.sort((a, b) => (a.card.country || '').localeCompare(b.card.country || ''));
+  } else {
+    entries.sort((a, b) => (!a.date ? 1 : !b.date ? -1 : a.date - b.date));
+  }
   if (!entries.length) return '';
   const dated = entries.filter(e => e.date);
-  const years = dated.length ? `${dated[0].date.getFullYear()} – ${dated[dated.length-1].date.getFullYear()}` : 'no dates available';
+  const byDate = [...dated].sort((a,b) => a.date - b.date);
+  const years = byDate.length ? `${byDate[0].date.getFullYear()} – ${byDate[byDate.length-1].date.getFullYear()}` : 'no dates available';
   const items = entries.map(({ card: c, date }) => {
     const open = tlOpenId === c.id;
     const flag = c.iso ? `<img src="${flagUrl(c.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:20px">${c.country_flag||''}</span>`;
@@ -341,7 +352,11 @@ function renderTimeline(manufacturer) {
   }).join('');
   return `<div class="section">
     <div class="section-head"><h3>Approval timeline — ${esc(manufacturer)}</h3>
-    <span style="font-size:12px;color:#94a3b8;">${entries.length} countries · ${years}</span></div>
+    <span style="font-size:12px;color:#94a3b8;">${entries.length} countries · ${years}</span>
+    <div class="tl-sort"><span>Sort:</span>
+      <button type="button" class="tl-sort-btn${tlSort==='date'?' active':''}" onclick="setTlSort('date')">Date</button>
+      <button type="button" class="tl-sort-btn${tlSort==='name'?' active':''}" onclick="setTlSort('name')">Name</button>
+    </div></div>
     <ol class="tl">${items}</ol>
   </div>`;
 }

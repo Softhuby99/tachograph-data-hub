@@ -601,16 +601,21 @@ function ManufacturerTimeline({
   cards: TachoCard[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "name">("date");
 
   const entries = useMemo(() => {
-    return cards
-      .map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }))
-      .sort((a, b) => {
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return a.date.getTime() - b.date.getTime();
-      });
-  }, [cards]);
+    const list = cards.map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }));
+    if (sortBy === "name") {
+      return list.sort((a, b) =>
+        a.card.country.localeCompare(b.card.country),
+      );
+    }
+    return list.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.getTime() - b.date.getTime();
+    });
+  }, [cards, sortBy]);
 
   const dated = entries.filter((e) => e.date);
   const years = dated.length
@@ -627,6 +632,27 @@ function ManufacturerTimeline({
           Approval timeline — {manufacturer}
           <Badge variant="secondary">{entries.length} countries</Badge>
           <span className="text-xs font-normal text-muted-foreground">{years}</span>
+          <div className="ml-auto flex items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Sort:</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "date" ? "default" : "outline"}
+              className="h-7 px-2 text-xs"
+              onClick={() => setSortBy("date")}
+            >
+              Date
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "name" ? "default" : "outline"}
+              className="h-7 px-2 text-xs"
+              onClick={() => setSortBy("name")}
+            >
+              Name
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
