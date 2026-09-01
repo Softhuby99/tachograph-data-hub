@@ -318,12 +318,17 @@ function parseApprovalDate(text) {
 }
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toggleTl(id) { tlOpenId = (tlOpenId === id) ? null : id; renderDetail(); }
+function setTlSort(mode) { tlSort = mode; renderDetail(); }
 function renderTimeline(manufacturer) {
   if (!manufacturer) return '';
   const entries = DATA.map(merged)
     .filter(r => (r.current_manufacturer_normalized || r.current_manufacturer) === manufacturer)
-    .map(r => ({ card: r, date: parseApprovalDate(r.date_status) }))
-    .sort((a, b) => (!a.date ? 1 : !b.date ? -1 : a.date - b.date));
+    .map(r => ({ card: r, date: parseApprovalDate(r.date_status) }));
+  if (tlSort === 'name') {
+    entries.sort((a, b) => (a.card.country || '').localeCompare(b.card.country || ''));
+  } else {
+    entries.sort((a, b) => (!a.date ? 1 : !b.date ? -1 : a.date - b.date));
+  }
   if (!entries.length) return '';
   const dated = entries.filter(e => e.date);
   const years = dated.length ? `${dated[0].date.getFullYear()} – ${dated[dated.length-1].date.getFullYear()}` : 'no dates available';
