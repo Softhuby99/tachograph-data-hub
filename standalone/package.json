@@ -1,6 +1,6 @@
 {
   "name": "tachograph-card-info-tool",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "Tachograph Card Info Tool - offline standalone",
   "main": "main.cjs",
   "author": "Lovable",

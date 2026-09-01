@@ -5,4 +5,4 @@
  * Keep in sync with standalone/package.json ("version") and the
  * APP_VERSION constant in standalone/index.html.
  */
-export const APP_VERSION = "1.9";
+export const APP_VERSION = "2.0";
