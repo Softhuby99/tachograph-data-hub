@@ -284,7 +284,13 @@ function TachographTool() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              className="rounded-full border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+              title="App version"
+            >
+              V{APP_VERSION}
+            </span>
             <Button
               variant={tab === "data" ? "default" : "outline"}
               size="sm"
