@@ -318,6 +318,13 @@ function TachographTool() {
               <FileText className="mr-2 h-4 w-4" /> Data
             </Button>
             <Button
+              variant={tab === "map" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("map")}
+            >
+              <Globe2 className="mr-2 h-4 w-4" /> Map
+            </Button>
+            <Button
               variant={tab === "analytics" ? "default" : "outline"}
               size="sm"
               onClick={() => setTab("analytics")}
