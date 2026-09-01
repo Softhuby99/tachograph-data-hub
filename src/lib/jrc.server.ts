@@ -128,19 +128,24 @@ function normApproval(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Keep only the most recent JRC entry per type approval number. */
+/**
+ * Keep the most recent JRC entry per type approval number AND generation, so
+ * historic G1 approvals stay visible alongside newer G2.x rows.
+ */
 export function latestPerApproval(rows: JrcRow[]): JrcRow[] {
   const best = new Map<string, JrcRow>();
   for (const row of rows) {
     const key = normApproval(row.typeApproval);
     if (!key) continue;
-    const current = best.get(key);
+    const mapKey = `${key}#${row.generation ?? ""}`;
+    const current = best.get(mapKey);
     if (!current || parseJrcDate(row.date) > parseJrcDate(current.date)) {
-      best.set(key, row);
+      best.set(mapKey, row);
     }
   }
   return Array.from(best.values());
 }
+
 
 type CardRow = {
   id: string;
@@ -176,9 +181,13 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   if (!key) return undefined;
   return cards.find((c) => {
     const haystack = normApproval(c.type_approval_number);
-    return haystack.length > 0 && haystack.includes(key);
+    if (haystack.length === 0 || !haystack.includes(key)) return false;
+    // A G1 row must not be swallowed by a G2.x card with the same approval no.
+    if (row.generation && c.generation && row.generation !== c.generation) return false;
+    return true;
   });
 }
+
 
 export function diffRow(row: JrcRow, card: CardRow): FieldChange[] {
   const proposed: Record<string, string> = {
