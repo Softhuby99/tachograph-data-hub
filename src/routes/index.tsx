@@ -286,6 +286,18 @@ function TachographTool() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-md border bg-muted p-0.5 text-xs font-medium">
+              <span className="rounded-sm bg-background px-2.5 py-1 shadow-sm">Web</span>
+              <a
+                href="/offline"
+                target="_blank"
+                rel="noreferrer"
+                className="px-2.5 py-1 text-muted-foreground hover:text-foreground"
+                title="Open the standalone/offline version in a new tab"
+              >
+                Offline
+              </a>
+            </div>
             <span
               className="rounded-full border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground"
               title="App version"
