@@ -948,10 +948,15 @@ function mapLabel(country, xy, cards, showNumbers) {
   if (showNumbers) {
     extra += '<text class="cn" y="24">' + esc(country) + '</text>';
     cards.slice(0,4).forEach((c,i) => {
-      extra += '<text class="ta link" y="' + (34 + i*10) + '"' +
-        ' onclick="event.stopPropagation();openCardModal(\'' + c.id + '\')">' +
-        '<title>Click for full details</title>' + esc(c.type_approval_number || c.generation) + '</text>';
+      const y = 34 + i*10;
+      const label = esc(c.type_approval_number || c.generation || '');
+      const w = Math.max(30, label.length * 4.6);
+      const click = 'event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\')';
+      extra += '<g class="ta-hit" onclick="' + click + '" style="cursor:pointer">' +
+        '<rect x="' + (-w/2) + '" y="' + (y-7) + '" width="' + w + '" height="10" fill="transparent"></rect>' +
+        '<text class="ta link" y="' + y + '"><title>Click for full details</title>' + label + '</text></g>';
     });
+
   }
   return '<g class="lbl' + (sel ? ' sel' : '') + '" transform="translate(' + xy[0] + ',' + xy[1] + ') scale(' + (1/mapZoomLevel) + ')"' +
     ' onclick="mapSelect(' + JSON.stringify(country).replace(/"/g,'&quot;') + ')">' +
