@@ -925,13 +925,61 @@ function mapLabel(country, xy, cards, showNumbers) {
   if (showNumbers) {
     extra += '<text class="cn" y="24">' + esc(country) + '</text>';
     cards.slice(0,4).forEach((c,i) => {
-      extra += '<text class="ta" y="' + (34 + i*10) + '">' + esc(c.type_approval_number || c.generation) + '</text>';
+      extra += '<text class="ta link" y="' + (34 + i*10) + '"' +
+        ' onclick="event.stopPropagation();openCardModal(\'' + c.id + '\')">' +
+        '<title>Click for full details</title>' + esc(c.type_approval_number || c.generation) + '</text>';
     });
   }
   return '<g class="lbl' + (sel ? ' sel' : '') + '" transform="translate(' + xy[0] + ',' + xy[1] + ') scale(' + (1/mapZoomLevel) + ')"' +
     ' onclick="mapSelect(' + JSON.stringify(country).replace(/"/g,'&quot;') + ')">' +
     '<circle r="11"></circle><text class="n" dy="0.35em">' + cards.length + '</text>' + extra + '</g>';
 }
+
+// ---------- Card info modal (draggable, resizable, scrollable) ----------
+function openCardModal(id) {
+  closeCardModal();
+  const base = DATA.find(x => x.id === id);
+  if (!base) return;
+  const r = merged(base);
+  const flag = r.iso ? '<img src="' + flagUrl(r.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
+  const fieldHtml = ([k,label]) =>
+    '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
+  const win = document.createElement('div');
+  win.className = 'card-modal';
+  win.id = 'cardModal';
+  win.innerHTML =
+    '<div class="cm-head" id="cardModalHead">' +
+      flag + '<div class="cm-title"><b>' + esc(r.country) + '</b> · ' + esc(r.type_approval_number || '—') +
+      ' <span class="badge">' + esc(r.generation || '') + '</span></div>' +
+      '<button class="cm-close" onclick="closeCardModal()" title="Close">&times;</button>' +
+    '</div>' +
+    '<div class="cm-body">' +
+      '<div class="section"><div class="section-head"><h3>Card &amp; Certification (Group 1)</h3></div>' +
+        fields1.map(fieldHtml).join('') + '</div>' +
+      '<div class="section"><div class="section-head"><h3>Procurement (Group 2)</h3></div>' +
+        fields2.map(fieldHtml).join('') + '</div>' +
+    '</div>';
+  document.body.appendChild(win);
+  const head = win.querySelector('#cardModalHead');
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cm-close')) return;
+    const rect = win.getBoundingClientRect();
+    const drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const move = ev => {
+      win.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - drag.dx)) + 'px';
+      win.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - drag.dy)) + 'px';
+      win.style.transform = 'none';
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+}
+function closeCardModal() {
+  const m = document.getElementById('cardModal');
+  if (m) m.remove();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCardModal(); });
 
 function renderMapDetail(counts) {
   const list = mapSelected ? (counts[mapSelected] || []) : [];
