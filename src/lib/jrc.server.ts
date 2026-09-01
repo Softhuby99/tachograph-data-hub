@@ -181,9 +181,13 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   if (!key) return undefined;
   return cards.find((c) => {
     const haystack = normApproval(c.type_approval_number);
-    return haystack.length > 0 && haystack.includes(key);
+    if (haystack.length === 0 || !haystack.includes(key)) return false;
+    // A G1 row must not be swallowed by a G2.x card with the same approval no.
+    if (row.generation && c.generation && row.generation !== c.generation) return false;
+    return true;
   });
 }
+
 
 export function diffRow(row: JrcRow, card: CardRow): FieldChange[] {
   const proposed: Record<string, string> = {
