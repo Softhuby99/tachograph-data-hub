@@ -257,6 +257,7 @@ type SnapshotEntry = {
   country: string;
   title: string;
   payload: Record<string, string>;
+  generation?: string;
 };
 
 const MAX_INFO_PER_SOURCE = 40;
