@@ -158,7 +158,18 @@
 </div>
 
 <script>
-const DATA = __DATA__;
+const BASE_DATA = __DATA__;
+const EXTRA_KEY = 'tacho-extra-rows-v1';
+function loadExtra() { try { return JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch { return []; } }
+function saveExtra(rows) { localStorage.setItem(EXTRA_KEY, JSON.stringify(rows)); }
+let extraRows = loadExtra();
+let DATA = BASE_DATA.concat(extraRows);
+function rebuildData() {
+  DATA = BASE_DATA.concat(extraRows);
+  fill($('fCountry'), uniq(DATA.map(r=>r.country)));
+  fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
+  renderList();
+}
 
 // Load per-id edits from localStorage
 const OVERRIDES_KEY = 'tacho-overrides-v1';
@@ -312,9 +323,12 @@ function resetEdits() {
 function switchTab(t) {
   $('tabData').classList.toggle('active', t==='data');
   $('tabAnalytics').classList.toggle('active', t==='analytics');
+  $('tabUpdates').classList.toggle('active', t==='updates');
   $('viewData').classList.toggle('active', t==='data');
   $('viewAnalytics').classList.toggle('active', t==='analytics');
+  $('viewUpdates').classList.toggle('active', t==='updates');
   if (t==='analytics') renderAnalytics();
+  if (t==='updates') renderUpdates();
 }
 
 let drillGen = null;
@@ -406,6 +420,296 @@ function renderAnalytics() {
 }
 
 renderList();
+
+// ======================= Offline Update Monitor =======================
+const SOURCES = {
+  card_status: { label: 'Card status', url: 'https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html' },
+  other_certificates: { label: 'Other certificates', url: 'https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html' },
+  public_key_certificates: { label: 'Public key certificates', url: 'https://dtc.jrc.ec.europa.eu/dtc_public_key_certificates_dt.php.html' },
+  key_management: { label: 'Key management status', url: 'https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html' },
+  security_updates: { label: 'Mandatory security updates', url: 'https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html' },
+  manufacturer_codes: { label: 'Manufacturer codes', url: 'https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html' },
+};
+const ANNEX_GEN = { '6f9ccc': 'G1', '2323dc': 'G2.1', 'ff9aff': 'G2.2' };
+
+const PROPOSALS_KEY = 'tacho-proposals-v1';
+const RUNS_KEY = 'tacho-runs-v1';
+const SNAP_KEY = 'tacho-snapshots-v1';
+const readJson = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } };
+const writeJson = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+let proposals = readJson(PROPOSALS_KEY, []);
+let runs = readJson(RUNS_KEY, {});
+let snapshots = readJson(SNAP_KEY, {});
+let sourceState = {};
+let proposalTab = 'pending';
+let checking = false;
+
+async function fetchPage(url) {
+  if (window.tacho && window.tacho.fetchText) return window.tacho.fetchText(url);
+  const res = await fetch(url); // browser fallback (may be blocked by CORS)
+  if (!res.ok) throw new Error('Request failed [' + res.status + ']');
+  return res.text();
+}
+
+function parseTableRows(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return [...doc.querySelectorAll('tr')].map(tr => {
+    const cells = [...tr.querySelectorAll('td,th')];
+    return {
+      values: cells.map(c => (c.textContent || '').replace(/\s+/g, ' ').trim()),
+      gens: cells.map(c => ANNEX_GEN[String(c.getAttribute('bgcolor') || '').replace('#','').toLowerCase()] || ''),
+    };
+  }).filter(r => r.values.length);
+}
+
+const normApproval = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function parseCardStatus(html) {
+  const out = [];
+  for (const row of parseTableRows(html)) {
+    if (row.values.length < 8) continue;
+    const v = row.values.slice(-8), g = row.gens.slice(-8);
+    if (v[0].toLowerCase() === 'manufacturer') continue;
+    if (!v[5] && !v[2]) continue;
+    out.push({ manufacturer: v[0], cardName: v[1], certificate: v[2], date: v[3], eov: v[4], typeApproval: v[5], generation: g[7] || '' });
+  }
+  return out;
+}
+
+function parseOtherCertificateCards(html) {
+  const out = [];
+  for (const row of parseTableRows(html)) {
+    if (row.values.length < 7) continue;
+    const v = row.values.slice(-7), g = row.gens.slice(-7);
+    if (v[0].toLowerCase().startsWith('manufacturer')) continue;
+    const sep = v[1].indexOf(' - ');
+    const component = sep > 0 ? v[1].slice(0, sep).trim() : v[1].trim();
+    const name = sep > 0 ? v[1].slice(sep + 3).trim() : '';
+    if (component.toLowerCase() !== 'card') continue;
+    if (!v[3]) continue;
+    out.push({
+      manufacturer: v[0], cardName: name,
+      certificate: /^n\.?\/?a\.?$/i.test(v[2]) ? '' : v[2],
+      date: v[4], eov: '', typeApproval: v[3], generation: g[6] || '',
+    });
+  }
+  return out;
+}
+
+const FIELD_LABELS = {
+  generation: 'Generation',
+  current_manufacturer: 'Current Manufacturer',
+  type_approval_number: 'Type Approval Number',
+  jrc_interoperability_status: 'JRC Interoperability Status',
+};
+
+function jrcStatusText(r) {
+  return [r.certificate, r.date ? 'issued ' + r.date : '', r.eov ? 'EOV ' + r.eov : ''].filter(Boolean).join(' · ');
+}
+
+function diffAgainstCard(row, card) {
+  const proposed = { generation: row.generation, type_approval_number: row.typeApproval };
+  const certKey = normApproval(row.certificate);
+  if (certKey && !normApproval(card.jrc_interoperability_status).includes(certKey)) proposed.jrc_interoperability_status = jrcStatusText(row);
+  const manuNew = (row.manufacturer || '').toLowerCase();
+  const token = manuNew.split(/[\s/–-]/)[0];
+  if (token.length > 2 && !String(card.current_manufacturer || '').toLowerCase().includes(token)) proposed.current_manufacturer = row.manufacturer;
+  const changes = [];
+  for (const [field, value] of Object.entries(proposed)) {
+    if (!value) continue;
+    const old = String(card[field] ?? '');
+    if (old.trim() === value.trim()) continue;
+    if (field === 'type_approval_number' && normApproval(old).includes(normApproval(value))) continue;
+    changes.push({ field, label: FIELD_LABELS[field] || field, old, new: value });
+  }
+  return changes;
+}
+
+function hashString(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+  return String(h);
+}
+
+function addProposal(p) {
+  if (proposals.some(x => x.fingerprint === p.fingerprint)) return false;
+  proposals.unshift({ id: 'p' + Date.now() + Math.random().toString(16).slice(2), status: 'pending', created_at: new Date().toISOString(), ...p });
+  return true;
+}
+
+async function checkCardSource(key) {
+  const html = await fetchPage(SOURCES[key].url);
+  const rows = key === 'card_status' ? parseCardStatus(html) : parseOtherCertificateCards(html);
+  const cards = DATA.map(merged);
+  let created = 0;
+  for (const row of rows) {
+    const k = normApproval(row.typeApproval);
+    if (!k) continue;
+    const card = cards.find(c => normApproval(c.type_approval_number).length && normApproval(c.type_approval_number).includes(k));
+    if (card) {
+      const changes = diffAgainstCard(row, card);
+      if (!changes.length) continue;
+      if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes,
+        fingerprint: hashString(key + '|' + card.id + '|' + changes.map(c => c.field + c.new).join('|')) })) created++;
+    } else {
+      if (addProposal({ kind: 'new', source: key, cardId: null, country: '', row, changes: [],
+        fingerprint: hashString(key + '|new|' + k + '|' + row.certificate + row.date) })) created++;
+    }
+  }
+  return { rows: rows.length, created };
+}
+
+async function checkInfoSource(key) {
+  const html = await fetchPage(SOURCES[key].url);
+  const rows = parseTableRows(html).filter(r => r.values.length > 2).map(r => r.values.join(' | '));
+  const known = new Set(snapshots[key] || []);
+  let created = 0;
+  const isFirst = !snapshots[key];
+  if (!isFirst) {
+    for (const line of rows) {
+      if (known.has(line)) continue;
+      if (addProposal({ kind: 'info', source: key, cardId: null, country: '', row: null, changes: [], info: line,
+        fingerprint: hashString(key + '|' + line) })) created++;
+    }
+  }
+  snapshots[key] = rows;
+  writeJson(SNAP_KEY, snapshots);
+  return { rows: rows.length, created, baseline: isFirst };
+}
+
+async function runUpdateCheck() {
+  if (checking) return;
+  checking = true;
+  sourceState = {};
+  $('btnCheck').disabled = true;
+  let totalRows = 0, totalNew = 0;
+  for (const key of Object.keys(SOURCES)) {
+    sourceState[key] = 'running';
+    runs[key] = { message: 'Checking…', at: new Date().toISOString() };
+    renderUpdates();
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const res = (key === 'card_status' || key === 'other_certificates')
+        ? await checkCardSource(key)
+        : await checkInfoSource(key);
+      totalRows += res.rows; totalNew += res.created;
+      sourceState[key] = res.created > 0 ? 'updated' : 'clean';
+      runs[key] = { message: res.baseline
+          ? res.rows + ' rows read — baseline stored, changes reported from next check'
+          : res.rows + ' rows read, ' + res.created + ' new proposal(s)',
+        at: new Date().toISOString() };
+    } catch (e) {
+      sourceState[key] = 'error';
+      runs[key] = { message: 'Failed: ' + (e && e.message ? e.message : String(e)), at: new Date().toISOString() };
+    }
+    writeJson(RUNS_KEY, runs);
+    writeJson(PROPOSALS_KEY, proposals);
+    renderUpdates();
+  }
+  // Only sources with findings or errors stay highlighted.
+  sourceState = Object.fromEntries(Object.entries(sourceState).filter(([, v]) => v === 'updated' || v === 'error'));
+  checking = false;
+  $('btnCheck').disabled = false;
+  $('updateStatus').textContent = 'Check finished — ' + totalRows + ' rows read, ' + totalNew + ' new proposal(s).';
+  renderUpdates();
+}
+
+function setProposalTab(t) { proposalTab = t; renderUpdates(); }
+
+function applyProposal(id) {
+  const p = proposals.find(x => x.id === id);
+  if (!p) return;
+  if (p.kind === 'change') {
+    const patch = {};
+    p.changes.forEach(c => { patch[c.field] = c.new; });
+    overrides[p.cardId] = { ...(overrides[p.cardId] || {}), ...patch };
+    saveOverrides(overrides);
+  } else if (p.kind === 'new') {
+    const country = (document.getElementById('c_' + id) || {}).value || '';
+    if (!country.trim()) { alert('Please enter the country for this new entry.'); return; }
+    extraRows.push({
+      id: 'jrc-' + p.id,
+      country: country.trim(),
+      country_flag: '',
+      generation: p.row.generation || '',
+      application: p.row.cardName || '',
+      current_manufacturer: p.row.manufacturer || '',
+      current_manufacturer_normalized: p.row.manufacturer || '',
+      type_approval_number: p.row.typeApproval || '',
+      jrc_interoperability_status: jrcStatusText(p.row),
+      jrc_certificate_source: SOURCES[p.source].url,
+      primary_source: SOURCES[p.source].url,
+      date_status: p.row.date || '',
+    });
+    saveExtra(extraRows);
+  }
+  p.status = 'applied';
+  writeJson(PROPOSALS_KEY, proposals);
+  rebuildData();
+  renderUpdates();
+}
+
+function dismissProposal(id) {
+  const p = proposals.find(x => x.id === id);
+  if (!p) return;
+  p.status = 'dismissed';
+  writeJson(PROPOSALS_KEY, proposals);
+  renderUpdates();
+}
+
+function esc(v) { return String(v ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+function renderUpdates() {
+  const online = navigator.onLine;
+  const lastAt = Object.values(runs).map(r => r.at).sort().pop();
+  $('updateStatus').innerHTML = (online ? '' : '<span style="color:#fca5a5;">No internet connection — the check needs online access.</span> ') +
+    'Last check: ' + (lastAt ? new Date(lastAt).toLocaleString() : 'never') +
+    (window.tacho ? '' : ' · Running outside the desktop app: requests may be blocked by the browser.');
+
+  $('sourceList').innerHTML = Object.entries(SOURCES).map(([key, src]) => {
+    const st = sourceState[key] || '';
+    const run = runs[key];
+    return '<div class="src-row ' + st + '">' +
+      '<span class="name">' + esc(src.label) + '</span>' +
+      '<span>' + esc(run ? run.message : 'not checked yet') + '</span>' +
+      '<a href="' + src.url + '" target="_blank" rel="noreferrer">Open</a></div>';
+  }).join('');
+
+  $('btnPending').classList.toggle('active', proposalTab === 'pending');
+  const pending = proposals.filter(p => p.status === 'pending');
+  const handled = proposals.filter(p => p.status !== 'pending');
+  $('btnPending').textContent = 'Pending (' + pending.length + ')';
+  $('btnHandled').textContent = 'Handled (' + handled.length + ')';
+  const list = proposalTab === 'pending' ? pending : handled;
+
+  $('proposalList').innerHTML = list.length ? list.map(p => {
+    const title = p.kind === 'info'
+      ? SOURCES[p.source].label + ' — new/changed entry'
+      : p.kind === 'new'
+        ? 'New JRC entry · ' + esc(p.row.typeApproval || '—')
+        : esc(p.country) + ' · ' + esc(p.row.typeApproval || '—');
+    const body = p.kind === 'info'
+      ? '<div style="font-size:12px;color:#cbd5e1;">' + esc(p.info) + '</div>'
+      : '<div style="font-size:12px;color:#cbd5e1;margin-bottom:8px;">' +
+          esc(p.row.manufacturer) + ' · ' + esc(p.row.cardName) + ' · ' + esc(jrcStatusText(p.row)) + '</div>' +
+        (p.changes.length ? '<div>' + p.changes.map(c =>
+          '<div class="chg"><span>' + esc(c.label) + '</span><span class="old">' + esc(c.old || '—') + '</span><span class="new">' + esc(c.new) + '</span></div>').join('') + '</div>' : '');
+    const actions = p.status === 'pending'
+      ? '<div class="actions">' +
+          (p.kind === 'new' ? '<input class="country" id="c_' + p.id + '" placeholder="Country for new entry" />' : '') +
+          (p.kind === 'info' ? '' : '<button class="btn" onclick="applyProposal(\'' + p.id + '\')">Approve &amp; apply</button>') +
+          '<button class="btn secondary" onclick="dismissProposal(\'' + p.id + '\')">Dismiss</button></div>'
+      : '';
+    return '<div class="prop"><div class="top"><span class="title">' + title + '</span><span class="tags">' +
+      '<span class="badge">' + esc(SOURCES[p.source].label) + '</span>' +
+      '<span class="badge">' + (p.kind === 'new' ? 'New entry' : p.kind === 'info' ? 'Info' : 'Changed') + '</span>' +
+      (p.status !== 'pending' ? '<span class="badge">' + p.status + '</span>' : '') +
+      '</span></div>' + body + actions + '</div>';
+  }).join('') : '<p style="color:#64748b;font-size:13px;">' + (proposalTab === 'pending'
+      ? 'No pending updates. Run a check to look for new JRC entries.'
+      : 'No handled proposals yet.') + '</p>';
+}
 </script>
 </body>
 </html>
