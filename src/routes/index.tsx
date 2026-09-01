@@ -481,6 +481,12 @@ function DataView({
         </CardContent>
       </Card>
 
+      {manufacturer !== "all" && (
+        <ManufacturerTimeline manufacturer={manufacturer} cards={filtered} />
+      )}
+
+
+
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <div>
           <div className="mb-2 flex items-center justify-between">
@@ -558,6 +564,131 @@ function DataView({
     </>
   );
 }
+
+/** Parse the first dd.mm.yyyy (or yyyy-mm-dd) date found in a free-text status field. */
+function parseApprovalDate(text: string): Date | null {
+  if (!text) return null;
+  const dmy = /(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(text);
+  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  const ymd = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const y = /\b(19|20)\d{2}\b/.exec(text);
+  if (y) return new Date(Number(y[0]), 0, 1);
+  return null;
+}
+
+const TIMELINE_FIELDS: Array<[keyof TachoCard, string]> = [
+  ["application", "Application"],
+  ["type_approval_number", "Type Approval Number"],
+  ["issued_by_authority", "Issued by Authority"],
+  ["date_status", "Date / Status"],
+  ["certificate_holder", "Certificate Holder"],
+  ["chip_platform_vendor", "Chip / Platform Vendor"],
+  ["security_certificate", "Security Certificate"],
+  ["jrc_interoperability_status", "JRC Interoperability Status"],
+  ["latest_tender", "Latest Tender"],
+  ["procurement_status", "Procurement Status"],
+];
+
+function ManufacturerTimeline({
+  manufacturer,
+  cards,
+}: {
+  manufacturer: string;
+  cards: TachoCard[];
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const entries = useMemo(() => {
+    return cards
+      .map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }))
+      .sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.getTime() - b.date.getTime();
+      });
+  }, [cards]);
+
+  const dated = entries.filter((e) => e.date);
+  const years = dated.length
+    ? `${dated[0].date!.getFullYear()} – ${dated[dated.length - 1].date!.getFullYear()}`
+    : "no dates available";
+
+  if (entries.length === 0) return null;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+          <Building2 className="h-4 w-4 text-primary" />
+          Approval timeline — {manufacturer}
+          <Badge variant="secondary">{entries.length} countries</Badge>
+          <span className="text-xs font-normal text-muted-foreground">{years}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ol className="relative space-y-2 border-l pl-6">
+          {entries.map(({ card: c, date }) => {
+            const open = openId === c.id;
+            const fUrl = flagUrl(c.country, 40);
+            return (
+              <li key={c.id} className="relative">
+                <span className="absolute -left-[27px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : c.id)}
+                  className={
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent " +
+                    (open ? "bg-accent" : "bg-card")
+                  }
+                >
+                  <span className="w-24 shrink-0 font-mono text-xs text-muted-foreground">
+                    {date
+                      ? date.toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "unknown"}
+                  </span>
+                  {fUrl ? (
+                    <img
+                      src={fUrl}
+                      alt={`${c.country} flag`}
+                      width={32}
+                      height={24}
+                      loading="lazy"
+                      className="h-6 w-8 shrink-0 rounded-sm border object-cover shadow-sm"
+                    />
+                  ) : (
+                    <span className="text-xl leading-none">{c.country_flag}</span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate font-medium">{c.country}</span>
+                  <span className="hidden truncate font-mono text-xs text-muted-foreground sm:block">
+                    {c.type_approval_number || "—"}
+                  </span>
+                  <Badge variant="secondary">{c.generation}</Badge>
+                </button>
+                {open && (
+                  <dl className="mt-1 grid gap-x-6 gap-y-2 rounded-md border bg-muted/40 px-4 py-3 text-sm sm:grid-cols-2">
+                    {TIMELINE_FIELDS.map(([key, label]) => (
+                      <div key={String(key)}>
+                        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                        <dd className="break-words">{String(c[key] ?? "") || "—"}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
+
 
 function DetailView({
   card,
