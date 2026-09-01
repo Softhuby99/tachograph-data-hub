@@ -368,7 +368,7 @@ function renderDetail() {
     ? `<div><button class="btn" onclick="saveEdits()">Save</button> <button class="btn secondary" onclick="cancelEdits()">Cancel</button> ${overrides[r.id]?'<button class="btn danger" onclick="resetEdits()">Reset to original</button>':''}</div>`
     : `<button class="btn" onclick="startEdit()">Edit</button>`;
 
-  $('detail').innerHTML = `
+  $('detail').innerHTML = timelineHtml + `
     <div class="detail-header">${flag}<div><h2>${r.country}${overrides[r.id]?'<span class="edit-badge">edited</span>':''}</h2><div class="gen">Generation ${r.generation}</div></div></div>
     <div class="section">
       <div class="section-head"><h3>Card &amp; Certification (Group 1)</h3>${sec1Head}</div>
