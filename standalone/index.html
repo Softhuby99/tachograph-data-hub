@@ -403,7 +403,7 @@ function resetEdits() {
   renderList(); renderDetail();
 }
 
-['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', renderList));
+['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', () => { renderList(); renderDetail(); }));
 
 // ---------- Analytics ----------
 function switchTab(t) {
