@@ -30,8 +30,10 @@ import {
   BarChart3,
   Pencil,
   RefreshCw,
+  Globe2,
 } from "lucide-react";
 import thalesLogo from "@/assets/thales-logo.png.asset.json";
+import { WorldMapView } from "@/components/WorldMapView";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -182,6 +184,7 @@ function flagUrl(country: string, size: 40 | 80 = 40): string | null {
 }
 
 const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
+  ["country", "Country"],
   ["generation", "Generation"],
   ["application", "Application"],
   ["tachograph_application_os", "Tachograph Application / OS"],
@@ -205,7 +208,7 @@ function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
+  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates">("data");
   const overridesQuery = useOverrides();
   const overrides = overridesQuery.data ?? {};
 
@@ -315,6 +318,13 @@ function TachographTool() {
               <FileText className="mr-2 h-4 w-4" /> Data
             </Button>
             <Button
+              variant={tab === "map" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("map")}
+            >
+              <Globe2 className="mr-2 h-4 w-4" /> Map
+            </Button>
+            <Button
               variant={tab === "analytics" ? "default" : "outline"}
               size="sm"
               onClick={() => setTab("analytics")}
@@ -355,6 +365,7 @@ function TachographTool() {
             onReset={resetOverride}
           />
         )}
+        {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} />}
         {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
 

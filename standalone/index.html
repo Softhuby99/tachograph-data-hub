@@ -184,7 +184,7 @@
 </div>
 
 <script>
-const APP_VERSION = "1.8";
+const APP_VERSION = "1.9";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -212,6 +212,7 @@ const $ = id => document.getElementById(id);
 const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
 
 const fields1 = [
+  ['country','Country'],
   ['generation','Generation'],
   ['application','Application'],
   ['tachograph_application_os','Tachograph Application OS'],
