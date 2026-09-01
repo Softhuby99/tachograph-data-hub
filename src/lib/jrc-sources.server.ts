@@ -133,9 +133,16 @@ export type OtherCertRow = {
 export function parseOtherCertificates(html: string): OtherCertRow[] {
   const out: OtherCertRow[] = [];
   for (const row of extractRows(html)) {
-    if (row.values.length < 7) continue;
-    const v = row.values.slice(-7);
-    const a = row.attrs.slice(-7);
+    // Most (older) rows only have 6 columns: manufacturer, component, interop
+    // certificate, type approval, date, annex. Newer rows add a
+    // "Mandatory security updates" column before the annex column.
+    const width = row.values.length;
+    if (width < 6) continue;
+    const raw = width >= 7 ? row.values.slice(-7) : row.values.slice(-6);
+    const rawAttrs = width >= 7 ? row.attrs.slice(-7) : row.attrs.slice(-6);
+    const v =
+      width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], "", raw[5]];
+    const annexAttr = width >= 7 ? rawAttrs[6] : rawAttrs[5];
     if (v[0].toLowerCase().startsWith("manufacturer")) continue;
     if (!v[0] && !v[1]) continue;
     const sep = v[1].indexOf(" - ");
@@ -150,11 +157,12 @@ export function parseOtherCertificates(html: string): OtherCertRow[] {
       typeApproval: v[3],
       date: v[4],
       mandatoryUpdates: v[5],
-      generation: generationFromAttrs(a[6]),
+      generation: generationFromAttrs(annexAttr),
     });
   }
   return out;
 }
+
 
 // ------------------------------------------------------ public key certs (DT)
 
