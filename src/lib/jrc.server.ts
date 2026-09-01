@@ -77,6 +77,47 @@ export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
     }));
 }
 
+/**
+ * "Other certificates" page, non-card entries (VU, MS, DSRC, M1N1, Paper, ...).
+ * The Annex column colour maps to the generation: Annex 1B = G1,
+ * Annex 1C (dark blue) = G2.1, Annex 1C v2 (pink) = G2.2.
+ */
+export async function fetchOtherCertificateInfoEntries(): Promise<{
+  entries: SnapshotEntry[];
+  rowsParsed: number;
+}> {
+  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
+  const others = rows.filter((r) => r.component.toLowerCase() !== "card");
+  return {
+    rowsParsed: rows.length,
+    entries: others.map((r) => ({
+      key: `${r.component}|${r.manufacturer}|${r.name}|${r.typeApproval}`,
+      fingerprint: [r.interopCertificate, r.date, r.mandatoryUpdates, r.generation].join("|"),
+      country: "",
+      generation: r.generation,
+      title: `${r.component} · ${r.name || r.typeApproval} — ${r.manufacturer}${
+        r.generation ? ` (${r.generation})` : ""
+      }`,
+      payload: {
+        Component: r.component,
+        Manufacturer: r.manufacturer,
+        Name: r.name,
+        "Interoperability certificate": r.interopCertificate,
+        "Type approval certificate": r.typeApproval,
+        "Date of approval": r.date,
+        "Mandatory security updates": r.mandatoryUpdates,
+        Annex: r.generation
+          ? `${r.generation} (${
+              r.generation === "G1" ? "Annex 1B" : r.generation === "G2.1" ? "Annex 1C" : "Annex 1C v2"
+            })`
+          : "",
+      },
+    })),
+  };
+}
+
+
+
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
   if (!m) return 0;
