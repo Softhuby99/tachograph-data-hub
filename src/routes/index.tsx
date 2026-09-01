@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { saveCardOverride, resetCardOverride } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_VERSION } from "@/lib/version";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -284,7 +285,13 @@ function TachographTool() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              className="rounded-full border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+              title="App version"
+            >
+              V{APP_VERSION}
+            </span>
             <Button
               variant={tab === "data" ? "default" : "outline"}
               size="sm"
