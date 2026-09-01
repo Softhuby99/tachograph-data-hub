@@ -10,6 +10,7 @@
     "productName": "TachographCardsInfoTool",
     "files": [
       "main.cjs",
+      "preload.cjs",
       "index.html",
       "data.json"
     ],
@@ -17,7 +18,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
