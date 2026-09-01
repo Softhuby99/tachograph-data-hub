@@ -601,16 +601,21 @@ function ManufacturerTimeline({
   cards: TachoCard[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "name">("date");
 
   const entries = useMemo(() => {
-    return cards
-      .map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }))
-      .sort((a, b) => {
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return a.date.getTime() - b.date.getTime();
-      });
-  }, [cards]);
+    const list = cards.map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }));
+    if (sortBy === "name") {
+      return list.sort((a, b) =>
+        a.card.country.localeCompare(b.card.country),
+      );
+    }
+    return list.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.getTime() - b.date.getTime();
+    });
+  }, [cards, sortBy]);
 
   const dated = entries.filter((e) => e.date);
   const years = dated.length
