@@ -481,6 +481,12 @@ function DataView({
         </CardContent>
       </Card>
 
+      {manufacturer !== "all" && (
+        <ManufacturerTimeline manufacturer={manufacturer} cards={filtered} />
+      )}
+
+
+
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <div>
           <div className="mb-2 flex items-center justify-between">
