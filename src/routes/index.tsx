@@ -818,8 +818,14 @@ function DetailView({
             }
             return <Field key={key} label={label} value={value} />;
           })}
+          {!editing && (
+            <div className="md:col-span-2">
+              <CertificationChainPanel card={card} />
+            </div>
+          )}
         </CardContent>
       </Card>
+
 
       {/* Group 2 */}
       <Card>
