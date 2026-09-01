@@ -696,7 +696,7 @@ function renderUpdates() {
   const lastAt = Object.values(runs).map(r => r.at).sort().pop();
   $('updateStatus').innerHTML = (online ? '' : '<span style="color:#fca5a5;">No internet connection — the check needs online access.</span> ') +
     'Last check: ' + (lastAt ? new Date(lastAt).toLocaleString() : 'never') +
-    (window.tacho ? '' : ' · Running outside the desktop app: requests may be blocked by the browser.');
+    (window.tacho ? '' : ' · Browser preview: requests are routed through the web server proxy.');
 
   $('sourceList').innerHTML = Object.entries(SOURCES).map(([key, src]) => {
     const st = sourceState[key] || '';
