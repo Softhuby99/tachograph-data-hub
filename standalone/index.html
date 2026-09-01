@@ -649,15 +649,16 @@ async function checkCardSource(key) {
   const rows = key === 'card_status' ? parseCardStatus(html) : parseOtherCertificateCards(html);
   const cards = DATA.map(merged);
   let created = 0;
-  // Keep only the most recent JRC entry per type approval number.
+  // Keep the most recent JRC entry per type approval number AND generation,
+  // so historic G1 rows stay visible next to newer G2.x rows.
   const latest = new Map();
   for (const row of rows) {
     const k = normApproval(row.typeApproval);
     if (!k) continue;
-    const cur = latest.get(k);
-    if (!cur || jrcDate(row.date) > jrcDate(cur.date)) latest.set(k, row);
+    const mapKey = k + '#' + (row.generation || '');
+    const cur = latest.get(mapKey);
+    if (!cur || jrcDate(row.date) > jrcDate(cur.date)) latest.set(mapKey, row);
   }
-  const cutoff = Date.now() - 3 * 365 * 24 * 3600 * 1000;
   for (const row of latest.values()) {
     const k = normApproval(row.typeApproval);
     if (!k) continue;
@@ -665,6 +666,7 @@ async function checkCardSource(key) {
     const card = cards.find(c => {
       const hay = normApproval(c.type_approval_number);
       if (!hay) return false;
+      if (row.generation && c.generation && row.generation !== c.generation) return false;
       return k.length >= 5 ? hay.includes(k) : hay === k;
     });
     if (card) {
@@ -673,12 +675,12 @@ async function checkCardSource(key) {
       if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes,
         fingerprint: hashString(key + '|' + card.id + '|' + changes.map(c => c.field + c.new).join('|')) })) created++;
     } else {
-      // Historic entries with no counterpart are not actionable — only report recent ones.
-      if (jrcDate(row.date) && jrcDate(row.date) < cutoff) continue;
+      // No counterpart in the local data — propose it regardless of age (incl. old G1 approvals).
       if (addProposal({ kind: 'new', source: key, cardId: null, country: '', row, changes: [],
-        fingerprint: hashString(key + '|new|' + k + '|' + row.certificate + row.date) })) created++;
+        fingerprint: hashString(key + '|new|' + k + '|' + (row.generation || '') + '|' + row.certificate + row.date) })) created++;
     }
   }
+
   return { rows: rows.length, created };
 }
 
