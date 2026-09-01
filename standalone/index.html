@@ -457,7 +457,8 @@ let checking = false;
 
 async function fetchPage(url) {
   if (window.tacho && window.tacho.fetchText) return window.tacho.fetchText(url);
-  const res = await fetch(url); // browser fallback (may be blocked by CORS)
+  // Browser fallback: go through the same-origin proxy (direct requests are CORS-blocked)
+  const res = await fetch('/api/public/fetch?url=' + encodeURIComponent(url));
   if (!res.ok) throw new Error('Request failed [' + res.status + ']');
   return res.text();
 }
