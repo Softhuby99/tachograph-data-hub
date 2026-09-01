@@ -1045,17 +1045,29 @@ function bindMapEvents() {
     mapZoomLevel = next; renderMap();
   }, { passive: false });
   el.addEventListener('pointerdown', e => {
-    mapDrag = { x:e.clientX, y:e.clientY, ox:mapOffset.x, oy:mapOffset.y, moved:false };
-    el.setPointerCapture(e.pointerId);
+    // NOTE: do NOT setPointerCapture here — capture retargets the subsequent
+    // click event to the wrapper, which swallowed clicks on the SVG labels.
+    mapDrag = { x:e.clientX, y:e.clientY, ox:mapOffset.x, oy:mapOffset.y, moved:false, id:e.pointerId };
   });
   el.addEventListener('pointermove', e => {
     if (!mapDrag) return;
+    if (!mapDrag.moved) {
+      if (Math.abs(e.clientX - mapDrag.x) + Math.abs(e.clientY - mapDrag.y) < 4) return;
+      mapDrag.moved = true;
+      try { el.setPointerCapture(mapDrag.id); } catch {}
+    }
     const rect = el.getBoundingClientRect();
     mapOffset = { x: mapDrag.ox + (e.clientX - mapDrag.x) * (980/rect.width), y: mapDrag.oy + (e.clientY - mapDrag.y) * (520/rect.height) };
     $('mapG').setAttribute('transform', 'translate(' + mapOffset.x + ',' + mapOffset.y + ') scale(' + mapZoomLevel + ')');
   });
-  el.addEventListener('pointerup', () => { mapDrag = null; });
-  el.addEventListener('pointerleave', () => { mapDrag = null; });
+  const endDrag = e => {
+    if (mapDrag && mapDrag.moved) { try { el.releasePointerCapture(mapDrag.id); } catch {} }
+    mapDrag = null;
+  };
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+  el.addEventListener('pointerleave', endDrag);
+
 }
 </script>
 </body>
