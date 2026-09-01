@@ -331,7 +331,8 @@ function renderTimeline(manufacturer) {
   }
   if (!entries.length) return '';
   const dated = entries.filter(e => e.date);
-  const years = dated.length ? `${dated[0].date.getFullYear()} – ${dated[dated.length-1].date.getFullYear()}` : 'no dates available';
+  const byDate = [...dated].sort((a,b) => a.date - b.date);
+  const years = byDate.length ? `${byDate[0].date.getFullYear()} – ${byDate[byDate.length-1].date.getFullYear()}` : 'no dates available';
   const items = entries.map(({ card: c, date }) => {
     const open = tlOpenId === c.id;
     const flag = c.iso ? `<img src="${flagUrl(c.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:20px">${c.country_flag||''}</span>`;
