@@ -29,7 +29,7 @@
   .row .country { font-weight:600; font-size:14px; }
   .row .sub { font-size:11px; color:#94a3b8; }
   .badge { font-size:10px; padding:2px 6px; border-radius:4px; background:#0369a1; color:#e0f2fe; }
-  .detail { padding:20px 28px; overflow-y:auto; }
+  .detail { padding:20px 28px; overflow-y:auto; min-height:0; height:100%; box-sizing:border-box; }
   .detail-header { display:flex; align-items:center; gap:16px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #334155; }
   .detail-header img { width:64px; height:48px; border-radius:4px; object-fit:cover; }
   .detail-header h2 { margin:0; font-size:22px; }
@@ -207,6 +207,7 @@ const fields1 = [
   ['security_certificate_lab','Security Certificate Lab'],
   ['functional_certificate_lab','Functional Certificate Lab'],
   ['jrc_interoperability_status','JRC Interoperability Status'],
+  ['card_quantities','Card Quantities'],
   ['jrc_certificate_source','JRC Certificate Source'],
   ['primary_source','Primary Source'],
 ];
