@@ -30,8 +30,10 @@ import {
   BarChart3,
   Pencil,
   RefreshCw,
+  Globe2,
 } from "lucide-react";
 import thalesLogo from "@/assets/thales-logo.png.asset.json";
+import { WorldMapView } from "@/components/WorldMapView";
 
 export const Route = createFileRoute("/")({
   head: () => ({
