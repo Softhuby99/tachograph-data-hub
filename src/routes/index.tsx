@@ -82,6 +82,8 @@ type TachoCard = {
   tender_source: string;
   verification_note: string;
   data_reference_date: string;
+  // Virtual field — not a DB column; stored only in manual overrides.
+  card_quantities?: string;
 };
 
 type Overrides = Record<string, Partial<TachoCard>>;
@@ -196,6 +198,7 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["jrc_interoperability_status", "JRC Interoperability Status"],
   ["jrc_certificate_source", "JRC / Certificate Source"],
   ["primary_source", "Primary Source"],
+  ["card_quantities", "Kartenmengen (Card Quantities)"],
 ];
 
 function TachographTool() {
