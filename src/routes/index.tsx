@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { saveCardOverride, resetCardOverride } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_VERSION } from "@/lib/version";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
