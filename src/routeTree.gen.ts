@@ -13,6 +13,7 @@ import { Route as OfflineRouteImport } from './routes/offline'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicJrcCheckRouteImport } from './routes/api/public/jrc-check'
+import { Route as ApiPublicFetchRouteImport } from './routes/api/public/fetch'
 
 const OfflineRoute = OfflineRouteImport.update({
   id: '/offline',
@@ -34,17 +35,24 @@ const ApiPublicJrcCheckRoute = ApiPublicJrcCheckRouteImport.update({
   path: '/api/public/jrc-check',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicFetchRoute = ApiPublicFetchRouteImport.update({
+  id: '/api/public/fetch',
+  path: '/api/public/fetch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/offline': typeof OfflineRoute
+  '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/offline': typeof OfflineRoute
+  '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,33 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/offline': typeof OfflineRoute
+  '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/offline' | '/api/public/jrc-check'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/offline'
+    | '/api/public/fetch'
+    | '/api/public/jrc-check'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/offline' | '/api/public/jrc-check'
-  id: '__root__' | '/' | '/auth' | '/offline' | '/api/public/jrc-check'
+  to: '/' | '/auth' | '/offline' | '/api/public/fetch' | '/api/public/jrc-check'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/offline'
+    | '/api/public/fetch'
+    | '/api/public/jrc-check'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   OfflineRoute: typeof OfflineRoute
+  ApiPublicFetchRoute: typeof ApiPublicFetchRoute
   ApiPublicJrcCheckRoute: typeof ApiPublicJrcCheckRoute
 }
 
@@ -99,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJrcCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/fetch': {
+      id: '/api/public/fetch'
+      path: '/api/public/fetch'
+      fullPath: '/api/public/fetch'
+      preLoaderRoute: typeof ApiPublicFetchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,6 +134,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   OfflineRoute: OfflineRoute,
+  ApiPublicFetchRoute: ApiPublicFetchRoute,
   ApiPublicJrcCheckRoute: ApiPublicJrcCheckRoute,
 }
 export const routeTree = rootRouteImport
