@@ -991,7 +991,7 @@ function renderMapDetail(counts) {
   if (!list.length) { $('mapDetail').innerHTML = '<p style="color:#64748b;font-size:13px;">No data for this country.</p>'; return; }
   $('mapDetail').innerHTML = '<table class="mfg"><thead><tr><th>Type Approval</th><th>Generation</th><th>Manufacturer</th><th>Authority</th><th>Date / Status</th><th>Chip / Platform</th></tr></thead><tbody>' +
     list.map(c => '<tr>' +
-      '<td>' + esc(c.type_approval_number || '\u2014') + '</td>' +
+      '<td><a href="#" class="ta-link" onclick="event.preventDefault();openCardModal(\'' + c.id + '\')">' + esc(c.type_approval_number || '\u2014') + '</a></td>' +
       '<td><span class="badge">' + esc(c.generation || '\u2014') + '</span></td>' +
       '<td>' + esc(c.current_manufacturer_normalized || c.current_manufacturer || '\u2014') + '</td>' +
       '<td>' + esc(c.issued_by_authority || '\u2014') + '</td>' +
