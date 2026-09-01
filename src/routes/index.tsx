@@ -1066,9 +1066,212 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
           )}
         </CardContent>
       </Card>
+
+      <LabsCard cards={cards} />
     </div>
   );
 }
+
+type LabRole = "Security evaluation / certification" | "Functional & interoperability certificate";
+
+const LAB_PATTERNS: Array<{ name: string; role: LabRole; note: string; re: RegExp }> = [
+  {
+    name: "ANSSI (FR)",
+    role: "Security evaluation / certification",
+    note: "French CC scheme — ANSSI-CC security certificates (e.g. ANSSI-CC-2022/38, 2022/36v2, 2018/11)",
+    re: /anssi/i,
+  },
+  {
+    name: "NSCIB / TÜV Rheinland (NL)",
+    role: "Security evaluation / certification",
+    note: "Dutch CC scheme — NSCIB-CC / CC-22-… security certificates",
+    re: /nscib|CC-\d{2}-\d{6,}/i,
+  },
+  {
+    name: "BSI (DE)",
+    role: "Security evaluation / certification",
+    note: "German CC scheme — BSI-DSZ security certificates",
+    re: /\bbsi\b|BSI-DSZ/i,
+  },
+  {
+    name: "RDW (NL)",
+    role: "Functional & interoperability certificate",
+    note: "Dutch approval authority — RDW-2016/799-… and RDW-AETR-… functional certificates",
+    re: /\brdw\b/i,
+  },
+  {
+    name: "UL TS B.V. (NL)",
+    role: "Functional & interoperability certificate",
+    note: "Interoperability / functional test laboratory used for RDW approvals",
+    re: /\bUL\s?TS\b|UL TS B\.V\./i,
+  },
+  {
+    name: "KBA (DE)",
+    role: "Functional & interoperability certificate",
+    note: "German Kraftfahrt-Bundesamt functional certificates (…-…/2023 Kontext)",
+    re: /\bkba\b/i,
+  },
+  {
+    name: "UTAC (FR)",
+    role: "Functional & interoperability certificate",
+    note: "French functional certification body",
+    re: /utac/i,
+  },
+  {
+    name: "CETIS",
+    role: "Functional & interoperability certificate",
+    note: "Functional approval referenced via CETIS / JRC",
+    re: /cetis/i,
+  },
+  {
+    name: "Swedish Transport Agency (TSV)",
+    role: "Functional & interoperability certificate",
+    note: "TSV functional certificates (e.g. TSV 2023-756)",
+    re: /\bTSV\b|swedish transport/i,
+  },
+  {
+    name: "JRC (EU)",
+    role: "Functional & interoperability certificate",
+    note: "JRC interoperability certificates / DTC listing",
+    re: /\bjrc\b/i,
+  },
+];
+
+function LabsCard({ cards }: { cards: TachoCard[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+
+  const labs = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        role: LabRole;
+        note: string;
+        entries: Array<{ country: string; generation: string; evidence: string }>;
+      }
+    > = {};
+    for (const c of cards) {
+      const fields = [
+        c.security_certificate_lab,
+        c.security_certificate,
+        c.functional_certificate_lab,
+        c.jrc_certificate_source,
+        c.issued_by_authority,
+      ].filter(Boolean);
+      for (const lab of LAB_PATTERNS) {
+        const hit = fields.find((f) => lab.re.test(String(f)));
+        if (!hit) continue;
+        if (!map[lab.name]) map[lab.name] = { role: lab.role, note: lab.note, entries: [] };
+        map[lab.name].entries.push({
+          country: c.country,
+          generation: c.generation,
+          evidence: String(hit),
+        });
+      }
+    }
+    return Object.entries(map)
+      .map(([name, v]) => ({ name, ...v, count: v.entries.length }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [cards]);
+
+  const unmatched = useMemo(
+    () =>
+      cards.filter(
+        (c) =>
+          !LAB_PATTERNS.some((l) =>
+            [c.security_certificate_lab, c.functional_certificate_lab, c.security_certificate].some(
+              (f) => f && l.re.test(String(f)),
+            ),
+          ),
+      ).length,
+    [cards],
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          Laboratories &amp; Certification Bodies — who did what
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Derived from the JRC / certificate fields of each record (security certificate, functional
+          certificate, issuing authority). {unmatched} record(s) contain no identifiable lab.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Lab / Body</th>
+                <th className="py-2 pr-3 font-medium">Used for</th>
+                <th className="py-2 pr-3 text-right font-medium">Records</th>
+                <th className="py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {labs.map((l) => (
+                <tr key={l.name} className="border-b align-top last:border-0">
+                  <td className="py-2 pr-3 font-medium">{l.name}</td>
+                  <td className="py-2 pr-3">
+                    <Badge variant="secondary" className="mb-1">
+                      {l.role}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">{l.note}</p>
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{l.count}</td>
+                  <td className="py-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setOpen(open === l.name ? null : l.name)}
+                    >
+                      {open === l.name ? "Hide" : "Details"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {labs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                    No laboratory information found in the current data.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {open && (
+          <div className="mt-4 rounded-md border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                {open} — countries &amp; evidence
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => setOpen(null)}>
+                Close
+              </Button>
+            </div>
+            <ul className="space-y-1 text-sm">
+              {labs
+                .find((l) => l.name === open)
+                ?.entries.sort((a, b) => a.country.localeCompare(b.country))
+                .map((e, i) => (
+                  <li key={`${e.country}-${i}`} className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium">{e.country}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {e.generation}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{e.evidence}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 
 function Field({
   label,
