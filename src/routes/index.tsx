@@ -632,6 +632,27 @@ function ManufacturerTimeline({
           Approval timeline — {manufacturer}
           <Badge variant="secondary">{entries.length} countries</Badge>
           <span className="text-xs font-normal text-muted-foreground">{years}</span>
+          <div className="ml-auto flex items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Sort:</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "date" ? "default" : "outline"}
+              className="h-7 px-2 text-xs"
+              onClick={() => setSortBy("date")}
+            >
+              Date
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortBy === "name" ? "default" : "outline"}
+              className="h-7 px-2 text-xs"
+              onClick={() => setSortBy("name")}
+            >
+              Name
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
