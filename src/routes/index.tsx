@@ -1272,6 +1272,165 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
   );
 }
 
+/** e-number prefix of a type approval number -> approving authority. */
+const E_NUMBER_AUTHORITY: Record<string, string> = {
+  e1: "KBA (Germany)",
+  e2: "France (ministère chargé des transports / UTAC)",
+  e3: "Italy (MIT)",
+  e4: "RDW (Netherlands)",
+  e5: "Transportstyrelsen / TSV (Sweden)",
+  e6: "Belgium (FPS Mobility)",
+  e7: "Hungary (NKH/KTI)",
+  e8: "Czech Republic (Ministry of Transport)",
+  e9: "Spain (Ministerio de Industria)",
+  e11: "United Kingdom (VCA/DVSA)",
+  e12: "Austria (BMK)",
+  e13: "Luxembourg (SNCA)",
+  e17: "Finland (Traficom)",
+  e19: "Romania (RAR)",
+  e20: "Poland (TDT)",
+  e21: "Portugal (IMT)",
+  e23: "Greece",
+  e24: "Ireland (RSA)",
+  e25: "Croatia (CVH)",
+  e26: "Slovenia",
+  e27: "Slovakia",
+  e29: "Estonia",
+  e32: "Latvia (CSDD)",
+  e34: "Bulgaria",
+  e36: "Lithuania",
+};
+
+type ChainItem = { label: string; value: string; evidence?: string; note?: string };
+
+function certificationChain(card: TachoCard): {
+  typeApproval: ChainItem[];
+  security: ChainItem[];
+  functional: ChainItem[];
+} {
+  const match = (role: LabRole, fields: Array<[string, string]>): ChainItem[] => {
+    const out: ChainItem[] = [];
+    for (const lab of LAB_PATTERNS) {
+      if (lab.role !== role) continue;
+      const hit = fields.find(([, v]) => v && lab.re.test(v));
+      if (!hit) continue;
+      out.push({ label: lab.name, value: hit[1], evidence: hit[0], note: lab.note });
+    }
+    return out;
+  };
+
+  const ta: ChainItem[] = [];
+  const num = (card.type_approval_number || "").trim();
+  const eMatch = /\be\s?(\d{1,2})\b/i.exec(num);
+  const authority = eMatch ? E_NUMBER_AUTHORITY[`e${eMatch[1]}`] : undefined;
+  if (card.issued_by_authority) {
+    ta.push({
+      label: "Type approval authority",
+      value: card.issued_by_authority,
+      evidence: "Issued by Authority",
+    });
+  }
+  if (authority) {
+    ta.push({
+      label: "Derived from approval number",
+      value: authority,
+      evidence: num,
+      note: `The "e${eMatch![1]}" prefix identifies the approving member-state authority.`,
+    });
+  }
+  if (!ta.length && num) {
+    ta.push({ label: "Type approval number", value: num, evidence: "no authority identifiable" });
+  }
+
+  const security = match("Security evaluation / certification", [
+    ["Security Certificate Lab", card.security_certificate_lab],
+    ["Security Certificate", card.security_certificate],
+    ["Chip Certificate", card.chip_certificate],
+    ["Certified Security Platform", card.certified_security_platform],
+  ]);
+
+  const functional = match("Functional & interoperability certificate", [
+    ["Functional Certificate Lab", card.functional_certificate_lab],
+    ["JRC Interoperability Status", card.jrc_interoperability_status],
+    ["JRC / Certificate Source", card.jrc_certificate_source],
+    ["Issued by Authority", card.issued_by_authority],
+    ["Type Approval Number", card.type_approval_number],
+  ]);
+
+  return { typeApproval: ta, security, functional };
+}
+
+function ChainGroup({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: ChainItem[];
+  empty: string;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-1 text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="mt-1 space-y-2">
+          {items.map((it, i) => (
+            <li key={`${it.label}-${i}`} className="rounded-md border bg-card px-3 py-2">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium">{it.label}</span>
+                {it.evidence && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {it.evidence}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 break-words text-sm">{it.value}</p>
+              {it.note && <p className="mt-0.5 text-xs text-muted-foreground">{it.note}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CertificationChainPanel({ card }: { card: TachoCard }) {
+  const chain = useMemo(() => certificationChain(card), [card]);
+  return (
+    <div className="mt-4 rounded-md border bg-muted/30 p-3">
+      <div className="mb-3 flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold">Certification chain — who tested / approved what</span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <ChainGroup
+          title="Type approval"
+          items={chain.typeApproval}
+          empty="No approving authority identifiable."
+        />
+        <ChainGroup
+          title="Security evaluation (Common Criteria)"
+          items={chain.security}
+          empty="No security lab / scheme identifiable."
+        />
+        <ChainGroup
+          title="Functional & interoperability"
+          items={chain.functional}
+          empty="No functional / interoperability body identifiable."
+        />
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Derived from the certificate fields of this record; the badge shows the source field the
+        match came from. Cross-check details in the Market Analytics → Laboratories section.
+      </p>
+    </div>
+  );
+}
+
 
 function Field({
   label,
