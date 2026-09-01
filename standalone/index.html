@@ -123,6 +123,16 @@
   .map-wrap g.lbl.sel text.n { fill:#0f172a; }
   .map-wrap g.lbl text.cn { fill:#e2e8f0; font-size:9px; font-weight:600; text-anchor:middle; }
   .map-wrap g.lbl text.ta { fill:#94a3b8; font-size:8px; text-anchor:middle; }
+  .map-wrap g.lbl text.ta.link { fill:#38bdf8; cursor:pointer; text-decoration:underline; }
+  .map-wrap g.lbl text.ta.link:hover { fill:#7dd3fc; }
+  .ta-link { color:#38bdf8; text-decoration:underline; cursor:pointer; }
+  .ta-link:hover { color:#7dd3fc; }
+  .card-modal { position:fixed; top:80px; left:50%; transform:translateX(-50%); width:560px; height:70vh; min-width:320px; min-height:200px; max-width:95vw; max-height:90vh; background:#ffffff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.45); z-index:1000; display:flex; flex-direction:column; resize:both; overflow:hidden; }
+  .card-modal .cm-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#0f172a; color:#e2e8f0; border-radius:10px 10px 0 0; cursor:move; user-select:none; flex:0 0 auto; }
+  .card-modal .cm-title { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-modal .cm-close { background:none; border:none; color:#94a3b8; font-size:22px; line-height:1; cursor:pointer; padding:0 4px; }
+  .card-modal .cm-close:hover { color:#ffffff; }
+  .card-modal .cm-body { flex:1; overflow-y:auto; overflow-x:auto; padding:14px; }
   .version-badge { border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-right:8px; align-self:center; }
   .view-switch { display:inline-flex; align-items:center; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; margin-right:8px; align-self:center; font-size:12px; font-weight:600; }
   .view-switch .active { background:#1d4ed8; color:#fff; padding:4px 10px; }
