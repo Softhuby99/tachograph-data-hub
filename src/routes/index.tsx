@@ -208,7 +208,7 @@ function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"data" | "analytics" | "updates">("data");
+  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates">("data");
   const overridesQuery = useOverrides();
   const overrides = overridesQuery.data ?? {};
 
