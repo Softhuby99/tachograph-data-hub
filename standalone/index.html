@@ -271,6 +271,18 @@ const OVERRIDES_KEY = 'tacho-overrides-v1';
 function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}'); } catch { return {}; } }
 function saveOverrides(o) { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); }
 let overrides = loadOverrides();
+// One-time cleanup: drop empty values saved by older versions (e.g. country: '' from before the data repair).
+(function cleanOverrides() {
+  let changed = false;
+  for (const id of Object.keys(overrides)) {
+    const o = overrides[id];
+    for (const k of Object.keys(o)) {
+      if (o[k] == null || o[k] === '') { delete o[k]; changed = true; }
+    }
+    if (!Object.keys(o).length) { delete overrides[id]; changed = true; }
+  }
+  if (changed) saveOverrides(overrides);
+})();
 
 function merged(r) {
   const o = overrides[r.id] || {};
