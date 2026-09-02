@@ -89,6 +89,29 @@ CREATE INDEX IF NOT EXISTS idx_tachograph_generation ON public.tachograph_cards 
 CREATE INDEX IF NOT EXISTS idx_tachograph_mfr_norm ON public.tachograph_cards (current_manufacturer_normalized);
 CREATE INDEX IF NOT EXISTS jrc_update_proposals_source_type_idx ON public.jrc_update_proposals (source_type);
 
+CREATE TABLE IF NOT EXISTS public.tachograph_card_overrides (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_id uuid NOT NULL UNIQUE REFERENCES public.tachograph_cards(id) ON DELETE CASCADE,
+  patch jsonb NOT NULL DEFAULT '{}'::jsonb,
+  edited_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.cron_config (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
+  token text NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  endpoint text NOT NULL DEFAULT '',
+  enabled boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO public.cron_config (id, endpoint, enabled)
+VALUES (true, '', false)
+ON CONFLICT (id) DO NOTHING;
+
+
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
