@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
@@ -11,6 +11,7 @@ const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!SUPABASE_URL) {
@@ -31,12 +32,12 @@ export function useAuth() {
         setSession(data.session);
         setLoading(false);
       });
-      // store cleanup via module-scoped ref
       cleanupRef.current = () => sub.subscription.unsubscribe();
     });
     return () => {
       active = false;
       cleanupRef.current?.();
+      cleanupRef.current = null;
     };
   }, []);
 
@@ -52,6 +53,3 @@ export function useAuth() {
     },
   };
 }
-
-// module-scoped cleanup holder
-const cleanupRef: { current: (() => void) | null } = { current: null };
