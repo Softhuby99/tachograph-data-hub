@@ -91,8 +91,6 @@ export type CheckRunRow = {
   message: string;
 };
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
 
 type SupabaseAdmin = SupabaseClient<Database>;
 
