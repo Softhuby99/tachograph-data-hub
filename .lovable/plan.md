@@ -1,17 +1,20 @@
-# Plan: Full Web Version under Docker (nginx) with local PostgreSQL
+# Plan: Full Web Version as a single Docker container (Node + PostgreSQL)
 
 ## Goal
 Run the complete web app (SSR, server functions, JRC/TED update monitoring,
-login, shared DB edits) locally under Docker: Node.js app + nginx reverse
-proxy + local PostgreSQL. Data lives in local PostgreSQL; login stays on the
-existing Lovable Cloud auth (remote Supabase) so no service-role key is needed.
+login, shared DB edits) locally in **one Docker container** that bundles the
+Node.js app **and** PostgreSQL. A single `docker run -p 8080:8080 tdh-web`
+starts everything. No nginx, no second container, no separate DB setup.
+
+Data lives in PostgreSQL inside the container; login stays on the existing
+Lovable Cloud auth (remote Supabase) so no service-role key is needed.
 
 ## Key design decision: dual-backend data layer
-Server functions run in **two** runtimes:
-- Lovable preview/published → Cloudflare Worker → uses Supabase (as today).
-- Local Docker → Node.js (`NITRO_PRESET=node-server`) → uses local PostgreSQL.
+Server functions run in two runtimes:
+- Lovable preview/published (Cloudflare Worker) → uses Supabase (as today).
+- Local Docker (Node.js, `NITRO_PRESET=node-server`) → uses local PostgreSQL.
 
-`src/lib/db.server.ts` picks the backend at call time:
+`src/lib/db.server.ts` picks the backend at call time inside each handler:
 - If `DB_HOST` is set → use a `pg` Pool against local PostgreSQL.
 - Otherwise → use the existing `supabaseAdmin` (unchanged Lovable behavior).
 
@@ -26,22 +29,21 @@ auth they hit local PostgreSQL. Overrides store the Supabase `userId`.
 ## Changes
 
 ### 1. New dependency
-- `pg` (node-postgres) + `@types/pg` — only used server-side inside handlers.
+- `pg` (node-postgres) + `@types/pg` — server-side only, inside handlers.
 
 ### 2. `src/lib/db.server.ts` (new)
-A typed data-access module exposing the operations the app needs:
-`getCards()`, `getOverrides()`, `saveOverride(cardId, patch, userId)`,
-`resetOverride(cardId)`, plus the query/mutate helpers `jrc.server.ts` uses
-(selects/inserts/updates on `tachograph_cards`, `jrc_source_snapshots`,
-`jrc_update_proposals`, `jrc_check_runs`, `cron_config`).
-Internally branches on `DB_HOST`: local → `pg.Pool`; else → `supabaseAdmin`.
+Typed data-access module. Branches on `DB_HOST`: local → `pg.Pool`; else →
+`supabaseAdmin`. Exposes the operations the app needs:
+- `getCards()`, `getOverrides()`, `saveOverride()`, `resetOverride()`.
+- The query/mutate helpers `jrc.server.ts` uses on `tachograph_cards`,
+  `jrc_source_snapshots`, `jrc_update_proposals`, `jrc_check_runs`,
+  `cron_config` (returning the same shapes the Supabase calls did).
 
 ### 3. Refactor server code to use `db.server.ts`
 - `src/lib/jrc.server.ts` — replace every `supabaseAdmin.from(...)` chain with
-  `db.server.ts` helpers returning the same shapes. (~15 call sites.)
+  `db.server.ts` helpers (~15 call sites).
 - `src/lib/cards.functions.ts` — `saveCardOverride`/`resetCardOverride` use
-  `db.server.ts` helpers instead of `context.supabase` (still
-  `requireSupabaseAuth` for `userId` + gate).
+  `db.server.ts` instead of `context.supabase` (still `requireSupabaseAuth`).
 - `src/routes/api/public/jrc-check.ts` — `cron_config` token read via
   `db.server.ts`.
 - New `getCardsFn` / `getOverridesFn` server functions; `src/routes/index.tsx`
@@ -50,38 +52,40 @@ Internally branches on `DB_HOST`: local → `pg.Pool`; else → `supabaseAdmin`.
 
 ### 4. Extend `db/init.sql`
 Append `tachograph_card_overrides` + `cron_config` tables (copy schema from the
-existing Supabase migrations, no RLS needed locally — the app is trusted
-behind nginx). Keep pg_cron schedule optional, pointing at the local endpoint.
+existing Supabase migrations, no RLS needed locally — the app is trusted inside
+the container). Keep an optional pg_cron schedule pointing at localhost.
 
-### 5. Docker stack (new files)
-- `Dockerfile.web` — multi-stage: `bun install` → `NITRO_PRESET=node-server
-  bun run build` → runtime image runs `node .output/server/index.mjs` on
-  port 3000.
-- `docker-compose.web.yml` — services: `db` (postgres:16 + `db/init.sql`
-  mounted), `web` (built from `Dockerfile.web`, env `DB_*` + `SUPABASE_*`),
-  `nginx` (reverse proxy → `web:3000`).
-- `nginx/web/tdh-web.conf` — `proxy_pass http://web:3000;` with gzip, caching
-  headers, SPA fallback.
+### 5. Single Docker image (`Dockerfile.web`)
+Multi-stage:
+1. Build stage: `bun install` → `NITRO_PRESET=node-server bun run build`
+   → produces `.output/server/index.mjs`.
+2. Runtime stage: Node base image with PostgreSQL installed. A small
+   `supervisord` config starts `postgres` and `node .output/server/index.mjs`.
+   An entrypoint script inits the DB from `db/init.sql` on first boot, then
+   starts supervisord. App connects to `localhost:5432`. One port exposed
+   (8080). Data persisted via a Docker volume on the PG data dir.
 
 ### 6. `.env.example`
-Add `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` + the existing
-`SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY/VITE_SUPABASE_*` vars needed by the
-node build (VITE_* baked at build time, SUPABASE_* at runtime).
+Add `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` (defaults point at the
+in-container localhost DB) + the existing `SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY`
+and `VITE_SUPABASE_*` vars the node build needs (VITE_* baked at build time,
+SUPABASE_* at runtime for auth).
 
 ### 7. `DEPLOYMENT.md`
-New section "Web-Version (Vollversion) mit lokalem PostgreSQL" with
-step-by-step: clone → `.env` → `docker compose -f docker-compose.web.yml up
--d --build` → verify ports → notes on auth (sign in via Lovable Cloud) and on
-the local cron endpoint.
+New section "Web-Version (Vollversion) als Ein-Container" with step-by-step:
+clone → `.env` anpassen → `docker build -f Dockerfile.web -t tdh-web .` →
+`docker run -p 8080:8080 -v tdh_pgdata:/var/lib/postgresql/data tdh-web` →
+Browser auf `http://localhost:8080` → Sign-in via Lovable Cloud →
+Hinweise zum lokalen Cron-Endpunkt und zum Neustart/Reset des Daten-Volumes.
 
 ## Testing limits (honest)
-- The Lovable sandbox forces the Cloudflare Nitro preset, so I **cannot**
-  run or test a `node-server` build here. I will verify with typecheck
-  (`tsgo`) and by reading the generated shapes; the real build + Docker run
-  happens on your server.
-- The Lovable preview keeps working (DB_HOST unset → Supabase path unchanged).
+- The Lovable sandbox forces the Cloudflare Nitro preset, so a `node-server`
+  build **cannot** be run/tested here. I verify with `tsgo` typecheck and by
+  reading generated shapes; the real build + Docker run happens on your server.
+- The Lovable preview keeps working (`DB_HOST` unset → Supabase path unchanged).
 
 ## Out of scope
 - Replacing Supabase Auth with a fully local auth system (kept remote on
   purpose — simplest working login without a service-role key).
-- Re-hosting on a non-Node runtime.
+- nginx / multi-container production hardening (not needed for a local tool;
+  add later behind an external TLS proxy if required).
