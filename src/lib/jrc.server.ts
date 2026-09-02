@@ -621,23 +621,16 @@ export async function runUpdateCheck() {
 }
 
 export async function approveProposal(id: string, country: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  const { data: proposal, error } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
+  const proposal = await getProposal(id);
   if (!proposal) throw new Error("Proposal not found");
   if (proposal.status !== "pending") throw new Error("Proposal already handled");
 
-  const changes = (proposal.changes as { fields?: FieldChange[] } | null)?.fields ?? [];
+  const changes = proposal.changes?.fields ?? [];
 
   if (proposal.kind === "info") {
     // Informational sources have no direct card column. Applying them records
     // the finding on the verification note of the matching country's cards.
-    const payload = (proposal.payload ?? {}) as Record<string, string>;
+    const payload = proposal.payload ?? {};
     const note = [
       `[${proposal.source_label}] ${proposal.title}`,
       Object.entries(payload)
@@ -650,37 +643,26 @@ export async function approveProposal(id: string, country: string) {
 
     const target = (proposal.country || country).trim();
     if (target) {
-      const { data: affected, error: selErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .select("id,verification_note")
-        .eq("country", target);
-      if (selErr) throw new Error(selErr.message);
-      for (const card of affected ?? []) {
+      const affected = await getCardVerificationNotes(target);
+      for (const card of affected) {
         const existingNote = (card.verification_note ?? "").trim();
         if (existingNote.includes(note)) continue;
-        const { error: upErr } = await supabaseAdmin
-          .from("tachograph_cards")
-          .update({
-            verification_note: existingNote ? `${existingNote}\n${note}` : note,
-          } as never)
-          .eq("id", card.id);
-        if (upErr) throw new Error(upErr.message);
+        await updateCardVerificationNote(
+          card.id,
+          existingNote ? `${existingNote}\n${note}` : note,
+        );
       }
     }
   } else if (proposal.card_id) {
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
     if (Object.keys(patch).length > 0) {
-      const { error: upErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .update(patch as Record<string, never>)
-        .eq("id", proposal.card_id);
-      if (upErr) throw new Error(upErr.message);
+      await updateCardFields(proposal.card_id, patch);
     }
   } else {
     const name = country.trim();
     if (!name) throw new Error("Country is required for a new entry");
-    const { error: insErr } = await supabaseAdmin.from("tachograph_cards").insert({
+    await insertCard({
       country: name,
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
@@ -696,23 +678,13 @@ export async function approveProposal(id: string, country: string) {
         .join(" · "),
       jrc_certificate_source: proposal.source_url,
     });
-    if (insErr) throw new Error(insErr.message);
   }
 
-  const { error: stErr } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .update({ status: "approved" })
-    .eq("id", id);
-  if (stErr) throw new Error(stErr.message);
+  await updateProposalStatus(id, "approved");
   return { ok: true };
 }
 
 export async function rejectProposal(id: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { error } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .update({ status: "rejected" })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  await updateProposalStatus(id, "rejected");
   return { ok: true };
 }
