@@ -4,8 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { saveCardOverride, resetCardOverride } from "@/lib/cards.functions";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  saveCardOverride,
+  resetCardOverride,
+  getCards,
+  getOverrides,
+} from "@/lib/cards.functions";
+import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -91,15 +96,13 @@ type TachoCard = {
 type Overrides = Record<string, Partial<TachoCard>>;
 
 function useOverrides() {
+  const fetchOverrides = useServerFn(getOverrides);
   return useQuery({
     queryKey: ["tachograph_card_overrides"],
     queryFn: async (): Promise<Overrides> => {
-      const { data, error } = await supabase
-        .from("tachograph_card_overrides")
-        .select("card_id, patch");
-      if (error) throw error;
+      const rows = await fetchOverrides();
       const map: Overrides = {};
-      for (const row of data ?? []) {
+      for (const row of rows ?? []) {
         map[row.card_id] = (row.patch ?? {}) as Partial<TachoCard>;
       }
       return map;
@@ -108,15 +111,24 @@ function useOverrides() {
 }
 
 function useCards() {
+  const fetchCards = useServerFn(getCards);
   return useQuery({
     queryKey: ["tachograph_cards"],
     queryFn: async (): Promise<TachoCard[]> => {
-      const { data, error } = await supabase.from("tachograph_cards").select("*").order("country");
-      if (error) throw error;
+      const data = await fetchCards();
       return data as TachoCard[];
     },
   });
 }
+
+function useAuthMode() {
+  const fetchMode = useServerFn(getAuthMode);
+  return useQuery({
+    queryKey: ["auth_mode"],
+    queryFn: async () => fetchMode(),
+  });
+}
+
 
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
@@ -207,6 +219,9 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
+  const authMode = useAuthMode();
+  const authEnabled = authMode.data?.enabled ?? true;
+  const canEdit = !authEnabled || !!auth.session;
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates">("data");
   const overridesQuery = useOverrides();
@@ -339,15 +354,16 @@ function TachographTool() {
               <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
             <span className="mx-1 h-8 w-px bg-border" />
-            {auth.session ? (
-              <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
-                Sign out
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            )}
+            {authEnabled &&
+              (auth.session ? (
+                <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
+                  Sign out
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/auth">Sign in</Link>
+                </Button>
+              ))}
           </div>
         </div>
       </header>
@@ -360,7 +376,7 @@ function TachographTool() {
           <DataView
             cards={cards}
             overrides={overrides}
-            canEdit={!!auth.session}
+            canEdit={canEdit}
             onSave={saveOverride}
             onReset={resetOverride}
           />

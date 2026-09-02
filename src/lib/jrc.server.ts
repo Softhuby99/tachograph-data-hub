@@ -14,6 +14,22 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
+import {
+  getCardsForJrc as dbGetCardsForJrc,
+  getCardsForTed as dbGetCardsForTed,
+  getKnownFingerprints,
+  insertProposals as dbInsertProposals,
+  getSnapshots,
+  upsertSnapshots,
+  insertCheckRun,
+  getProposal,
+  getCardVerificationNotes,
+  updateCardVerificationNote,
+  updateCardFields,
+  insertCard,
+  updateProposalStatus,
+  type ProposalRow,
+} from "./db.server";
 
 export { JRC_SOURCES } from "./jrc-sources.server";
 export type { SourceKey } from "./jrc-sources.server";
@@ -437,43 +453,15 @@ export const UPDATE_SOURCE_ORDER = [
 ] as const;
 
 export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  const { data: cards, error } = await supabaseAdmin
-    .from("tachograph_cards")
-    .select(
-      "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source,data_reference_date",
-    );
-  if (error) throw new Error(error.message);
-
-  const cardRows = (cards ?? []) as (CardRow & { data_reference_date: string })[];
+  const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
     const t = Date.parse(c.data_reference_date ?? "");
     return Number.isNaN(t) ? acc : Math.max(acc, t);
   }, 0);
 
-  const known = new Set<string>();
-  for (let from = 0; ; from += 1000) {
-    const { data: existing, error: exErr } = await supabaseAdmin
-      .from("jrc_update_proposals")
-      .select("fingerprint")
-      .range(from, from + 999);
-    if (exErr) throw new Error(exErr.message);
-    for (const e of existing ?? []) known.add(e.fingerprint as string);
-    if (!existing || existing.length < 1000) break;
-  }
-
-  const insertProposals = async (items: ProposalInsert[]) => {
-    const fresh = items.filter((c) => !known.has(c.fingerprint));
-    for (const f of fresh) known.add(f.fingerprint);
-    if (fresh.length > 0) {
-      const { error: insErr } = await supabaseAdmin
-        .from("jrc_update_proposals")
-        .insert(fresh as never);
-      if (insErr) throw new Error(insErr.message);
-    }
-    return fresh.length;
-  };
+  const known = await getKnownFingerprints();
+  const insertProposals = (items: ProposalInsert[]) =>
+    dbInsertProposals(items as unknown as ProposalRow[], known);
 
   const meta = JRC_SOURCES[source];
   let result: SourceResult;
@@ -487,18 +475,8 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     // PostgREST caps a select at 1000 rows — page through the snapshot,
     // otherwise unseen rows look "changed" on every run.
     const snapshot = new Map<string, string>();
-    for (let from = 0; ; from += 1000) {
-      const { data: snapRows, error: snapErr } = await supabaseAdmin
-        .from("jrc_source_snapshots")
-        .select("entry_key,fingerprint")
-        .eq("source_type", source)
-        .range(from, from + 999);
-      if (snapErr) throw new Error(snapErr.message);
-      for (const s of snapRows ?? []) {
-        snapshot.set(s.entry_key as string, s.fingerprint as string);
-      }
-      if (!snapRows || snapRows.length < 1000) break;
-    }
+    const snapRows = await getSnapshots(source);
+    for (const s of snapRows) snapshot.set(s.entry_key, s.fingerprint);
     const baseline = snapshot.size === 0;
 
     let created = 0;
@@ -536,14 +514,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       fingerprint: e.fingerprint,
       updated_at: new Date().toISOString(),
     }));
-    for (let i = 0; i < snapRowsToWrite.length; i += 200) {
-      const { error: upErr } = await supabaseAdmin
-        .from("jrc_source_snapshots")
-        .upsert(snapRowsToWrite.slice(i, i + 200), {
-          onConflict: "source_type,entry_key",
-        });
-      if (upErr) throw new Error(upErr.message);
-    }
+    await upsertSnapshots(snapRowsToWrite);
 
     return { candidates, created, baseline };
   };
@@ -580,13 +551,8 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     } else if (source === "ted_procurement") {
       const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
       const notices = await fetchTedNotices();
-      const { data: procCards, error: procErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .select(
-          "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
-        );
-      if (procErr) throw new Error(procErr.message);
-      const candidates = buildTedProposals(notices, (procCards ?? []) as never, sinceMs);
+      const procCards = await dbGetCardsForTed();
+      const candidates = buildTedProposals(notices, procCards as never, sinceMs);
       const created = await insertProposals(candidates as unknown as ProposalInsert[]);
       result = {
         source,
@@ -620,20 +586,18 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     };
   }
 
-  await supabaseAdmin.from("jrc_check_runs").insert([
-    {
-      source_type: result.source,
-      source_url: meta.url,
-      rows_parsed: result.rowsParsed,
-      proposals_created: result.created,
-      status: result.error ? "error" : "ok",
-      message: result.error
-        ? result.error
-        : result.baseline
-          ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
-          : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
-    },
-  ] as never);
+  await insertCheckRun({
+    source_type: result.source,
+    source_url: meta.url,
+    rows_parsed: result.rowsParsed,
+    proposals_created: result.created,
+    status: result.error ? "error" : "ok",
+    message: result.error
+      ? result.error
+      : result.baseline
+        ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
+        : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
+  });
 
   return result;
 }
@@ -657,23 +621,16 @@ export async function runUpdateCheck() {
 }
 
 export async function approveProposal(id: string, country: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  const { data: proposal, error } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
+  const proposal = await getProposal(id);
   if (!proposal) throw new Error("Proposal not found");
   if (proposal.status !== "pending") throw new Error("Proposal already handled");
 
-  const changes = (proposal.changes as { fields?: FieldChange[] } | null)?.fields ?? [];
+  const changes = proposal.changes?.fields ?? [];
 
   if (proposal.kind === "info") {
     // Informational sources have no direct card column. Applying them records
     // the finding on the verification note of the matching country's cards.
-    const payload = (proposal.payload ?? {}) as Record<string, string>;
+    const payload = proposal.payload ?? {};
     const note = [
       `[${proposal.source_label}] ${proposal.title}`,
       Object.entries(payload)
@@ -686,37 +643,26 @@ export async function approveProposal(id: string, country: string) {
 
     const target = (proposal.country || country).trim();
     if (target) {
-      const { data: affected, error: selErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .select("id,verification_note")
-        .eq("country", target);
-      if (selErr) throw new Error(selErr.message);
-      for (const card of affected ?? []) {
+      const affected = await getCardVerificationNotes(target);
+      for (const card of affected) {
         const existingNote = (card.verification_note ?? "").trim();
         if (existingNote.includes(note)) continue;
-        const { error: upErr } = await supabaseAdmin
-          .from("tachograph_cards")
-          .update({
-            verification_note: existingNote ? `${existingNote}\n${note}` : note,
-          } as never)
-          .eq("id", card.id);
-        if (upErr) throw new Error(upErr.message);
+        await updateCardVerificationNote(
+          card.id,
+          existingNote ? `${existingNote}\n${note}` : note,
+        );
       }
     }
   } else if (proposal.card_id) {
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
     if (Object.keys(patch).length > 0) {
-      const { error: upErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .update(patch as Record<string, never>)
-        .eq("id", proposal.card_id);
-      if (upErr) throw new Error(upErr.message);
+      await updateCardFields(proposal.card_id, patch);
     }
   } else {
     const name = country.trim();
     if (!name) throw new Error("Country is required for a new entry");
-    const { error: insErr } = await supabaseAdmin.from("tachograph_cards").insert({
+    await insertCard({
       country: name,
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
@@ -732,23 +678,13 @@ export async function approveProposal(id: string, country: string) {
         .join(" · "),
       jrc_certificate_source: proposal.source_url,
     });
-    if (insErr) throw new Error(insErr.message);
   }
 
-  const { error: stErr } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .update({ status: "approved" })
-    .eq("id", id);
-  if (stErr) throw new Error(stErr.message);
+  await updateProposalStatus(id, "approved");
   return { ok: true };
 }
 
 export async function rejectProposal(id: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { error } = await supabaseAdmin
-    .from("jrc_update_proposals")
-    .update({ status: "rejected" })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  await updateProposalStatus(id, "rejected");
   return { ok: true };
 }

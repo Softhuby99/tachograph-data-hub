@@ -1,416 +1,151 @@
-# TDH = Tacho Data Hub
+# Tachograph Cards Info Tool — Local Docker Deployment
 
-Deployment des **Tachograph Cards Info Tool** (nginx im Docker-Container,
-Debian 12 Host).
+Single-container deployment of the **full web version**: TanStack Start (Nitro
+node-server) + PostgreSQL, with native HTTPS. No Lovable/Supabase backend, no
+nginx, no login (by default). Runs entirely in one Docker container.
 
-Es gibt zwei Betriebsarten:
-
-1. **Statisch (Default)** — Die App unter `standalone/` ist vollstaendig
-   eigenstaendig: HTML, UI-Logik und alle 53 Datensaetze sind eingebettet.
-   Keine Datenbank, kein Backend. Der Container liefert lediglich die Dateien
-   per nginx aus.
-
-2. **Mit lokaler PostgreSQL** — Zusaetzlich zum statischen Frontend laeuft ein
-   PostgreSQL-Container mit dem vollen Datenbankschema (4 Tabellen) und allen
-   53 Datensaetzen plus 1.283 JRC-Snapshot-Baselines. Damit ist die
-   JRC-/TED-Update-Pruefung lokal verfuegbar (siehe Abschnitt 11).
+```
+┌────────────────────── single container (port 443) ──────────────────────┐
+│  supervisord                                                            │
+│   ├─ PostgreSQL  (data in /var/lib/postgresql/data  — persistent volume) │
+│   └─ node .output/server/index.mjs  (Nitro HTTPS, /app)                 │
+└─────────────────────────────────────────────────────────────────────────┘
+        ▲                                  ▲
+   browser HTTPS              outbound TCP 443 → JRC / TED update checks
+   (port 443:443)
+```
 
 ---
 
-# Start-Modi
+## 1. What you need
 
-Der Stack unterstuetzt vier Startmodi ueber `./scripts/run.sh <modus>`:
+- Docker Engine + Compose plugin (or `docker run`) on the host (Debian/Proxmox host, VLAN 2/DMZ is fine)
+- Port 443 free on the host
+- Outbound internet (TCP 443) to `dtc.jrc.ec.europa.eu` / `ted.europa.eu` for update checks
+- Optional: a real TLS certificate for production (test mode generates a self-signed one)
 
-| Modus   | Umgebung | TLS                 | Port | Anwendungsfall                                           |
-| ------- | -------- | ------------------- | ---- | -------------------------------------------------------- |
-| `test1` | Test     | ohne                | 80   | Erster Funktionstest, beliebige IP/Hostname              |
-| `test2` | Test     | self-signed HTTPS   | 443  | Lokale HTTPS-Tests (Zertifikat wird automatisch erzeugt) |
-| `test3` | Live     | ohne                | 8080 | Produktive Domain hinter externem TLS-Proxy              |
-| `test4` | Live     | Let's Encrypt HTTPS | 443  | Produktivbetrieb — siehe Abschnitt 10                    |
+## 2. Environment (`.env`)
 
-Starten / Stoppen:
+Copy `.env.example` to `.env` and adjust:
 
 ```bash
-./scripts/run.sh test1        # HTTP-only Testbetrieb
-./scripts/stop.sh
-```
-
-Die Modi laden je ein `docker-compose.<modus>.yml` zusaetzlich zum Base-Compose;
-`nginx/conf.d/site.conf` (produktiv) bleibt in allen Test-Modi ungenutzt und
-unangetastet.
-
----
-
-# Lokaler HTTP-Test (Modus `test1`)
-
-Diese Anleitung startet den vollen Stack lokal auf Port 80, ohne TLS und ohne
-Let's Encrypt. Ideal fuer den ersten Funktionstest auf dem Debian-Server.
-
-## Voraussetzungen
-
-- Debian 12 (oder vergleichbare Linux-Distribution)
-- Docker + Docker Compose Plugin installiert
-- User `deploy` in der Gruppe `docker`
-- Port 80 frei (kein anderer Webserver)
-- ca. 500 MB freier Speicherplatz
-- Keine Domain, DNS oder TLS notwendig
-
-Docker installieren (falls noch nicht vorhanden, als root):
-
-```bash
-apt update && apt install -y ca-certificates curl git openssl
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
-  > /etc/apt/sources.list.d/docker.list
-apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-```
-
-## 1. Vorbereitung als root
-
-```bash
-useradd -m -s /bin/bash deploy 2>/dev/null || true
-usermod -aG docker deploy
-mkdir -p /opt/TDH
-chown -R deploy:deploy /opt/TDH
-ufw allow 80        # nur falls ufw aktiv ist
-```
-
-## 2. Projekt als deploy bereitstellen
-
-```bash
-su - deploy
-cd /opt/TDH
-git clone <REPO-URL> .      # oder: Projektarchiv entpacken
-cp .env.example .env
-```
-
-Benoetigt werden mindestens: `Dockerfile`, `docker-compose*.yml`, `nginx/`,
-`scripts/`, `standalone/`.
-
-```bash
-chmod +x scripts/*.sh
-```
-
-## 3. `.env` anpassen
-
-```bash
-PUBLIC_BASE_URL=http://<server-ip-oder-localhost>
-DOMAIN=tdh.example.com
-LETSENCRYPT_EMAIL=you@example.com
-```
-
-## 4. Stack starten (HTTP-only)
-
-```bash
-cd /opt/TDH
-./scripts/run.sh test1
-docker compose logs -f web      # bis "start worker process" erscheint
-```
-
-## 5. Test der Seiten
-
-- `http://<server-ip>/` — Tool-Startseite (Data-View)
-- `http://<server-ip>/healthz` — muss `ok` liefern
-- `http://<server-ip>/data.json` — Rohdaten der 53 Datensaetze
-
-Schnelltest von der Shell:
-
-```bash
-curl -I http://localhost/
-curl    http://localhost/healthz
-```
-
-In der Oberflaeche pruefen: Filter (Country / Generation / Manufacturer),
-Detailansicht mit Flagge, Tab **Market Analytics**, Edit-Button in
-„Card & Certification" (Aenderungen liegen im `localStorage` des Browsers).
-
-## 6. Daten aktualisieren
-
-Die Datensaetze stecken in `standalone/index.html` bzw. `standalone/data.json`.
-Nach einer Aenderung:
-
-```bash
-./scripts/run.sh test1      # baut das Image neu und startet neu
-```
-
-## 7. Stack stoppen
-
-```bash
-./scripts/stop.sh
-```
-
-Mit `./scripts/stop.sh -v` werden zusaetzlich angelegte Volumes entfernt.
-
-## 8. Weitere Test-Modi
-
-- **`./scripts/run.sh test2`** — self-signed HTTPS. Beim ersten Start wird
-  `nginx/certs/{fullchain,privkey}.pem` per `openssl` erzeugt. Browser warnen
-  wegen des unbekannten Ausstellers — das ist gewollt.
-- **`./scripts/run.sh test3`** — HTTP-only auf Port 8080 mit produktiver Domain
-  in `PUBLIC_BASE_URL`, gedacht fuer den Betrieb hinter einem externen
-  TLS-Terminator (Cloudflare, Traefik, o. ae.).
-
-## 9. Autostart nach Server-Reboot
-
-Die Container laufen mit `restart: unless-stopped` und starten mit dem
-Docker-Daemon automatisch wieder mit:
-
-```bash
-sudo systemctl enable docker
-```
-
-## 10. Produktivbetrieb (`test4`, Let's Encrypt)
-
-Voraussetzung: DNS-A-Record der Domain zeigt auf den Server, Port 80 und 443
-sind von aussen erreichbar.
-
-1. `./scripts/stop.sh`
-2. In `.env` setzen:
-   ```bash
-   PUBLIC_BASE_URL=https://tdh.example.com
-   DOMAIN=tdh.example.com
-   LETSENCRYPT_EMAIL=you@example.com
-   ```
-3. Zertifikat einmalig anfordern:
-   ```bash
-   ./scripts/init-letsencrypt.sh
-   ```
-4. Produktiv starten:
-   ```bash
-   ./scripts/run.sh test4
-   ```
-5. Firewall: `ufw allow 80 && ufw allow 443`
-
-Der mitlaufende `certbot`-Container erneuert die Zertifikate alle 12 Stunden
-automatisch. nginx nach einer Erneuerung neu laden:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.test4.yml exec web nginx -s reload
-```
-
-## Troubleshooting
-
-| Symptom                          | Pruefen / Loesung                                                                       |
-| -------------------------------- | ---------------------------------------------------------------------------------------- |
-| Port 80 bereits belegt           | `ss -tlnp \| grep :80` — anderen Dienst stoppen (System-nginx? `systemctl stop nginx`)   |
-| `permission denied` bei Docker   | `groups` muss `docker` enthalten; neu einloggen oder `newgrp docker`                     |
-| nginx crash-loopt                | Modus falsch — `./scripts/run.sh test1` statt `docker compose up` nutzen                 |
-| 404 auf `/`                      | `docker compose exec web ls /usr/share/nginx/html` — `index.html` muss vorhanden sein    |
-| Aenderungen nicht sichtbar       | Image neu bauen: `./scripts/run.sh test1`; Browser-Cache leeren (Strg+F5)                |
-| Flaggen fehlen                   | Server/Client braucht Internetzugang zu `flagcdn.com`, sonst greift der Emoji-Fallback   |
-| TLS-Warnung im Browser (test2)   | Erwartet — self-signed Zertifikat, Ausnahme im Browser bestaetigen                       |
-| certbot schlaegt fehl (test4)    | DNS-A-Record und Erreichbarkeit von Port 80 pruefen: `curl http://<domain>/.well-known/acme-challenge/test` |
-
----
-
-# 11. Lokale PostgreSQL-Datenbank
-
-Dieser Abschnitt beschreibt, wie du eine eigene PostgreSQL-Datenbank lokal
-(oder im Docker-Stack) betreibst, das Schema anlegst und die 53 Datensaetze
-plus JRC-Snapshot-Baseline importierst.
-
-## Was wird benoetigt?
-
-| Komponente | Version | Zweck |
-| ---------- | ------- | ----- |
-| PostgreSQL | 14+ (16 empfohlen) | Datenbank-Server |
-| `db/init.sql` | aus diesem Repo | Schema + Seed-Daten (53 Karten + 1.283 Snapshots) |
-| `docker-compose.db.yml` | aus diesem Repo | Docker-Container fuer PostgreSQL (optional) |
-
-Die Datei `db/init.sql` ist vollstaendig eigenstaendig: sie enthaelt das
-komplette Schema (4 Tabellen, Indizes, Trigger-Funktion) **und** alle
-Seed-Daten in Form von `INSERT`-Statements. Keine externen Abhaengigkeiten.
-
-## 11.1 Tabellen-Uebersicht
-
-| Tabelle | Datensaetze | Inhalt |
-| ------- | ----------- | ------ |
-| `tachograph_cards` | 53 | Konsolidierte Karten-Daten (Land, Generation, Hersteller, Zertifikate, Beschaffung) |
-| `jrc_source_snapshots` | 1.283 | Fingerabdruecke aller JRC-Eintraege — dient als Diff-Baseline fuer die Update-Pruefung |
-| `jrc_update_proposals` | 0 (runtime) | Ausstehende Update-Vorschlaege — wird bei jeder Pruefung gefuellt |
-| `jrc_check_runs` | 0 (runtime) | Verlauf der bisherigen Update-Pruefungen — wird bei jeder Pruefung gefuellt |
-
-Die beiden letzten Tabellen starten leer und fuellen sich beim ersten
-„Check for updates"-Lauf.
-
-## 11.2 Option A: PostgreSQL im Docker-Container (empfohlen)
-
-### 11.2.1 Nur die Datenbank starten
-
-```bash
-cd /opt/TDH
-docker compose -f docker-compose.db.yml up -d
-```
-
-Beim ersten Start wird `db/init.sql` automatisch ausgefuehrt (Schema +
-Seed-Daten). Danach ist die Datenbank unter `localhost:5432` verfuegbar.
-
-### 11.2.2 Web-Stack + Datenbank zusammen starten
-
-```bash
-cd /opt/TDH
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.test1.yml \
-  -f docker-compose.db.yml \
-  up -d
-```
-
-Das Frontend laeuft auf Port 80, die Datenbank auf Port 5432.
-
-### 11.2.3 Verbindung testen
-
-```bash
-docker exec -it tdh-db psql -U tdh -d tdh -c "SELECT count(*) FROM tachograph_cards;"
-# Erwartet: 53
-
-docker exec -it tdh-db psql -U tdh -d tdh -c "SELECT count(*) FROM jrc_source_snapshots;"
-# Erwartet: 1283
-```
-
-### 11.2.4 Daten neu importieren (Reset)
-
-Um das Schema und die Seed-Daten neu aufzubauen (z. B. nach einer
-Aktualisierung von `db/init.sql`):
-
-```bash
-docker compose -f docker-compose.db.yml down -v   # Volume loeschen
-docker compose -f docker-compose.db.yml up -d     # neu starten, init.sql laeuft automatisch
-```
-
-> **Achtung:** `down -v` loescht alle Daten im Volume, including runtime-
-> Daten (`jrc_update_proposals`, `jrc_check_runs`). Nur ausfuehren, wenn du
-> die Datenbank neu aufbauen willst.
-
-### 11.2.5 Zugangsdaten anpassen
-
-In `.env` ergaenzen (oder beim `docker compose`-Befehl `-e` verwenden):
-
-```bash
-POSTGRES_DB=tdh
-POSTGRES_USER=tdh
-POSTGRES_PASSWORD=tdh_secret          # bitte aendern!
-```
-
-## 11.3 Option B: PostgreSQL direkt auf dem Host (ohne Docker)
-
-### 11.3.1 PostgreSQL installieren (Debian 12)
-
-```bash
-sudo apt update
-sudo apt install -y postgresql postgresql-contrib
-sudo systemctl enable --now postgresql
-```
-
-### 11.3.2 Datenbank und User anlegen
-
-```bash
-sudo -u postgres psql << 'SQL'
-CREATE USER tdh WITH PASSWORD 'tdh_secret';
-CREATE DATABASE tdh OWNER tdh;
-SQL
-```
-
-### 11.3.3 Schema + Seed-Daten importieren
-
-```bash
-psql -U tdh -d tdh -h localhost -f db/init.sql
-```
-
-Wenn du nach dem Passwort gefragt wirst, `tdh_secret` eingeben.
-
-### 11.3.4 Import verifizieren
-
-```bash
-psql -U tdh -d tdh -h localhost -c "SELECT count(*) FROM tachograph_cards;"
-psql -U tdh -d tdh -h localhost -c "SELECT count(*) FROM jrc_source_snapshots;"
-```
-
-### 11.3.5 Daten aktualisieren
-
-Um die Seed-Daten zu aktualisieren (z. B. neue Version von `db/init.sql`):
-
-```bash
-# Tabellen leeren, dann neu importieren
-psql -U tdh -d tdh -h localhost -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-psql -U tdh -d tdh -h localhost -f db/init.sql
-```
-
-## 11.4 Daten manuell exportieren (CSV)
-
-Fuer Backups oder den Transfer auf einen anderen Server:
-
-```bash
-# Docker
-docker exec tdh-db psql -U tdh -d tdh \
-  -c "COPY tachograph_cards TO STDOUT WITH CSV HEADER" > backup_cards.csv
-
-# Host
-psql -U tdh -d tdh -h localhost \
-  -c "COPY tachograph_cards TO STDOUT WITH CSV HEADER" > backup_cards.csv
-```
-
-## 11.5 Verbindung aus der App
-
-Die statische Frontend-App (`standalone/index.html`) arbeitet eingebettet
-und benoetigt keine Datenbank. Die lokale PostgreSQL-Datenbank ist fuer den
-Betrieb der **JRC-/TED-Update-Pruefung** gedacht: Die Server-Funktionen des
-Tools verbinden sich mit der Datenbank, lesen die Snapshots, vergleichen mit
-den JRC-Quellen und schreiben neue Vorschlaege in `jrc_update_proposals`.
-
-Damit die Server-Funktionen die lokale Datenbank erreichen, folgende
-Umgebungsvariablen setzen (in `.env` oder beim Start):
-
-```bash
-# Fuer die lokale PostgreSQL (statt Lovable Cloud)
-DB_HOST=localhost          # bzw. tdh-db im Docker-Netzwerk
+PORT=443
+AUTH_MODE=none                 # no login; set "oidc" later for Authentik (step 2)
+DB_HOST=127.0.0.1             # any non-empty value enables local PostgreSQL
 DB_PORT=5432
 DB_NAME=tdh
 DB_USER=tdh
-DB_PASSWORD=tdh_secret
+DB_PASSWORD=changeme
+NITRO_SSL_CERT=/certs/fullchain.pem
+NITRO_SSL_KEY=/certs/privkey.pem
+DOMAIN=tdh.example.com         # CN for the self-signed cert in test mode
 ```
 
-> **Hinweis:** Die Server-Funktionen muessen angepasst werden, um die lokale
-> PostgreSQL-Verbindung statt des Supabase-Clients zu verwenden. Das
-> Frontend (Data-View, Market Analytics) funktioniert auch ohne Datenbank,
-> da es die eingebetteten `data.json`-Daten verwendet.
+> `DB_HOST` non-empty = local PostgreSQL mode. Leave `DB_HOST` unset to fall
+> back to the Lovable/Supabase backend (used by the preview).
 
-## 11.6 Datenbank-Wartung
+## 3. TLS certificates
 
-### Backup (Dump)
+**Test mode (self-signed):** leave `/certs` empty. The entrypoint generates a
+self-signed cert for `DOMAIN` automatically. Browser warnings are expected.
+
+**Live mode (real cert via OPNsense ACME / Let's Encrypt):**
+1. OPNsense ACME client issues a certificate for your domain (Cloudflare DNS-01 or HTTP-01).
+2. Automate copying the issued `fullchain.pem` and `privkey.pem` to the host directory `./certs/`.
+3. Mount it read-only into the container at `/certs`:
+   ```
+   -v ./certs:/certs:ro
+   ```
+4. Set `DOMAIN` to your real hostname.
+
+## 4. Run the prebuilt image (from GitHub Container Registry)
 
 ```bash
-# Docker
-docker exec tdh-db pg_dump -U tdh tdh > backup_$(date +%Y%m%d).sql
-
-# Host
-pg_dump -U tdh -h localhost tdh > backup_$(date +%Y%m%d).sql
+mkdir -p ./certs ./pgdata
+docker run -d --name tacho \
+  --restart unless-stopped \
+  -p 443:443 \
+  -v "$PWD/pgdata:/var/lib/postgresql/data" \
+  -v "$PWD/certs:/certs:ro" \
+  --env-file .env \
+  ghcr.io/<owner>/tachograph-cards-web:latest
 ```
 
-### Restore
+Replace `<owner>` with your GitHub owner/org name. The image is built by the
+GitHub Actions workflow `.github/workflows/build-web.yml` (see section 6).
+
+First boot initialises PostgreSQL, applies `db/init.sql` (schema + seed data),
+and starts the Nitro server with HTTPS on port 443.
+
+## 5. Build the image locally (without GitHub)
 
 ```bash
-psql -U tdh -d tdh -h localhost -f backup_20260811.sql
-# bzw. im Container:
-docker exec -i tdh-db psql -U tdh -d tdh < backup_20260811.sql
+docker build -f Dockerfile.web -t tacho-web .
+docker run -d --name tacho -p 443:443 \
+  -v "$PWD/pgdata:/var/lib/postgresql/data" \
+  -v "$PWD/certs:/certs:ro" \
+  --env-file .env tacho-web
 ```
 
-### Indizes neu aufbauen (bei Performance-Rueckgang)
+## 6. Build via GitHub Actions → GHCR
+
+The workflow `.github/workflows/build-web.yml` builds and pushes the image to
+GHCR on every push to `main` and on manual dispatch (`Actions` tab →
+"Build Web Docker image" → "Run workflow"). It tags `latest` and the short
+commit SHA. Required permission: `packages: write` (default for `GITHUB_TOKEN`).
+
+Pull a specific build:
 
 ```bash
-docker exec tdh-db psql -U tdh -d tdh -c "REINDEX DATABASE tdh;"
+docker pull ghcr.io/<owner>/tachograph-cards-web:latest
+docker pull ghcr.io/<owner>/tachograph-cards-web:<short-sha>
 ```
 
----
+## 7. Verify
 
-## Hinweise
+```bash
+curl -k https://localhost/            # app loads (self-signed: -k)
+docker exec tacho psql -U tdh -d tdh -c "SELECT count(*) FROM tachograph_cards;"
+```
 
-- Manuelle Edits in „Card & Certification" werden pro Browser im `localStorage`
-  gespeichert, nicht serverseitig. Fuer geteilte Aenderungen `standalone/data.json`
-  aktualisieren und neu deployen.
-- Die JRC-/TED-Update-Pruefung benoetigt die lokale PostgreSQL-Datenbank
-  (Abschnitt 11). Ohne Datenbank ist die statische App voll funktionsfaehig,
-  jedoch ohne Update-Monitoring.
+In the UI: filters (Country / Generation / Manufacturer), detail view with flag,
+Market Analytics, Approval Timeline, World Map, and **Update Monitor** →
+"Check for updates" (fetches JRC/TED sources; proposals land in the database).
+
+## 8. Updating the app
+
+```bash
+docker pull ghcr.io/<owner>/tachograph-cards-web:latest
+docker stop tacho && docker rm tacho
+docker run -d --name tacho ... ghcr.io/<owner>/tachograph-cards-web:latest
+```
+
+The PostgreSQL volume (`./pgdata`) persists across rebuilds, so manual edits,
+update proposals and check-run history are retained.
+
+## 9. Backups
+
+```bash
+docker exec tacho pg_dump -U tdh tdh > backup_$(date +%Y%m%d).sql
+# restore:
+docker exec -i tacho psql -U tdh -d tdh < backup_YYYYMMDD.sql
+```
+
+## 10. Login (planned, step 2)
+
+`AUTH_MODE=none` disables all auth — editing and update checks are available to
+everyone. For a later login layer (Authentik/OIDC), set `AUTH_MODE=oidc` and
+provide `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`. No code changes
+to the server functions are required; `optionalAuth` already switches between
+the local identity and Supabase auth. Alternatively, place the container behind
+an Authentik reverse proxy and let it handle auth at the edge.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Browser TLS warning | Expected in test mode (self-signed). Add exception or use a real cert in `./certs`. |
+| Update check shows 0 proposals | Confirm outbound TCP 443 to `dtc.jrc.ec.europa.eu`; check `docker logs tacho`. |
+| `DB_HOST` set but no data | First boot runs `db/init.sql`; verify with the `psql count` above. |
+| Flags missing | Container/client needs egress to `flagcdn.com`; emoji fallback otherwise. |
+| Want HTTP only / behind proxy | Set `PORT=3000`, unset `NITRO_SSL_CERT`/`NITRO_SSL_KEY`, and reverse-proxy in front. |

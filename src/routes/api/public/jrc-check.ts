@@ -10,8 +10,8 @@ async function handle(request: Request) {
     url.searchParams.get("token") ??
     "";
 
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: config } = await supabaseAdmin.from("cron_config").select("token").maybeSingle();
+  const { getCronConfig } = await import("@/lib/db.server");
+  const config = await getCronConfig();
 
   const accepted = [process.env["CRON_SECRET"], config?.token].filter(
     (t): t is string => typeof t === "string" && t.length > 0,
