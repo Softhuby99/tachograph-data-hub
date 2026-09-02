@@ -1,7 +1,7 @@
 [
  {
   "id": "df041cca-b529-481c-b979-1bbb85cc479d",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph card of second generation (smart tachograph)",
@@ -29,11 +29,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "es"
  },
  {
   "id": "8f484ac4-1249-47a0-b54e-6e1effa2dbe2",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -61,11 +61,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "55217807-5cae-4862-93a0-f4dc5a4fe892",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph Card",
@@ -93,11 +93,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "hr"
  },
  {
   "id": "77aa8c5f-e347-4e97-aa3c-6929fa2c9dfa",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Cards based on StarCos Operating System",
@@ -125,11 +125,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "d6855415-ce84-4c36-b3d7-4ee55bded2e0",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ver. STXX-AETR",
@@ -157,11 +157,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "231ad0fb-7998-4692-a024-6f4a4c6e504f",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ver. STXX v.2",
@@ -189,11 +189,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "b3b125e1-d0de-4b99-af1c-6588ab8d3540",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos tacho module 1.1",
@@ -221,11 +221,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "e9126d36-8c7c-4c1d-9bf8-3b424f811078",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Morpho Tachograph N V2.0 - AETR",
@@ -253,11 +253,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "1fc89ed6-523b-4366-acdd-f94fb4fec00e",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -285,11 +285,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "3e69dddc-2fed-49a4-af31-48223c7ec59d",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "Incard Smart Tacho v1.0",
@@ -317,11 +317,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "it"
  },
  {
   "id": "47de4e25-ad7c-4970-b7e5-2bda1a7c5602",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.5 - Version 2.0.1G on MultiApp V4.0.1",
@@ -349,11 +349,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "9acdbf98-96b4-42bc-8a2f-207b195397e0",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Carte Tachygraphique G2",
@@ -381,11 +381,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "fr"
  },
  {
   "id": "fbb6d01e-ec97-4391-82ff-6cb63afc685e",
-  "country": "",
+  "country": "Liechtenstein",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph Generation 2.2",
@@ -413,11 +413,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "li"
  },
  {
   "id": "f70419bb-88c5-4458-bcb6-84116c50ffd7",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ARM vers.STXX-AETR - Release 1.2",
@@ -445,11 +445,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "7d4156cb-bfdb-46cf-8725-ffcb2b8f357a",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -477,11 +477,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "f75bbdfc-caa0-407a-9439-eed2317f48e0",
-  "country": "",
+  "country": "Belarus",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital tachograph cards based on STARCOS 3.4ID",
@@ -509,11 +509,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "by"
  },
  {
   "id": "db731a8b-7ee0-460a-932c-66725a314b68",
-  "country": "",
+  "country": "Belarus",
   "country_flag": "",
   "generation": "G1",
   "application": "IDeal Drive DT V3.0",
@@ -541,11 +541,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "by"
  },
  {
   "id": "02968a73-ee3b-4137-8949-ddafa9dd3f08",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ARM vers.STXX-AETR - Release 1.2",
@@ -573,11 +573,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "3d01ce6b-9d88-4b59-8d88-2417c0cf48e6",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph card",
@@ -605,11 +605,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "dcad93df-2b23-422f-80bb-1bd8d4676534",
-  "country": "",
+  "country": "Belgium",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Thales Digital Tachograph G2V2/G2V2 V2.2.1.N on IFX CCI_000039H",
@@ -637,11 +637,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "be"
  },
  {
   "id": "ad98f67f-cf51-41de-8fa2-aac7caf32515",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -669,11 +669,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "926cf646-4fcd-4dab-8e94-c772111350c5",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph cards",
@@ -701,11 +701,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "si"
  },
  {
   "id": "3c6f973d-2f7a-4df3-8512-f5eba066d955",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "tru/cos tacho v1.0",
@@ -733,11 +733,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "34c782dc-3f93-47ef-a3e9-f05fdaeed083",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3",
@@ -765,11 +765,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "61ff6a61-4b03-4e98-a7bd-6899d85712e0",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW PL Tach G2 Cards v1.0",
@@ -797,11 +797,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "se"
  },
  {
   "id": "7d5812db-33e7-40ba-8a55-870eee9d04aa",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.6 [ver. 2.2.1.N]",
@@ -829,11 +829,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "3b97c57e-c73b-45b2-a9d4-0054abd9e973",
-  "country": "",
+  "country": "Moldova",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.6",
@@ -861,11 +861,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "md"
  },
  {
   "id": "078b7c14-6bc9-450e-8ebe-c2d493f48f72",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -893,11 +893,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "cz"
  },
  {
   "id": "03ad99b2-0c1a-499c-8d50-12b8d2eeea6f",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -925,11 +925,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "es"
  },
  {
   "id": "fcac199f-524d-4ab7-8bc8-1041247f6fbc",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tacho v2.0 STARCOS 3.4 ID",
@@ -957,11 +957,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "it"
  },
  {
   "id": "1304907a-e454-4c45-9948-257ea094ee98",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "IDeal Drive DT V3.0",
@@ -989,11 +989,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "es"
  },
  {
   "id": "f3e4d2d8-d20c-4b15-91a7-61bd60ad55eb",
-  "country": "",
+  "country": "Türkiye",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1021,11 +1021,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "tr"
  },
  {
   "id": "86967331-7800-4539-9f6f-d2e117b57945",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.6 ID Tachograph P1",
@@ -1053,11 +1053,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "9fa2297d-3950-45ec-af0f-5ef063e4c37b",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1085,11 +1085,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "d4164df4-38be-4fca-8d4a-385d934aa520",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card N - AETR - Micardo V1.0 R1.0",
@@ -1117,11 +1117,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "aadf9340-bc3d-4104-93a6-87f7011122e3",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW-NAVILINE KZ Tach G1 Cards v1.0",
@@ -1149,11 +1149,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "se"
  },
  {
   "id": "de0fb09f-4a7f-464e-9b1b-e2cf95914b73",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "SPSL Smart Tachograph Card and Version 1.1 128/64 R1.1",
@@ -1181,11 +1181,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "2209bf5c-4efa-4df0-9c54-1d99cdf6aeb4",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Morpho Tachograph N V2.0 - AETR",
@@ -1213,11 +1213,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "b6fe043f-388f-4f62-9102-f4a8b21ae1e7",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Thales Digital Tachograph G2V2 Version 2.2.1.N",
@@ -1245,11 +1245,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "fcc68243-b26d-4352-ab52-3577ad374326",
-  "country": "",
+  "country": "Norway",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph G2V2 cards for Norway",
@@ -1277,11 +1277,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "no"
  },
  {
   "id": "8813091e-8d47-4efd-9a27-86d67ecc315c",
-  "country": "",
+  "country": "Kyrgyzstan",
   "country_flag": "",
   "generation": "G1",
   "application": "TachoDrive v4 on ID-One Cosmo X",
@@ -1309,11 +1309,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "kg"
  },
  {
   "id": "4b650aba-9526-434f-8ea1-ea014bff100e",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "CETIS Smart Tachograph G2V2SI v2.0",
@@ -1341,11 +1341,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "si"
  },
  {
   "id": "6731d3f6-2c35-41d3-a36d-27c5e03e4415",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1373,11 +1373,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "90f5ba9d-bb05-4edd-b8db-68e3d7478fee",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.4 ID Tachograph C1",
@@ -1405,11 +1405,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "0060c520-a422-4026-8511-6cf51dec336f",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -1437,11 +1437,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "9e06dc8d-a83f-4726-bc4b-e05a1aeb0728",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1469,11 +1469,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "cz"
  },
  {
   "id": "b6f44900-0868-48d2-a50a-cb790a695da7",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Micardo Tachograph Version 1.0 R1.0 (Smart Tachograph N)",
@@ -1501,11 +1501,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "439e44ab-7285-4165-9d88-c501ad0c9c99",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card",
@@ -1533,11 +1533,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "es"
  },
  {
   "id": "033a42b8-aebe-4787-b0d3-20708c01643b",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Cards - Version 2.0",
@@ -1565,11 +1565,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "81f17c1c-2ef2-49a9-bfe6-fb1e6df89f8d",
-  "country": "",
+  "country": "Türkiye",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph G1 v1.5 Cards of THALES with an INFINEON SLE78CFX4000PH chip",
@@ -1597,11 +1597,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "tr"
  },
  {
   "id": "cf92f369-3f97-47dd-a78c-9342f4279769",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2",
@@ -1629,11 +1629,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "si"
  },
  {
   "id": "277c4dea-9acc-4caa-8a5e-db7440d4d140",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card T v1.0 R2",
@@ -1661,11 +1661,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "4b8378fc-58a6-4415-9acf-be4f8042a868",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Smart Tachograph G2V2",
@@ -1693,11 +1693,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "si"
  },
  {
   "id": "8902265f-2a34-4fce-a23b-01302861bdd6",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph card of second generation",
@@ -1725,11 +1725,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "hr"
  },
  {
   "id": "39c6caa9-b908-4da8-98b6-0a0f1979acb0",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "TCOS Version 1.0 R2.0",
@@ -1757,11 +1757,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "8af39425-fc29-42f5-b101-6289c861c1f3",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph cards for second generation tachograph, version two",
@@ -1789,11 +1789,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "hr"
  },
  {
   "id": "66cfac3d-6667-4e48-ba25-e59c51b6cc4a",
-  "country": "",
+  "country": "Portugal",
   "country_flag": "",
   "generation": "G2.2",
   "application": "G2V2 INCM Digital Tachograph cards",
@@ -1821,11 +1821,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "pt"
  },
  {
   "id": "5fb4f661-2468-4944-bc39-280249ee39f6",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1853,11 +1853,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "a3787fb3-e930-4aa7-8b49-bea0b9a86f61",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1885,11 +1885,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "212d6429-c112-4e6a-89d6-014446396973",
-  "country": "",
+  "country": "Portugal",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -1917,11 +1917,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "pt"
  },
  {
   "id": "efe54c41-4d05-4864-9a91-5b49efbe3460",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1949,11 +1949,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "cf211623-2efb-4605-8c02-ee5b46b3d8db",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "CETIS Smart Tachograph G2-BIH",
@@ -1981,11 +1981,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "si"
  },
  {
   "id": "fa60e14d-0f58-4164-8479-baefddde98b0",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos tacho V1.1",
@@ -2013,11 +2013,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "ru"
  },
  {
   "id": "a190baea-ff59-445d-8bbc-effe26d31c9d",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph v3.0",
@@ -2045,11 +2045,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "it"
  },
  {
   "id": "3fee844d-22d3-4b5d-903c-320c2947bff9",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Generation 2 MAV4.0.1 - EWG",
@@ -2077,11 +2077,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "155a91d8-4559-4c89-a824-357fb22da1f4",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW GE and AZ Tach G1 Cards v1.3",
@@ -2109,11 +2109,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "se"
  },
  {
   "id": "8a4acba7-f67c-4944-bb87-7575f8f33dab",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "Imprimerie Nationale Cards",
@@ -2141,11 +2141,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "fr"
  },
  {
   "id": "2fb3055b-0f50-468d-bf3d-8b9a992a76cb",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Smart Tachograph G2V2 - Infineon SLC37",
@@ -2173,11 +2173,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "cz"
  },
  {
   "id": "741f2d37-090d-4a05-8ae7-c4030faf854e",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart T. card J - Version 1.1 128/64 R1.2",
@@ -2205,11 +2205,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "93b82cc6-9865-4dd6-ac4c-76bf6dcaad4b",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos Version 1.1 cards",
@@ -2237,11 +2237,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "de"
  },
  {
   "id": "20c94e90-b571-4959-8b4b-6504e693e1b8",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph Cards based on STARCOS 3.4 ID",
@@ -2269,11 +2269,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "cz"
  },
  {
   "id": "37de8dd4-2bf5-4fbd-9f68-b81116180736",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.4 ID Tachograph",
@@ -2301,11 +2301,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "es"
  },
  {
   "id": "ed99e65e-58cb-44e6-82e3-db20a67b76a8",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3",
@@ -2333,11 +2333,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "fr"
  },
  {
   "id": "aafd9fbd-74e3-454e-8a55-12f47f3ad6b8",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "Imprimerie Nationale Cards",
@@ -2365,11 +2365,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "fr"
  },
  {
   "id": "ff26f755-40a5-4e02-a4cb-8e00352260af",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -2397,11 +2397,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "bdcefc5f-a5af-4811-b887-6c8ce02f7a50",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -2429,11 +2429,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "gb"
  },
  {
   "id": "f5cab370-e121-47a1-952a-4b4941d9bc8e",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "M256LFCHRON_SI_A5_05_01 rev.B",
@@ -2461,11 +2461,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "fr"
  },
  {
   "id": "449c3aa9-ea29-499b-a388-e983f9774683",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "NTS Smart Tachograph Card G2 v1.0",
@@ -2493,11 +2493,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "nl"
  },
  {
   "id": "8423de90-3ba1-43e5-9f9a-bc483a3c6d4a",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G2.2",
   "application": "G2v2 tachograph cards SmartTacho V4.0 - J-TACHOG2V2 v1.0.2",
@@ -2525,11 +2525,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "it"
  },
  {
   "id": "33a0650f-34a1-4f1c-9715-e9f253eef516",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "SmartTacho V3.1",
@@ -2557,11 +2557,11 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "it"
  },
  {
   "id": "e3e43f5e-2676-47c5-b019-b4fd78a6ac4c",
-  "country": "",
+  "country": "Cyprus",
   "country_flag": "",
   "generation": "G1",
   "application": "M256LFCHRON_SLA5_05_01",
@@ -2589,7 +2589,7 @@
   "tender_source": "",
   "verification_note": "",
   "data_reference_date": "2026-09-02",
-  "iso": ""
+  "iso": "cy"
  },
  {
   "id": "26ef42d1-c71c-41af-92bb-a26588670314",
