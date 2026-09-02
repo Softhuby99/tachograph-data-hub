@@ -96,15 +96,13 @@ type TachoCard = {
 type Overrides = Record<string, Partial<TachoCard>>;
 
 function useOverrides() {
+  const fetchOverrides = useServerFn(getOverrides);
   return useQuery({
     queryKey: ["tachograph_card_overrides"],
     queryFn: async (): Promise<Overrides> => {
-      const { data, error } = await supabase
-        .from("tachograph_card_overrides")
-        .select("card_id, patch");
-      if (error) throw error;
+      const rows = await fetchOverrides();
       const map: Overrides = {};
-      for (const row of data ?? []) {
+      for (const row of rows ?? []) {
         map[row.card_id] = (row.patch ?? {}) as Partial<TachoCard>;
       }
       return map;
@@ -113,15 +111,24 @@ function useOverrides() {
 }
 
 function useCards() {
+  const fetchCards = useServerFn(getCards);
   return useQuery({
     queryKey: ["tachograph_cards"],
     queryFn: async (): Promise<TachoCard[]> => {
-      const { data, error } = await supabase.from("tachograph_cards").select("*").order("country");
-      if (error) throw error;
+      const data = await fetchCards();
       return data as TachoCard[];
     },
   });
 }
+
+function useAuthMode() {
+  const fetchMode = useServerFn(getAuthMode);
+  return useQuery({
+    queryKey: ["auth_mode"],
+    queryFn: async () => fetchMode(),
+  });
+}
+
 
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
