@@ -319,6 +319,13 @@ fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_
 let selectedId = null;
 let editing = false;
 
+const COUNTRY_ISO = {Albania:'al',Armenia:'am',Austria:'at',Azerbaijan:'az',Belarus:'by',Belgium:'be','Bosnia and Herzegovina':'ba',Bulgaria:'bg',Croatia:'hr',Cyprus:'cy',Czechia:'cz',Denmark:'dk',Estonia:'ee',Finland:'fi',France:'fr',Georgia:'ge',Germany:'de',Greece:'gr',Hungary:'hu',Iceland:'is',Ireland:'ie',Israel:'il',Italy:'it',Kazakhstan:'kz',Kyrgyzstan:'kg',Latvia:'lv',Liechtenstein:'li',Lithuania:'lt',Luxembourg:'lu',Malta:'mt',Moldova:'md',Monaco:'mc',Montenegro:'me',Netherlands:'nl','North Macedonia':'mk',Norway:'no',Poland:'pl',Portugal:'pt',Romania:'ro',Russia:'ru','San Marino':'sm',Serbia:'rs',Slovakia:'sk',Slovenia:'si',Spain:'es',Sweden:'se',Switzerland:'ch',Tajikistan:'tj',Turkmenistan:'tm','Türkiye':'tr',Ukraine:'ua','United Kingdom':'gb',Uzbekistan:'uz'};
+
+/** ISO code for a record — falls back to the country name when iso is missing. */
+function isoOf(r) {
+  return (r && r.iso) || (r && COUNTRY_ISO[r.country]) || '';
+}
+
 function flagUrl(iso, big) {
   if (!iso) return '';
   return `https://flagcdn.com/${big?'64x48':'32x24'}/${iso}.png`;
