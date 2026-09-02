@@ -132,7 +132,11 @@
   .card-modal .cm-title { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card-modal .cm-close { background:none; border:none; color:#94a3b8; font-size:22px; line-height:1; cursor:pointer; padding:0 4px; }
   .card-modal .cm-close:hover { color:#ffffff; }
-  .card-modal .cm-body { flex:1; overflow-y:auto; overflow-x:auto; padding:14px; }
+  .card-modal .cm-body { flex:1; overflow-y:auto; overflow-x:auto; padding:14px; color:#0f172a; }
+  .card-modal .cm-body table.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .card-modal .cm-body table.tbl th { text-align:left; padding:6px 8px; border-bottom:2px solid #cbd5e1; color:#475569; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
+  .card-modal .cm-body table.tbl td { padding:6px 8px; border-bottom:1px solid #e2e8f0; color:#0f172a; }
+  .card-modal .cm-body table.tbl tbody tr:hover { background:#f1f5f9; }
   .version-badge { border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-right:8px; align-self:center; }
   .view-switch { display:inline-flex; align-items:center; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden; margin-right:8px; align-self:center; font-size:12px; font-weight:600; }
   .view-switch .active { background:#1d4ed8; color:#fff; padding:4px 10px; }
@@ -231,7 +235,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.4";
+const APP_VERSION = "2.5";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -947,20 +951,58 @@ function mapLabel(country, xy, cards, showNumbers) {
   let extra = '';
   if (showNumbers) {
     extra += '<text class="cn" y="24">' + esc(country) + '</text>';
-    cards.slice(0,4).forEach((c,i) => {
-      const y = 34 + i*10;
-      const label = esc(c.type_approval_number || c.generation || '');
-      const w = Math.max(30, label.length * 4.6);
-      const click = 'event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\')';
-      extra += '<g class="ta-hit" onclick="' + click + '" style="cursor:pointer">' +
-        '<rect x="' + (-w/2) + '" y="' + (y-7) + '" width="' + w + '" height="10" fill="transparent"></rect>' +
-        '<text class="ta link" y="' + y + '"><title>Click for full details</title>' + label + '</text></g>';
-    });
-
   }
+  // Clicking the count badge opens a list modal with ALL approvals for the country.
+  const q = JSON.stringify(country).replace(/"/g,'&quot;');
   return '<g class="lbl' + (sel ? ' sel' : '') + '" transform="translate(' + xy[0] + ',' + xy[1] + ') scale(' + (1/mapZoomLevel) + ')"' +
-    ' onclick="mapSelect(' + JSON.stringify(country).replace(/"/g,'&quot;') + ')">' +
+    ' onclick="event.stopPropagation();openCountryModal(' + q + ')" style="cursor:pointer">' +
+    '<title>' + esc(country) + ': ' + cards.length + ' type approval(s) — click for the full list</title>' +
+    '<rect x="-14" y="-14" width="28" height="28" fill="transparent"></rect>' +
     '<circle r="11"></circle><text class="n" dy="0.35em">' + cards.length + '</text>' + extra + '</g>';
+}
+
+// ---------- Country list modal: all approvals with generation + date/status ----------
+function openCountryModal(country) {
+  closeCardModal();
+  mapSelected = country;
+  const cards = (mapCounts()[country] || []).slice()
+    .sort((a,b) => String(a.type_approval_number||'').localeCompare(String(b.type_approval_number||'')));
+  const first = cards[0] ? merged(cards[0]) : null;
+  const flag = first && first.iso ? '<img src="' + flagUrl(first.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '';
+  const rows = cards.map(c => {
+    const r = merged(c);
+    return '<tr onclick="openCardModal(\'' + c.id + '\')" style="cursor:pointer" title="Click for full details">' +
+      '<td><a href="#" class="ta-link" onclick="event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\')">' + esc(r.type_approval_number || '\u2014') + '</a></td>' +
+      '<td><span class="badge">' + esc(r.generation || '\u2014') + '</span></td>' +
+      '<td>' + esc(r.date_status || '\u2014') + '</td>' +
+      '<td>' + esc(r.current_manufacturer_normalized || r.current_manufacturer || '\u2014') + '</td></tr>';
+  }).join('');
+  const win = document.createElement('div');
+  win.className = 'card-modal';
+  win.id = 'cardModal';
+  win.innerHTML =
+    '<div class="cm-head" id="cardModalHead">' +
+      flag + '<div class="cm-title"><b>' + esc(country) + '</b> · ' + cards.length + ' type approval(s)</div>' +
+      '<button class="cm-close" onclick="closeCardModal()" title="Close">&times;</button>' +
+    '</div>' +
+    '<div class="cm-body"><table class="tbl"><thead><tr>' +
+      '<th>Type Approval</th><th>Generation</th><th>Date / Status</th><th>Manufacturer</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  document.body.appendChild(win);
+  const head = win.querySelector('#cardModalHead');
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cm-close')) return;
+    const rect = win.getBoundingClientRect();
+    const drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const move = ev => {
+      win.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - drag.dx)) + 'px';
+      win.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - drag.dy)) + 'px';
+      win.style.transform = 'none';
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 }
 
 // ---------- Card info modal (draggable, resizable, scrollable) ----------
