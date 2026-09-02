@@ -351,7 +351,7 @@ function renderList() {
   rows.forEach(r => {
     const div = document.createElement('div');
     div.className = 'row' + (r.id===selectedId?' active':'');
-    const flag = r.iso ? `<img src="${flagUrl(r.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:24px">${r.country_flag||''}</span>`;
+    const flag = isoOf(r) ? `<img src="${flagUrl(isoOf(r),false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:24px">${r.country_flag||''}</span>`;
     const edited = overrides[r.id] ? '<span class="edit-badge">edited</span>' : '';
     div.innerHTML = `${flag}<div class="meta"><div class="country">${r.country}${edited}</div><div class="sub">${r.current_manufacturer_normalized||r.current_manufacturer||'—'}</div></div><span class="badge">${r.generation}</span>`;
     div.onclick = () => { selectedId = r.id; editing = false; renderList(); renderDetail(); };
@@ -413,7 +413,7 @@ function renderTimeline(manufacturer) {
   const years = byDate.length ? `${byDate[0].date.getFullYear()} – ${byDate[byDate.length-1].date.getFullYear()}` : 'no dates available';
   const items = entries.map(({ card: c, date }) => {
     const open = tlOpenId === c.id;
-    const flag = c.iso ? `<img src="${flagUrl(c.iso,false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:20px">${c.country_flag||''}</span>`;
+    const flag = isoOf(c) ? `<img src="${flagUrl(isoOf(c),false)}" onerror="this.style.display='none'"/>` : `<span style="font-size:20px">${c.country_flag||''}</span>`;
     const dateStr = date ? date.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : 'unknown';
     const detail = open ? `<dl class="tl-detail">${TIMELINE_FIELDS.map(([k,label]) =>
       `<div><dt>${label}</dt><dd>${esc(c[k]) || '—'}</dd></div>`).join('')}</dl>` : '';
@@ -443,7 +443,7 @@ function renderDetail() {
   }
   const base = DATA.find(x => x.id === selectedId);
   const r = merged(base);
-  const flag = r.iso ? `<img src="${flagUrl(r.iso,true)}" onerror="this.style.display='none'"/>` : `<span style="font-size:48px">${r.country_flag||''}</span>`;
+  const flag = isoOf(r) ? `<img src="${flagUrl(isoOf(r),true)}" onerror="this.style.display='none'"/>` : `<span style="font-size:48px">${r.country_flag||''}</span>`;
 
   const renderField = ([k,label]) => {
     if (editing) {
@@ -978,7 +978,7 @@ function openCountryModal(country) {
   const cards = (mapCounts()[country] || []).slice()
     .sort((a,b) => String(a.type_approval_number||'').localeCompare(String(b.type_approval_number||'')));
   const first = cards[0] ? merged(cards[0]) : null;
-  const flag = first && first.iso ? '<img src="' + flagUrl(first.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '';
+  const flag = first && isoOf(first) ? '<img src="' + flagUrl(isoOf(first),true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '';
   const rows = cards.map(c => {
     const r = merged(c);
     return '<tr onclick="openCardModal(\'' + c.id + '\',' + cCountry + ')" style="cursor:pointer" title="Click for full details">' +
@@ -1023,7 +1023,7 @@ function openCardModal(id, fromCountry) {
   if (!base) return;
   const r = merged(base);
   if (fromCountry) lastCountryModal = fromCountry;
-  const flag = r.iso ? '<img src="' + flagUrl(r.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
+  const flag = isoOf(r) ? '<img src="' + flagUrl(isoOf(r),true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
   const fieldHtml = ([k,label]) =>
     '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
   const backCountry = lastCountryModal ? "'" + lastCountryModal.replace(/'/g,"\\'") + "'" : '';
