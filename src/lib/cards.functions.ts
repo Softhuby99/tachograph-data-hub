@@ -13,12 +13,15 @@ import {
 
 // ---- reads (public; no auth) ---------------------------------------------
 
+type CardData = Record<string, string | number | null>;
+type OverrideData = { card_id: string; patch: Record<string, string> };
+
 export const getCards = createServerFn({ method: "GET" }).handler(async () => {
-  return await getAllCards();
+  return (await getAllCards()) as CardData[];
 });
 
 export const getOverrides = createServerFn({ method: "GET" }).handler(async () => {
-  return await getAllOverrides();
+  return (await getAllOverrides()) as OverrideData[];
 });
 
 // ---- writes (optional auth) ---------------------------------------------
