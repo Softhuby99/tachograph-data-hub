@@ -437,43 +437,15 @@ export const UPDATE_SOURCE_ORDER = [
 ] as const;
 
 export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  const { data: cards, error } = await supabaseAdmin
-    .from("tachograph_cards")
-    .select(
-      "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source,data_reference_date",
-    );
-  if (error) throw new Error(error.message);
-
-  const cardRows = (cards ?? []) as (CardRow & { data_reference_date: string })[];
+  const cardRows = (await getCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
     const t = Date.parse(c.data_reference_date ?? "");
     return Number.isNaN(t) ? acc : Math.max(acc, t);
   }, 0);
 
-  const known = new Set<string>();
-  for (let from = 0; ; from += 1000) {
-    const { data: existing, error: exErr } = await supabaseAdmin
-      .from("jrc_update_proposals")
-      .select("fingerprint")
-      .range(from, from + 999);
-    if (exErr) throw new Error(exErr.message);
-    for (const e of existing ?? []) known.add(e.fingerprint as string);
-    if (!existing || existing.length < 1000) break;
-  }
-
-  const insertProposals = async (items: ProposalInsert[]) => {
-    const fresh = items.filter((c) => !known.has(c.fingerprint));
-    for (const f of fresh) known.add(f.fingerprint);
-    if (fresh.length > 0) {
-      const { error: insErr } = await supabaseAdmin
-        .from("jrc_update_proposals")
-        .insert(fresh as never);
-      if (insErr) throw new Error(insErr.message);
-    }
-    return fresh.length;
-  };
+  const known = await getKnownFingerprints();
+  const insertProposals = (items: ProposalInsert[]) =>
+    dbInsertProposals(items as unknown as ProposalRow[], known);
 
   const meta = JRC_SOURCES[source];
   let result: SourceResult;
