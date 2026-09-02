@@ -68,11 +68,12 @@ docker run -d --name tacho \
   -v "$PWD/pgdata:/var/lib/postgresql/data" \
   -v "$PWD/certs:/certs:ro" \
   --env-file .env \
-  ghcr.io/<owner>/tachograph-cards-web:latest
+  ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
 ```
 
-Replace `<owner>` with your GitHub owner/org name. The image is built by the
-GitHub Actions workflow `.github/workflows/build-web.yml` (see section 6).
+The image is built by the GitHub Actions workflow
+`.github/workflows/build-web.yml` on the `Softhuby99/tachograph-data-hub`
+repository (see section 6). Clone it with `gh repo clone Softhuby99/tachograph-data-hub`.
 
 First boot initialises PostgreSQL, applies `db/init.sql` (schema + seed data),
 and starts the Nitro server with HTTPS on port 443.
