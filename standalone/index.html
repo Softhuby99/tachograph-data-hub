@@ -272,7 +272,15 @@ function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE
 function saveOverrides(o) { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); }
 let overrides = loadOverrides();
 
-function merged(r) { return { ...r, ...(overrides[r.id] || {}) }; }
+function merged(r) {
+  const o = overrides[r.id] || {};
+  const m = { ...r, ...o };
+  // Old edits saved before the country-repair may contain empty fields — never let them blank out the base data.
+  for (const k of Object.keys(o)) {
+    if ((o[k] == null || o[k] === '') && r[k] != null && r[k] !== '') m[k] = r[k];
+  }
+  return m;
+}
 
 const $ = id => document.getElementById(id);
 const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
