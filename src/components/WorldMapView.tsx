@@ -36,6 +36,11 @@ const MICRO_STATES: Record<string, [number, number]> = {
   Liechtenstein: [9.55, 47.15],
 };
 
+/** Label positions for countries whose geographic centroid is distorted by remote territories. */
+const LABEL_COORDINATES: Record<string, [number, number]> = {
+  France: [2.2, 46.2],
+};
+
 const WIDTH = 980;
 const HEIGHT = 520;
 const MIN_ZOOM = 1;
@@ -110,7 +115,12 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
     for (const s of shapes) {
       const app = atlasToApp.get(s.name);
       if (!app) continue;
-      out.push({ country: app, xy: s.centroid, cards: counts.get(app) ?? [] });
+       const adjusted = LABEL_COORDINATES[app];
+       out.push({
+         country: app,
+         xy: adjusted ? (projection(adjusted) as [number, number]) : s.centroid,
+         cards: counts.get(app) ?? [],
+       });
     }
     for (const m of markers) {
       const list = counts.get(m.name);
