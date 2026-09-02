@@ -1,7 +1,7 @@
 [
  {
   "id": "df041cca-b529-481c-b979-1bbb85cc479d",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph card of second generation (smart tachograph)",
@@ -28,11 +28,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "8f484ac4-1249-47a0-b54e-6e1effa2dbe2",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -59,11 +60,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "55217807-5cae-4862-93a0-f4dc5a4fe892",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph Card",
@@ -90,11 +92,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hr"
  },
  {
   "id": "77aa8c5f-e347-4e97-aa3c-6929fa2c9dfa",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Cards based on StarCos Operating System",
@@ -121,11 +124,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "d6855415-ce84-4c36-b3d7-4ee55bded2e0",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ver. STXX-AETR",
@@ -152,11 +156,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "231ad0fb-7998-4692-a024-6f4a4c6e504f",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ver. STXX v.2",
@@ -183,11 +188,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "b3b125e1-d0de-4b99-af1c-6588ab8d3540",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos tacho module 1.1",
@@ -214,11 +220,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "e9126d36-8c7c-4c1d-9bf8-3b424f811078",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Morpho Tachograph N V2.0 - AETR",
@@ -245,11 +252,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "1fc89ed6-523b-4366-acdd-f94fb4fec00e",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -276,11 +284,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "3e69dddc-2fed-49a4-af31-48223c7ec59d",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "Incard Smart Tacho v1.0",
@@ -307,11 +316,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "it"
  },
  {
   "id": "47de4e25-ad7c-4970-b7e5-2bda1a7c5602",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.5 - Version 2.0.1G on MultiApp V4.0.1",
@@ -338,11 +348,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "9acdbf98-96b4-42bc-8a2f-207b195397e0",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Carte Tachygraphique G2",
@@ -369,11 +380,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "fbb6d01e-ec97-4391-82ff-6cb63afc685e",
-  "country": "",
+  "country": "Liechtenstein",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph Generation 2.2",
@@ -400,11 +412,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "li"
  },
  {
   "id": "f70419bb-88c5-4458-bcb6-84116c50ffd7",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ARM vers.STXX-AETR - Release 1.2",
@@ -431,11 +444,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "7d4156cb-bfdb-46cf-8725-ffcb2b8f357a",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -462,11 +476,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "f75bbdfc-caa0-407a-9439-eed2317f48e0",
-  "country": "",
+  "country": "Belarus",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital tachograph cards based on STARCOS 3.4ID",
@@ -493,11 +508,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "by"
  },
  {
   "id": "db731a8b-7ee0-460a-932c-66725a314b68",
-  "country": "",
+  "country": "Belarus",
   "country_flag": "",
   "generation": "G1",
   "application": "IDeal Drive DT V3.0",
@@ -524,11 +540,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "by"
  },
  {
   "id": "02968a73-ee3b-4137-8949-ddafa9dd3f08",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Card ARM vers.STXX-AETR - Release 1.2",
@@ -555,11 +572,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "3d01ce6b-9d88-4b59-8d88-2417c0cf48e6",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph card",
@@ -586,11 +604,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "dcad93df-2b23-422f-80bb-1bd8d4676534",
-  "country": "",
+  "country": "Belgium",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Thales Digital Tachograph G2V2/G2V2 V2.2.1.N on IFX CCI_000039H",
@@ -617,11 +636,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "be"
  },
  {
   "id": "ad98f67f-cf51-41de-8fa2-aac7caf32515",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -648,11 +668,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "926cf646-4fcd-4dab-8e94-c772111350c5",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph cards",
@@ -679,11 +700,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "3c6f973d-2f7a-4df3-8512-f5eba066d955",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "tru/cos tacho v1.0",
@@ -710,11 +732,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "34c782dc-3f93-47ef-a3e9-f05fdaeed083",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3",
@@ -741,11 +764,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "61ff6a61-4b03-4e98-a7bd-6899d85712e0",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW PL Tach G2 Cards v1.0",
@@ -772,11 +796,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "se"
  },
  {
   "id": "7d5812db-33e7-40ba-8a55-870eee9d04aa",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.6 [ver. 2.2.1.N]",
@@ -803,11 +828,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "3b97c57e-c73b-45b2-a9d4-0054abd9e973",
-  "country": "",
+  "country": "Moldova",
   "country_flag": "",
   "generation": "G1",
   "application": "Thales Digital Tachograph G1 v1.6",
@@ -834,11 +860,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "md"
  },
  {
   "id": "078b7c14-6bc9-450e-8ebe-c2d493f48f72",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -865,11 +892,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "cz"
  },
  {
   "id": "03ad99b2-0c1a-499c-8d50-12b8d2eeea6f",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -896,11 +924,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "fcac199f-524d-4ab7-8bc8-1041247f6fbc",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tacho v2.0 STARCOS 3.4 ID",
@@ -927,11 +956,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "it"
  },
  {
   "id": "1304907a-e454-4c45-9948-257ea094ee98",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "IDeal Drive DT V3.0",
@@ -958,11 +988,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "f3e4d2d8-d20c-4b15-91a7-61bd60ad55eb",
-  "country": "",
+  "country": "Türkiye",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -989,11 +1020,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "tr"
  },
  {
   "id": "86967331-7800-4539-9f6f-d2e117b57945",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.6 ID Tachograph P1",
@@ -1020,11 +1052,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "9fa2297d-3950-45ec-af0f-5ef063e4c37b",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1051,11 +1084,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "d4164df4-38be-4fca-8d4a-385d934aa520",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card N - AETR - Micardo V1.0 R1.0",
@@ -1082,11 +1116,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "aadf9340-bc3d-4104-93a6-87f7011122e3",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW-NAVILINE KZ Tach G1 Cards v1.0",
@@ -1113,11 +1148,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "se"
  },
  {
   "id": "de0fb09f-4a7f-464e-9b1b-e2cf95914b73",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "SPSL Smart Tachograph Card and Version 1.1 128/64 R1.1",
@@ -1144,11 +1180,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "2209bf5c-4efa-4df0-9c54-1d99cdf6aeb4",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Morpho Tachograph N V2.0 - AETR",
@@ -1175,11 +1212,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "b6fe043f-388f-4f62-9102-f4a8b21ae1e7",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Thales Digital Tachograph G2V2 Version 2.2.1.N",
@@ -1206,11 +1244,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "fcc68243-b26d-4352-ab52-3577ad374326",
-  "country": "",
+  "country": "Norway",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph G2V2 cards for Norway",
@@ -1237,11 +1276,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "no"
  },
  {
   "id": "8813091e-8d47-4efd-9a27-86d67ecc315c",
-  "country": "",
+  "country": "Kyrgyzstan",
   "country_flag": "",
   "generation": "G1",
   "application": "TachoDrive v4 on ID-One Cosmo X",
@@ -1268,11 +1308,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "kg"
  },
  {
   "id": "4b650aba-9526-434f-8ea1-ea014bff100e",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "CETIS Smart Tachograph G2V2SI v2.0",
@@ -1299,11 +1340,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "6731d3f6-2c35-41d3-a36d-27c5e03e4415",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1330,11 +1372,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "90f5ba9d-bb05-4edd-b8db-68e3d7478fee",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.4 ID Tachograph C1",
@@ -1361,11 +1404,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "0060c520-a422-4026-8511-6cf51dec336f",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -1392,11 +1436,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "9e06dc8d-a83f-4726-bc4b-e05a1aeb0728",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1423,11 +1468,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "cz"
  },
  {
   "id": "b6f44900-0868-48d2-a50a-cb790a695da7",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Micardo Tachograph Version 1.0 R1.0 (Smart Tachograph N)",
@@ -1454,11 +1500,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "439e44ab-7285-4165-9d88-c501ad0c9c99",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card",
@@ -1485,11 +1532,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "033a42b8-aebe-4787-b0d3-20708c01643b",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Cards - Version 2.0",
@@ -1516,11 +1564,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "81f17c1c-2ef2-49a9-bfe6-fb1e6df89f8d",
-  "country": "",
+  "country": "Türkiye",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph G1 v1.5 Cards of THALES with an INFINEON SLE78CFX4000PH chip",
@@ -1547,11 +1596,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "tr"
  },
  {
   "id": "cf92f369-3f97-47dd-a78c-9342f4279769",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2",
@@ -1578,11 +1628,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "277c4dea-9acc-4caa-8a5e-db7440d4d140",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart Tachograph Card T v1.0 R2",
@@ -1609,11 +1660,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "4b8378fc-58a6-4415-9acf-be4f8042a868",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Smart Tachograph G2V2",
@@ -1640,11 +1692,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "8902265f-2a34-4fce-a23b-01302861bdd6",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph card of second generation",
@@ -1671,11 +1724,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hr"
  },
  {
   "id": "39c6caa9-b908-4da8-98b6-0a0f1979acb0",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "TCOS Version 1.0 R2.0",
@@ -1702,11 +1756,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "8af39425-fc29-42f5-b101-6289c861c1f3",
-  "country": "",
+  "country": "Croatia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Tachograph cards for second generation tachograph, version two",
@@ -1733,11 +1788,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hr"
  },
  {
   "id": "66cfac3d-6667-4e48-ba25-e59c51b6cc4a",
-  "country": "",
+  "country": "Portugal",
   "country_flag": "",
   "generation": "G2.2",
   "application": "G2V2 INCM Digital Tachograph cards",
@@ -1764,11 +1820,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "pt"
  },
  {
   "id": "5fb4f661-2468-4944-bc39-280249ee39f6",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1795,11 +1852,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "a3787fb3-e930-4aa7-8b49-bea0b9a86f61",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph v1.3",
@@ -1826,11 +1884,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "212d6429-c112-4e6a-89d6-014446396973",
-  "country": "",
+  "country": "Portugal",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 on MultiApp V4.0.1",
@@ -1857,11 +1916,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "pt"
  },
  {
   "id": "efe54c41-4d05-4864-9a91-5b49efbe3460",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -1888,11 +1948,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "cf211623-2efb-4605-8c02-ee5b46b3d8db",
-  "country": "",
+  "country": "Slovenia",
   "country_flag": "",
   "generation": "G2.1",
   "application": "CETIS Smart Tachograph G2-BIH",
@@ -1919,11 +1980,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "fa60e14d-0f58-4164-8479-baefddde98b0",
-  "country": "",
+  "country": "Russia",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos tacho V1.1",
@@ -1950,11 +2012,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ru"
  },
  {
   "id": "a190baea-ff59-445d-8bbc-effe26d31c9d",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph v3.0",
@@ -1981,11 +2044,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "it"
  },
  {
   "id": "3fee844d-22d3-4b5d-903c-320c2947bff9",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tachograph Generation 2 MAV4.0.1 - EWG",
@@ -2012,11 +2076,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "155a91d8-4559-4c89-a824-357fb22da1f4",
-  "country": "",
+  "country": "Sweden",
   "country_flag": "",
   "generation": "G1",
   "application": "PWPW GE and AZ Tach G1 Cards v1.3",
@@ -2043,11 +2108,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "se"
  },
  {
   "id": "8a4acba7-f67c-4944-bb87-7575f8f33dab",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "Imprimerie Nationale Cards",
@@ -2074,11 +2140,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "2fb3055b-0f50-468d-bf3d-8b9a992a76cb",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G2.2",
   "application": "Smart Tachograph G2V2 - Infineon SLC37",
@@ -2105,11 +2172,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "cz"
  },
  {
   "id": "741f2d37-090d-4a05-8ae7-c4030faf854e",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Smart T. card J - Version 1.1 128/64 R1.2",
@@ -2136,11 +2204,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "93b82cc6-9865-4dd6-ac4c-76bf6dcaad4b",
-  "country": "",
+  "country": "Germany",
   "country_flag": "",
   "generation": "G1",
   "application": "Tru/cos Version 1.1 cards",
@@ -2167,11 +2236,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "20c94e90-b571-4959-8b4b-6504e693e1b8",
-  "country": "",
+  "country": "Czechia",
   "country_flag": "",
   "generation": "G1",
   "application": "Digital Tachograph Cards based on STARCOS 3.4 ID",
@@ -2198,11 +2268,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "cz"
  },
  {
   "id": "37de8dd4-2bf5-4fbd-9f68-b81116180736",
-  "country": "",
+  "country": "Spain",
   "country_flag": "",
   "generation": "G1",
   "application": "STARCOS 3.4 ID Tachograph",
@@ -2229,11 +2300,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "ed99e65e-58cb-44e6-82e3-db20a67b76a8",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3",
@@ -2260,11 +2332,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "aafd9fbd-74e3-454e-8a55-12f47f3ad6b8",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "Imprimerie Nationale Cards",
@@ -2291,11 +2364,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "ff26f755-40a5-4e02-a4cb-8e00352260af",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "Smart Tachograph G2 Version 2.0.1.G on MultiApp V4.0.1",
@@ -2322,11 +2396,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "bdcefc5f-a5af-4811-b887-6c8ce02f7a50",
-  "country": "",
+  "country": "United Kingdom",
   "country_flag": "",
   "generation": "G1",
   "application": "MultiApp ID Tachograph V1.3 cards",
@@ -2353,11 +2428,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gb"
  },
  {
   "id": "f5cab370-e121-47a1-952a-4b4941d9bc8e",
-  "country": "",
+  "country": "France",
   "country_flag": "",
   "generation": "G1",
   "application": "M256LFCHRON_SI_A5_05_01 rev.B",
@@ -2384,11 +2460,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "449c3aa9-ea29-499b-a388-e983f9774683",
-  "country": "",
+  "country": "Netherlands",
   "country_flag": "",
   "generation": "G2.1",
   "application": "NTS Smart Tachograph Card G2 v1.0",
@@ -2415,11 +2492,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "8423de90-3ba1-43e5-9f9a-bc483a3c6d4a",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G2.2",
   "application": "G2v2 tachograph cards SmartTacho V4.0 - J-TACHOG2V2 v1.0.2",
@@ -2446,11 +2524,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "it"
  },
  {
   "id": "33a0650f-34a1-4f1c-9715-e9f253eef516",
-  "country": "",
+  "country": "Italy",
   "country_flag": "",
   "generation": "G1",
   "application": "SmartTacho V3.1",
@@ -2477,11 +2556,12 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "it"
  },
  {
   "id": "e3e43f5e-2676-47c5-b019-b4fd78a6ac4c",
-  "country": "",
+  "country": "Cyprus",
   "country_flag": "",
   "generation": "G1",
   "application": "M256LFCHRON_SLA5_05_01",
@@ -2508,7 +2588,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "cy"
  },
  {
   "id": "26ef42d1-c71c-41af-92bb-a26588670314",
@@ -2539,7 +2620,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "AETR country. Current G2V2 approval publicly documented by JRC.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "al"
  },
  {
   "id": "05f912a3-060b-4167-b00d-53907c253ce7",
@@ -2570,7 +2652,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. Current G1 card approval documented in the 2026 JRC list.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "am"
  },
  {
   "id": "7029e255-f1bc-4d4c-9c06-d6837e48a3cb",
@@ -2601,7 +2684,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "94d6dbad-c1a3-41c2-b6cc-1d2916970b12",
@@ -2632,7 +2716,8 @@
   "procurement_scope": "Austria Card as manufacturer is not sufficient procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Corrected: Tachosmart Austria G2V2 uses Security Certificate ANSSI-CC-2022/38 and Maintenance Report M01. This certificate belongs to the THALES DIS-developed Tachograph G2V2 platform on Infineon IFX_CCI_000039H. Austria Card remains the card manufacturer and integrator.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "at"
  },
  {
   "id": "c945df2c-6164-41d7-ae41-b337f9dbb333",
@@ -2663,7 +2748,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "001a087a-9b1d-4e11-a28a-1f71c0532bb9",
@@ -2694,7 +2780,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "b66c185d-2085-4cc7-a243-04e29aae222b",
@@ -2725,7 +2812,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "00656842-7616-4312-963c-576d72c99916",
@@ -2756,7 +2844,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "e9e435cc-ac17-4569-872b-79f8f020eac1",
@@ -2787,7 +2876,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "e7be8a93-5a90-4e77-ab2b-f9dbf787927d",
@@ -2818,7 +2908,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "at"
  },
  {
   "id": "e90e2dfb-9448-4b49-9022-8340c2276e47",
@@ -2849,7 +2940,8 @@
   "procurement_scope": "",
   "tender_source": "https://unece.org/transport/contracting-parties",
   "verification_note": "AETR country. No clearly attributable current JRC card approval identified during this review.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "az"
  },
  {
   "id": "10e0f74d-0410-4e0b-9e5d-f0ab46ed77fb",
@@ -2880,7 +2972,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "by"
  },
  {
   "id": "7b2cc926-406c-4226-bb81-5ece21b7eb21",
@@ -2911,7 +3004,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "Legacy G1 approval documented; no current replacement approval identified.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "by"
  },
  {
   "id": "60027064-9e41-45e5-ae78-9559ab60aecd",
@@ -2942,7 +3036,8 @@
   "procurement_scope": "Thales supplies the cards and also performs personalization. The procedure found in 2025 concerns support, operation, optimization, or redevelopment of the overall technical system.",
   "tender_source": "Technical information provided by the user; supplemented by the Belgian procurement procedure identified in 2025",
   "verification_note": "Card supplier: Thales. Personalization: also performed by Thales. The supply and personalization structure is technically confirmed; a formal public award notice is tracked separately.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "be"
  },
  {
   "id": "93ead070-b370-4332-8a76-640bb16f8d25",
@@ -2973,7 +3068,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "AETR Balkan country with a documented G2 smart tachograph card approval.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ba"
  },
  {
   "id": "70e59062-38ec-4c53-93f6-d5d553e30cbf",
@@ -3004,7 +3100,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ba"
  },
  {
   "id": "8337e88f-22a1-43a4-8722-0fb59de53395",
@@ -3035,7 +3132,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ba"
  },
  {
   "id": "a10986b3-a214-4c72-a63c-abb5f7a0b18f",
@@ -3066,7 +3164,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "bg"
  },
  {
   "id": "e83c7d6e-ad71-4588-92c0-1107c2f2d8d6",
@@ -3097,7 +3196,8 @@
   "procurement_scope": "The Type Approval documents the product combination, not the procurement procedure",
   "tender_source": "JRC Type Approval plus national procurement search",
   "verification_note": "Documented; not e34-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "bg"
  },
  {
   "id": "854ce889-e4aa-49d4-8c03-e6441a494e2e",
@@ -3128,7 +3228,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "bg"
  },
  {
   "id": "df86b477-c2af-464c-9289-ae30fffef3ff",
@@ -3159,7 +3260,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "bg"
  },
  {
   "id": "a34436e7-5da8-41c4-bfa0-360c6d888b8a",
@@ -3190,7 +3292,8 @@
   "procurement_scope": "AKD produces/develops tachograph cards; no conventional procurement procedure found",
   "tender_source": "Public AKD/procurement search; no clear contract award notice",
   "verification_note": "Documented.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "hr"
  },
  {
   "id": "57f85884-1851-4e8a-8559-4435da0ae4b2",
@@ -3221,7 +3324,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hr"
  },
  {
   "id": "7dadda02-b6dd-468f-977b-16e7aab3659c",
@@ -3252,7 +3356,8 @@
   "procurement_scope": "PWPW/CERTSIGN product reference is not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; not e37-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "cy"
  },
  {
   "id": "a4059dbc-ed7b-4940-9c6f-25b4b7252279",
@@ -3283,7 +3388,8 @@
   "procurement_scope": "Contact chip modules; the Thales G2V2 solution received preferred technical weighting",
   "tender_source": "https://ted.europa.eu/cs/notice/634227-2025/pdfs",
   "verification_note": "Documented.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "cz"
  },
  {
   "id": "c6757130-87d9-40fd-ab08-e279a1cefbf1",
@@ -3314,7 +3420,8 @@
   "procurement_scope": "G2V2 production, personalization and distribution; contract value approx. DKK 15,801,945",
   "tender_source": "https://www.tenderlake.com/notice/tender/fad2a677-1ecc-493e-beb5-0cb678811908/id-cards/3d937dd3-fe74-4b94-8abd-42a768711bf3?lg=EN",
   "verification_note": "Documented.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "dk"
  },
  {
   "id": "e71a983f-ca3c-42e0-a697-aba90645d6fa",
@@ -3345,7 +3452,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ee"
  },
  {
   "id": "dfb88db6-391b-4d54-b592-65d172ac8609",
@@ -3376,7 +3484,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ee"
  },
  {
   "id": "8dce4bd9-d967-447f-be43-3244badb3a96",
@@ -3407,7 +3516,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ee"
  },
  {
   "id": "00253679-c876-49db-9cd9-7e406fafef27",
@@ -3438,7 +3548,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ee"
  },
  {
   "id": "faff3e62-a06b-4396-94ec-dc8334c7e040",
@@ -3469,7 +3580,8 @@
   "procurement_scope": "Not usable as a current G2V2 procurement reference",
   "tender_source": "https://vm.ee/en/node/10807",
   "verification_note": "Newer approval than e4-0041-00/-01; do not record SmartMX3 definitively without certificate evidence.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ee"
  },
  {
   "id": "aa1a7880-6e8f-40bc-aa85-79c543132588",
@@ -3500,7 +3612,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ee"
  },
  {
   "id": "e7488376-e4d8-4b01-be76-46b06c5de92a",
@@ -3531,7 +3644,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fi"
  },
  {
   "id": "18a99be0-be8d-44ce-be3f-22e19b6a3fbc",
@@ -3562,7 +3676,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fi"
  },
  {
   "id": "df01e5f8-77fc-417f-b2ad-2f57e1b5f973",
@@ -3593,7 +3708,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fi"
  },
  {
   "id": "58ab22ba-a60d-4ff5-80ae-3fac6a83edbb",
@@ -3624,7 +3740,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fi"
  },
  {
   "id": "72978d4e-0c59-4a19-ab2d-d29190fe02ca",
@@ -3655,7 +3772,8 @@
   "procurement_scope": "Traficom issuance documented; production procurement not publicly attributable",
   "tender_source": "https://traficom.fi/sv/sakerhet-och-tillsyn-inom-vagtrafiken/digital-fardskrivare-och-fardskrivarkort",
   "verification_note": "Multiple valid product approvals; the current issuance must be reconciled with national procurement.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "fi"
  },
  {
   "id": "8f1ca412-b50d-4a74-a165-0fa4af9bc822",
@@ -3686,7 +3804,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fi"
  },
  {
   "id": "2ec93956-e9b0-4539-aa72-dab21f65eb20",
@@ -3717,7 +3836,8 @@
   "procurement_scope": "State-affiliated issuing structure; the operator is not automatically the tender winner",
   "tender_source": "https://www.chronoservices.fr/fr/carte-chronotachygraphe.html",
   "verification_note": "Updated to the latest France-specific G2V2 entry published by JRC in 2024.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "fr"
  },
  {
   "id": "fd35403e-c2f0-4660-bc94-1eaa310eef59",
@@ -3748,7 +3868,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "efbb9701-36f2-4a3f-8c53-4ca39e835765",
@@ -3779,7 +3900,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "f454d80c-1443-4d57-859e-83426114d692",
@@ -3810,7 +3932,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "fr"
  },
  {
   "id": "b647c0c4-7e71-46c7-be29-1982d3da5b64",
@@ -3841,7 +3964,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. Current G1 approval listed by JRC in 2026.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ge"
  },
  {
   "id": "ae14e0d9-8660-429f-9f97-6865130e27f5",
@@ -3872,7 +3996,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "b642f27d-e475-4258-867f-dd5c2c82860d",
@@ -3903,7 +4028,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "c5df2191-04e6-4306-949b-7afd1d6153e0",
@@ -3934,7 +4060,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "de"
  },
  {
   "id": "9fac49c2-9f57-451e-a020-673d15c148ad",
@@ -3965,7 +4092,8 @@
   "procurement_scope": "Distinction between card supply and personalization infrastructure. Thales supplies the cards; Mühlbauer provides the personalization machines.",
   "tender_source": "Technical information provided by the user; eVergabe/TED/KBA award evidence remains open",
   "verification_note": "Card supplier: Thales. Personalization machines/infrastructure: Mühlbauer. This information is based on technical information provided by the user; a public procurement or award document for Germany still has to be verified separately.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "de"
  },
  {
   "id": "6c5014ba-0fa8-42cb-a359-67db97d6befa",
@@ -3996,7 +4124,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "gr"
  },
  {
   "id": "c4be1d9a-d556-474b-95c1-ca677ef27253",
@@ -4027,7 +4156,8 @@
   "procurement_scope": "Austria Card product reference is not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; not e23-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "gr"
  },
  {
   "id": "0845b43f-96cf-47d4-b1c4-57e64a59c106",
@@ -4058,7 +4188,8 @@
   "procurement_scope": "AKD historically supplied G2V1 cards in the EU context; no current G2V2 procurement documented",
   "tender_source": "Public manufacturer/procurement search; no clear current G2V2 procurement",
   "verification_note": "Nicht mit dem alten G1-Typ e7-0002 verwechseln. Review-pflichtig.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "hu"
  },
  {
   "id": "27481975-a2c8-4816-9686-37c104468328",
@@ -4089,7 +4220,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hu"
  },
  {
   "id": "12fd03cf-80fe-4a98-87b9-1d3bfd3a18aa",
@@ -4120,7 +4252,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hu"
  },
  {
   "id": "ecb37b27-2550-41d9-878b-432c3659d6e0",
@@ -4151,7 +4284,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hu"
  },
  {
   "id": "3f08ff9c-fdd0-47b3-baac-cb260e419e59",
@@ -4182,7 +4316,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "hu"
  },
  {
   "id": "562896cb-f190-490d-aae2-40a7860e59b5",
@@ -4213,7 +4348,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "is"
  },
  {
   "id": "1db7d894-2f1d-46e1-892a-2b7625e690fb",
@@ -4244,7 +4380,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Uploaded Swedish type approval confirms G2.2/G2V2 for Iceland, all four card types, model G2V2 v2.2.1.N on IFX_CCI_000039H, approval dated 30.01.2026.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "is"
  },
  {
   "id": "ce16392d-2cd3-467f-b911-e4b49b9de802",
@@ -4275,7 +4412,8 @@
   "procurement_scope": "Tachograph cards including certificate generation, test cards, and sample cards; no contract award notice found",
   "tender_source": "https://www.etenders.gov.ie/epps/pmc/viewPmc.do?resourceId=5695211",
   "verification_note": "Documented; not e24-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ie"
  },
  {
   "id": "28e3781b-0b3a-4b7a-b995-98b7dcc1a641",
@@ -4306,7 +4444,8 @@
   "procurement_scope": "",
   "tender_source": "https://unece.org/transport/road-transport",
   "verification_note": "Israel acceded to AETR in August 2025; no clearly attributable current JRC card approval identified.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "il"
  },
  {
   "id": "d53df3a5-7478-455e-9d34-ce06b222bde9",
@@ -4337,7 +4476,8 @@
   "procurement_scope": "STMicroelectronics/Incard is a manufacturer reference, not automatically the procurement winner",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; the previous row was unnecessarily left open.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "it"
  },
  {
   "id": "ba2c3dfc-a675-47ea-b16e-1cda230547ab",
@@ -4368,7 +4508,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "kz"
  },
  {
   "id": "839ea47f-dd64-4ccd-97c9-080eb3d79861",
@@ -4399,7 +4540,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "kz"
  },
  {
   "id": "1c8698f8-4456-4662-b90a-724834d33fb1",
@@ -4430,7 +4572,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. Current card approval and generation require national verification.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "kz"
  },
  {
   "id": "579eae7a-584d-4357-8493-07b1f07c43e9",
@@ -4461,7 +4604,8 @@
   "procurement_scope": "",
   "tender_source": "https://asiatachocard.kg/eng",
   "verification_note": "AETR country. G2V2 approval and local production organisation documented.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "kg"
  },
  {
   "id": "57c78202-08f9-4c7e-8db0-508468122209",
@@ -4492,7 +4636,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "lv"
  },
  {
   "id": "43a05ed6-8693-4f80-9c35-00fa8a1ea826",
@@ -4523,7 +4668,8 @@
   "procurement_scope": "Production, personalization, certification, and supply of G2V2 tachograph cards; value approx. EUR 1,155,000",
   "tender_source": "https://www.smartcardstenders.com/id-cardtenders.php",
   "verification_note": "Documented; not e32-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "lv"
  },
  {
   "id": "f515a1e7-7478-4408-b6f9-e5b6612dc98c",
@@ -4554,7 +4700,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "li"
  },
  {
   "id": "a1217b99-4d39-479c-8c73-10afd620c12b",
@@ -4585,7 +4732,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/PDF_Card/e1-00022-00.pdf",
   "verification_note": "Shared Swiss/Liechtenstein G2V2 approval; country allocation stated in the approval annex.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "li"
  },
  {
   "id": "49fd83e6-5455-43a4-b127-c0e58b95558d",
@@ -4616,7 +4764,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "li"
  },
  {
   "id": "a0584a86-282e-49c2-84c1-0f3bb274e825",
@@ -4647,7 +4796,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "lt"
  },
  {
   "id": "59f81e18-062d-4364-818e-911d546a9f8c",
@@ -4678,7 +4828,8 @@
   "procurement_scope": "Thales product reference is not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; not e36-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "lt"
  },
  {
   "id": "f51ddff1-5c92-41b8-83cc-3a28e871c27b",
@@ -4709,7 +4860,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "lt"
  },
  {
   "id": "26a248ef-e7e9-4f50-a3eb-159d65ae60f2",
@@ -4740,7 +4892,8 @@
   "procurement_scope": "IDEMIA/SNCH allocation plausible, but no procurement demonstrated",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Plausible shared NL/LU solution; the current country-specific G2V2 reference is not explicitly stated in the publicly listed title.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "lu"
  },
  {
   "id": "24d0d077-8992-497e-98d1-f02f4814f27b",
@@ -4771,7 +4924,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "lu"
  },
  {
   "id": "9dab093d-5d59-46dc-ba58-9e02f425de4d",
@@ -4802,7 +4956,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mt"
  },
  {
   "id": "8c43cf6c-4866-472d-bcb8-671db0b22f52",
@@ -4833,7 +4988,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mt"
  },
  {
   "id": "15aefe63-b3ee-4ba7-8e9f-d53ff7f72803",
@@ -4864,7 +5020,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mt"
  },
  {
   "id": "eb52405d-155a-4d85-ba4d-e2428e8437e9",
@@ -4895,7 +5052,8 @@
   "procurement_scope": "IN Groupe product reference is not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; not e50-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "mt"
  },
  {
   "id": "347e1d9a-a6fd-46c1-a138-25634ab81ba3",
@@ -4926,7 +5084,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "md"
  },
  {
   "id": "1652540f-040c-45da-bd4d-e65ee70e6b07",
@@ -4957,7 +5116,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Current JRC-listed G1 revision e4-AETR-0005-01 retained. Uploaded predecessor e4*AETR*3821/85*0005*00 confirms G1 v1.6 [2.2.1.N], Annex IA/IB, JRC DTLab/A3-156/2023 and RDW-AETR-0121197. Older G1 v1.5 approvals include e4*AETR*3821/85*0002*00 and the multi-country tru/cos tacho V1.1-AETR approval e1*232*04.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "md"
  },
  {
   "id": "bf70bec6-fc2f-48f4-b1bd-bc8b4ed6d640",
@@ -4988,7 +5148,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "md"
  },
  {
   "id": "3e3262ee-5e57-48e9-ad59-8853e695e487",
@@ -5019,7 +5180,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "md"
  },
  {
   "id": "8373213c-b7c7-48c7-8a9f-6f750d79489a",
@@ -5050,7 +5212,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mc"
  },
  {
   "id": "c8e41dd9-3019-4d2d-b6a7-d3e10311eb0c",
@@ -5081,7 +5244,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. No clearly attributable current JRC card approval identified.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "mc"
  },
  {
   "id": "a742dae8-526d-4236-84b6-519595300ce7",
@@ -5112,7 +5276,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR Balkan country. No clearly attributable current JRC card approval identified during this review.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "me"
  },
  {
   "id": "55083e00-51f5-438e-960b-ef5651f5b1c1",
@@ -5143,7 +5308,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "2adb9786-5ef6-43b9-a91d-1c0366931864",
@@ -5174,7 +5340,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "cc15dff3-5f4a-4d4c-8f16-78952898ad18",
@@ -5205,7 +5372,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "22f27dfd-f9ee-4481-b3a0-16eea12e3d62",
@@ -5236,7 +5404,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "ef2a1cf7-1748-478d-9097-05bbd840275a",
@@ -5267,7 +5436,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "272a9432-dcae-4658-89d4-4011d64ed897",
@@ -5298,7 +5468,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "8560372d-2a30-4cc9-9484-ee19aba4345d",
@@ -5329,7 +5500,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "5475fd4b-2727-4331-92a9-5b6444b9aea5",
@@ -5360,7 +5532,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "b4eab014-3b78-4686-827b-6eb6b3f4e71a",
@@ -5391,7 +5564,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "f58958c9-7a8c-4791-a5a7-00afc6a25420",
@@ -5422,7 +5596,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "8e646e63-d404-4927-99b5-ecb95d727d8a",
@@ -5453,7 +5628,8 @@
   "procurement_scope": "Kiwa is the issuing authority; procurement of card production has not been verified",
   "tender_source": "https://www.kiwaregister.com/nl/land/smart-tachograaf",
   "verification_note": "Updated to the latest clearly attributable Netherlands G2V2 entry published by JRC in 2024.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "nl"
  },
  {
   "id": "f3b9f56e-9c6b-4f72-8938-2bc4e47e41e4",
@@ -5484,7 +5660,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "e8c6c4e7-47f8-4fb8-a0e9-d0149af86b9a",
@@ -5515,7 +5692,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "nl"
  },
  {
   "id": "36058d40-a2d4-4b26-bc4b-69782f4d8e49",
@@ -5546,7 +5724,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mk"
  },
  {
   "id": "4179aced-7796-4763-8f5d-b5c2dd85e4d7",
@@ -5577,7 +5756,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Uploaded approval e4*AETR*3821/85*0004*01 confirms G1 v1.5 for North Macedonia, Annex IA/IB, JRC_DTLab/A3-152/2022, approval date 15.03.2024. The older multi-country Thales tru/cos tacho V1.1-AETR approval e1*232*04 also covered MK.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "mk"
  },
  {
   "id": "8c1713e9-7394-48d0-8a44-d7f4ec94a162",
@@ -5608,7 +5788,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "mk"
  },
  {
   "id": "70a7d297-14be-4d8d-b555-3cc160197a12",
@@ -5639,7 +5820,8 @@
   "procurement_scope": "Production, personalization and distribution of Norwegian tachograph cards",
   "tender_source": "https://eu.eu-supply.com/ctm/Supplier/PublicPurchase/411487/1/1",
   "verification_note": "A more recent revision than e4-0033-00 from 2023 was found.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "no"
  },
  {
   "id": "c25f5f57-a6a1-4013-8e2f-de6f4e2069b0",
@@ -5670,7 +5852,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "pl"
  },
  {
   "id": "fb4fa9b5-7bb3-4bec-bb8e-f88f290920a5",
@@ -5701,7 +5884,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "pl"
  },
  {
   "id": "63f1008c-6504-4842-9e50-a03678a3cdd6",
@@ -5732,7 +5916,8 @@
   "procurement_scope": "PWPW produces and operates central system components; tender date not demonstrated",
   "tender_source": "https://www.pap.pl/centrum-prasowe/469111%2Cpwpw-wydaje-karty-2-generacji-do-tachografow-inteligentnych.html",
   "verification_note": "Documented; not e20-…. Shared product package with Bulgaria.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "pl"
  },
  {
   "id": "3fe6e58d-3239-4094-8fc5-71a226ff5d1d",
@@ -5763,7 +5948,8 @@
   "procurement_scope": "IMT is the issuing authority; production/personalization procurement not verified",
   "tender_source": "https://www.imt-ip.pt/rodoviario/infraestruturas-rodoviarias/registo-eletronico-nacional/",
   "verification_note": "Documented; not merely a prefix estimate.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "pt"
  },
  {
   "id": "8400cc0b-97d0-407e-8214-bc875ec27034",
@@ -5794,7 +5980,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "pt"
  },
  {
   "id": "6144973f-2fb3-4c21-accd-f12491170413",
@@ -5825,7 +6012,8 @@
   "procurement_scope": "Thales supplies the cards; certSIGN performs personalization.",
   "tender_source": "Technical information provided by the user; national procurement/award evidence remains open",
   "verification_note": "Current G2.2 confirmed by functional certificate RDW-2016/799-0121412: Thales Digital Tachograph G2V2 v2.2.1.N on IFX_CCI_000039H for Romania. Historical predecessor: Thales Smart Tachograph G2 v2.0.1.G on MultiApp V4.0.1, functional certificate RDW-2016/799-0077875, chip SLE78CFX4000PH, security certificate ANSSI-CC-2018/11 and type approval e4*2016/799*2018/502*0006*00.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ro"
  },
  {
   "id": "388bfd0b-ccdf-44e7-b70b-fca27b0f660f",
@@ -5856,7 +6044,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ro"
  },
  {
   "id": "a57b50ba-ca52-4da9-a129-f66a8b869635",
@@ -5887,7 +6076,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ro"
  },
  {
   "id": "c346599c-afda-42a1-8937-55b58d80c2d7",
@@ -5918,7 +6108,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "Current AETR G1 approval exists, but the public JRC title does not explicitly name the destination country; allocation must be verified before treating it as Russia-specific.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ru"
  },
  {
   "id": "ab52e495-756f-41b7-a28c-fee79b7f2890",
@@ -5949,7 +6140,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Current public JRC record found for G1 cards.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "sm"
  },
  {
   "id": "0ac8bf06-13f9-40c4-bf04-f77aa14e83bc",
@@ -5980,7 +6172,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "rs"
  },
  {
   "id": "516e38fb-55c4-483f-bc83-b567ed2eac69",
@@ -6011,7 +6204,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/PDF_Card/e10-003.pdf",
   "verification_note": "AETR Balkan country with a documented G2 smart tachograph card approval.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "rs"
  },
  {
   "id": "0e5e7da1-7e2d-49aa-98f2-262946c97be9",
@@ -6042,7 +6236,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "rs"
  },
  {
   "id": "6e8b934f-a3b5-4ca4-815c-b93ccd2148fc",
@@ -6073,7 +6268,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "sk"
  },
  {
   "id": "7f1cd0aa-3785-4bc5-95e2-7f6f6c048fe2",
@@ -6104,7 +6300,8 @@
   "procurement_scope": "Thales product reference is not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Documented; not e27-….",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "sk"
  },
  {
   "id": "0b86a9d6-a9e5-449a-bf29-f69a93b7ad42",
@@ -6135,7 +6332,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "sk"
  },
  {
   "id": "cd89807a-c28b-4947-9e30-877cd0666830",
@@ -6166,7 +6364,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "si"
  },
  {
   "id": "a20927cb-3945-4e4d-83e3-7f7ae948fb01",
@@ -6197,7 +6396,8 @@
   "procurement_scope": "CETIS is a product/manufacturer reference, but not procurement evidence",
   "tender_source": "National-language and English web search; no clear current award",
   "verification_note": "Updated to the latest Slovenia-specific G2V2 entry published by JRC in 2024.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "si"
  },
  {
   "id": "e4479ad1-1726-4420-89f2-41eac6686c4d",
@@ -6228,7 +6428,8 @@
   "procurement_scope": "A regional individual procurement must not be equated with national card production",
   "tender_source": "https://gd.aragon.es/cgi-bin/CONT/BRSCGI?BASE=CONT&CMD=VERLST&SEC=CONT_PUBL&SORT=-EJER&docs=1-100",
   "verification_note": "Approval and JRC status documented; laboratory information from the original table was not supported by the JRC title data.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "es"
  },
  {
   "id": "35e6bc5c-d060-4de3-b261-4ba1147fb5eb",
@@ -6259,7 +6460,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "es"
  },
  {
   "id": "4a849db5-2372-4889-90f5-ad924cc6fe5c",
@@ -6290,7 +6492,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "se"
  },
  {
   "id": "4dba1926-e47a-4b81-a75d-b199f6fc7c06",
@@ -6321,7 +6524,8 @@
   "procurement_scope": "The dataset requires further manual review in the Swedish procurement portal or access to the underlying documents",
   "tender_source": "https://app.pabliq.se/procurements/ecbeaac8-5eba-4d38-981e-14d0e22bb777",
   "verification_note": "Revision 01 documented; replaces/supplements e4-0029-00.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "se"
  },
  {
   "id": "03442585-af3a-411a-b8f2-9c796b8699a3",
@@ -6352,7 +6556,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/PDF_Card/e1-00022-00.pdf",
   "verification_note": "Current shared CH/FL G2.2 approval remains e1-00022-00. Historical evidence: Thales tru/cos tacho V1.1-AETR approval e1*232*04 covered Swiss card variants under Appendix/Annex IB together with UA, MD, MK, UZ and TJ.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ch"
  },
  {
   "id": "c2962caf-b1d9-4887-a5da-1da9e67f0f9d",
@@ -6383,7 +6588,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ch"
  },
  {
   "id": "ed01e10c-44cf-48c8-a818-9b4f145f1609",
@@ -6414,7 +6620,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Uploaded approval e4*AETR*3821/85*0006*00 confirms G1 v1.6 for Tajikistan, Annex IA/IB, JRC_DTLab/A3-183/2025 and approval date 24.02.2026. An older Thales tru/cos tacho V1.1-AETR approval e1*232*04 also included TJ.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "tj"
  },
  {
   "id": "96665929-a9c6-4e6d-bced-56ed8b735102",
@@ -6445,7 +6652,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "tr"
  },
  {
   "id": "271de34a-c2c8-4824-a0be-90153006ca9e",
@@ -6476,7 +6684,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. Current G1 card approval documented in 2026.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "tr"
  },
  {
   "id": "785b163c-aa3f-4b2c-a1e1-07f8e62948eb",
@@ -6507,7 +6716,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   "verification_note": "AETR country. No clearly attributable current JRC card approval identified.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "tm"
  },
  {
   "id": "597edfcd-e4c0-4451-8fb8-533a921d3d06",
@@ -6538,7 +6748,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "ua"
  },
  {
   "id": "6860c598-a1f1-4588-89e6-38c790b9758b",
@@ -6569,7 +6780,8 @@
   "procurement_scope": "",
   "tender_source": "https://transport.ec.europa.eu/news-events/news/road-transport-eu-and-ukraine-sign-decision-extend-smart-tachograph-ukrainian-hauliers-2025-01-17_en",
   "verification_note": "Uploaded current approval confirms G2.2/G2V2 for Ukraine with JRC DTLab/A3-156/2023. Historical predecessor: G1 v1.5 approval e4*AETR*3821/85*0001*00, RDW-AETR-0115671, JRC_DTLab/A3-152/2022 and ANSSI-CC-2018/11. The older e1*232*04 approval also covered UA.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "ua"
  },
  {
   "id": "9cc0ef88-ee01-4d97-9cf5-2075f9a17be4",
@@ -6600,7 +6812,8 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Non-EU AETR country with a current G2V2 approval.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "gb"
  },
  {
   "id": "d7db1d5e-cc3a-4f9e-a85d-530e0be50aee",
@@ -6631,7 +6844,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "uz"
  },
  {
   "id": "897d736d-ce93-4702-913f-d54710a3c86b",
@@ -6662,7 +6876,8 @@
   "procurement_scope": "",
   "tender_source": "",
   "verification_note": "",
-  "data_reference_date": "2026-09-02"
+  "data_reference_date": "2026-09-02",
+  "iso": "uz"
  },
  {
   "id": "c16a9daf-e406-4bee-b0c4-9fbff128bab9",
@@ -6693,6 +6908,7 @@
   "procurement_scope": "",
   "tender_source": "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
   "verification_note": "Uploaded approval confirms current G1 v1.6 for Uzbekistan, Annex IA/IB, JRC DTLab/A3-156/2023 and approval date 02.04.2025. Historical predecessor: G1 v1.5 approval e4*AETR*3821/85*0003*00 with RDW-AETR-0121194 and JRC_DTLab/A3-152/2022. The older e1*232*04 approval also covered UZ.",
-  "data_reference_date": "2026-07-15"
+  "data_reference_date": "2026-07-15",
+  "iso": "uz"
  }
 ]
