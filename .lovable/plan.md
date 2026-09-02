@@ -93,15 +93,26 @@ in-container localhost DB) + the existing `SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY
 and `VITE_SUPABASE_*` vars the node build needs (VITE_* baked at build time,
 SUPABASE_* at runtime for auth).
 
-### 7. `DEPLOYMENT.md`
+### 7. GitHub Actions: build + push image (`.github/workflows/build-web.yml`)
+On push to `main` and on manual dispatch: build `Dockerfile.web` with
+`NITRO_PRESET=node-server` and the `VITE_SUPABASE_*` values (from GitHub repo
+secrets), tag and push to `ghcr.io/<org>/tdh-web:latest` (and `:sha`). Uses
+`GITHUB_TOKEN` with `packages: write`. No build runs on the homelab — it only
+pulls the finished image.
+
+### 8. `DEPLOYMENT.md`
 New section "Web-Version (Vollversion) als Ein-Container (HTTPS, Homelab/DMZ)"
-with step-by-step: clone → `.env` anpassen (`SUPABASE_*`) →
-`docker build -f Dockerfile.web -t tdh-web .` → Testmodus:
-`docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data tdh-web` →
-Browser auf `https://<host>` (Self-Signed-Warnung bestätigen) → Live:
-OPNsense-ACME-Certs via `-v ./certs:/certs:ro` mounten → Sign-in via Lovable
-Cloud → egress 443 in der OPN-Firewall für Auth + JRC/TED freigeben →
-Hinweise zum lokalen Cron-Endpunkt und zum Neustart/Reset des Daten-Volumes.
+with two paths:
+- **Via GitHub (empfohlen)**: Repo-Secrets `VITE_SUPABASE_*` anlegen → Workflow
+  baut & pusht nach `ghcr.io/<org>/tdh-web` → Homelab: `docker pull` +
+  `docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data -v ./certs:/certs:ro
+  -e SUPABASE_URL=... -e SUPABASE_PUBLISHABLE_KEY=... ghcr.io/<org>/tdh-web`.
+- **Lokal bauen**: `.env` anpassen → `docker build -f Dockerfile.web -t tdh-web .`
+  → `docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data tdh-web`.
+Beide: Browser auf `https://<host>` (Self-Signed im Test, OPNsense-ACME-Certs im
+Live) → Sign-in via Lovable Cloud → egress 443 in der OPN-Firewall für Auth +
+JRC/TED freigeben → Hinweise zum lokalen Cron-Endpunkt und zum Reset des
+Daten-Volumes.
 
 ## Testing limits (honest)
 - The Lovable sandbox forces the Cloudflare Nitro preset, so a `node-server`
