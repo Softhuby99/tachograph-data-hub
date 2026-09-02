@@ -453,7 +453,7 @@ export const UPDATE_SOURCE_ORDER = [
 ] as const;
 
 export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
-  const cardRows = (await getCardsForJrc()) as (CardRow & { data_reference_date: string })[];
+  const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
     const t = Date.parse(c.data_reference_date ?? "");
     return Number.isNaN(t) ? acc : Math.max(acc, t);
