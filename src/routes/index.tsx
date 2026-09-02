@@ -354,15 +354,16 @@ function TachographTool() {
               <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
             <span className="mx-1 h-8 w-px bg-border" />
-            {auth.session ? (
-              <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
-                Sign out
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/auth">Sign in</Link>
-              </Button>
-            )}
+            {authEnabled &&
+              (auth.session ? (
+                <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
+                  Sign out
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/auth">Sign in</Link>
+                </Button>
+              ))}
           </div>
         </div>
       </header>
