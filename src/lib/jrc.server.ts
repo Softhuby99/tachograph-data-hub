@@ -551,13 +551,8 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     } else if (source === "ted_procurement") {
       const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
       const notices = await fetchTedNotices();
-      const { data: procCards, error: procErr } = await supabaseAdmin
-        .from("tachograph_cards")
-        .select(
-          "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source",
-        );
-      if (procErr) throw new Error(procErr.message);
-      const candidates = buildTedProposals(notices, (procCards ?? []) as never, sinceMs);
+      const procCards = await dbGetCardsForTed();
+      const candidates = buildTedProposals(notices, procCards as never, sinceMs);
       const created = await insertProposals(candidates as unknown as ProposalInsert[]);
       result = {
         source,
