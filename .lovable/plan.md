@@ -61,15 +61,18 @@ Append `tachograph_card_overrides` + `cron_config` tables (copy schema from the
 existing Supabase migrations, no RLS needed locally — the app is trusted inside
 the container). Keep an optional pg_cron schedule pointing at localhost.
 
-### 5. Single Docker image (`Dockerfile.web`)
+### 5. Single Docker image (`Dockerfile.web`) — with HTTPS
 Multi-stage:
 1. Build stage: `bun install` → `NITRO_PRESET=node-server bun run build`
    → produces `.output/server/index.mjs`.
-2. Runtime stage: Node base image with PostgreSQL installed. A small
-   `supervisord` config starts `postgres` and `node .output/server/index.mjs`.
-   An entrypoint script inits the DB from `db/init.sql` on first boot, then
-   starts supervisord. App connects to `localhost:5432`. One port exposed
-   (8080). Data persisted via a Docker volume on the PG data dir.
+2. Runtime stage: Node base image with PostgreSQL + openssl installed. A small
+   `supervisord` config starts `postgres` and the Node app. An entrypoint
+   script: inits the DB from `db/init.sql` on first boot; uses a real cert
+   from a mounted `/certs/{fullchain,privkey}.pem` when present, else generates
+   a self-signed one; exports `NITRO_SSL_CERT`/`NITRO_SSL_KEY` so the Node
+   server serves HTTPS; then starts supervisord. App connects to
+   `localhost:5432`. HTTPS port 443 exposed. Data persisted via a Docker
+   volume on the PG data dir; certs via a mounted `/certs` volume.
 
 ### 6. `.env.example`
 Add `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` (defaults point at the
