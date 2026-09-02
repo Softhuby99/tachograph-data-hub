@@ -1008,25 +1008,30 @@ function openCountryModal(country) {
 }
 
 // ---------- Card info modal (draggable, resizable, scrollable) ----------
-function openCardModal(id) {
+var lastCountryModal = null;   // country name when opened from the country list modal
+function openCardModal(id, fromCountry) {
   closeCardModal();
   const base = DATA.find(x => x.id === id);
   if (!base) return;
   const r = merged(base);
+  if (fromCountry) lastCountryModal = fromCountry;
   const flag = r.iso ? '<img src="' + flagUrl(r.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
   const fieldHtml = ([k,label]) =>
     '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
+  const backBtn = lastCountryModal
+    ? '<button class="cm-back" onclick="openCountryModal(' + JSON.stringify(lastCountryModal) + ')" title="Back to list">&#8592; Back</button>'
+    : '';
   const win = document.createElement('div');
   win.className = 'card-modal';
   win.id = 'cardModal';
   win.innerHTML =
     '<div class="cm-head" id="cardModalHead">' +
-      flag + '<div class="cm-title"><b>' + esc(r.country) + '</b> · ' + esc(r.type_approval_number || '—') +
+      flag + backBtn + '<div class="cm-title"><b>' + esc(r.country) + '</b> · ' + esc(r.type_approval_number || '—') +
       ' <span class="badge">' + esc(r.generation || '') + '</span></div>' +
       '<button class="cm-close" onclick="closeCardModal()" title="Close">&times;</button>' +
     '</div>' +
     '<div class="cm-body">' +
-      '<div class="section"><div class="section-head"><h3>Card &amp; Certification (Group 1)</h3></div>' +
+      '<div class="section"><div class="section-head"><h3>Card & Certification (Group 1)</h3></div>' +
         fields1.map(fieldHtml).join('') + '</div>' +
       '<div class="section"><div class="section-head"><h3>Procurement (Group 2)</h3></div>' +
         fields2.map(fieldHtml).join('') + '</div>' +
