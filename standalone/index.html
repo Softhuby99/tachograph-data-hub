@@ -237,7 +237,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.7";
+const APP_VERSION = "2.8";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -271,8 +271,28 @@ const OVERRIDES_KEY = 'tacho-overrides-v1';
 function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}'); } catch { return {}; } }
 function saveOverrides(o) { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); }
 let overrides = loadOverrides();
+// One-time cleanup: drop empty values saved by older versions (e.g. country: '' from before the data repair).
+(function cleanOverrides() {
+  let changed = false;
+  for (const id of Object.keys(overrides)) {
+    const o = overrides[id];
+    for (const k of Object.keys(o)) {
+      if (o[k] == null || o[k] === '') { delete o[k]; changed = true; }
+    }
+    if (!Object.keys(o).length) { delete overrides[id]; changed = true; }
+  }
+  if (changed) saveOverrides(overrides);
+})();
 
-function merged(r) { return { ...r, ...(overrides[r.id] || {}) }; }
+function merged(r) {
+  const o = overrides[r.id] || {};
+  const m = { ...r, ...o };
+  // Old edits saved before the country-repair may contain empty fields — never let them blank out the base data.
+  for (const k of Object.keys(o)) {
+    if ((o[k] == null || o[k] === '') && r[k] != null && r[k] !== '') m[k] = r[k];
+  }
+  return m;
+}
 
 const $ = id => document.getElementById(id);
 const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
