@@ -376,7 +376,7 @@ function TachographTool() {
           <DataView
             cards={cards}
             overrides={overrides}
-            canEdit={!!auth.session}
+            canEdit={canEdit}
             onSave={saveOverride}
             onReset={resetOverride}
           />
