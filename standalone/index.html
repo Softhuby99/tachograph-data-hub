@@ -967,14 +967,15 @@ function mapLabel(country, xy, cards, showNumbers) {
 function openCountryModal(country) {
   closeCardModal();
   mapSelected = country;
+  const cCountry = "'" + country.replace(/'/g,"\\'") + "'";
   const cards = (mapCounts()[country] || []).slice()
     .sort((a,b) => String(a.type_approval_number||'').localeCompare(String(b.type_approval_number||'')));
   const first = cards[0] ? merged(cards[0]) : null;
   const flag = first && first.iso ? '<img src="' + flagUrl(first.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '';
   const rows = cards.map(c => {
     const r = merged(c);
-    return '<tr onclick="openCardModal(\'' + c.id + '\',' + country.replace(/'/g,"\'") + ')" style="cursor:pointer" title="Click for full details">' +
-      '<td><a href="#" class="ta-link" onclick="event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\',' + country.replace(/'/g,"\'") + ')">' + esc(r.type_approval_number || '\u2014') + '</a></td>' +
+    return '<tr onclick="openCardModal(\'' + c.id + '\',' + cCountry + ')" style="cursor:pointer" title="Click for full details">' +
+      '<td><a href="#" class="ta-link" onclick="event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\',' + cCountry + ')">' + esc(r.type_approval_number || '\u2014') + '</a></td>' +
       '<td><span class="badge">' + esc(r.generation || '\u2014') + '</span></td>' +
       '<td>' + esc(r.date_status || '\u2014') + '</td>' +
       '<td>' + esc(r.current_manufacturer_normalized || r.current_manufacturer || '\u2014') + '</td></tr>';
