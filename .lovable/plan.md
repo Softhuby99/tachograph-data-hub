@@ -118,5 +118,9 @@ New section "Web-Version (Vollversion) als Ein-Container (HTTPS, Homelab/DMZ)":
 - The Lovable preview keeps working (`DB_HOST` unset → Supabase path unchanged,
   login still active there).
 
-## Later (separate step, not in this plan)
-- Authentik/OIDC login via the `AUTH_MODE=oidc` branch in `auth.server.ts`.
+## Later — Schritt 2: Login via Authentik (separate, not in this plan)
+- `AUTH_MODE=oidc` branch in `src/lib/auth.server.ts`: OIDC-Verifizierung gegen
+  dein Authentik (Discovery, ID-Token, Session-Cookie). Die Serverfunktionen
+  bleiben unverändert, nur die zentrale Auth-Stelle wird ergänzt.
+- Optional: RBAC (Admin/Editor) über Authentik-Gruppen-Claims.
+- Erst danach: Header-Sign-in/-Sign-out-Button wieder aktivieren.
