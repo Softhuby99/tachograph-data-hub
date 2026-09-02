@@ -14,6 +14,22 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
+import {
+  getCardsForJrc as dbGetCardsForJrc,
+  getCardsForTed as dbGetCardsForTed,
+  getKnownFingerprints,
+  insertProposals as dbInsertProposals,
+  getSnapshots,
+  upsertSnapshots,
+  insertCheckRun,
+  getProposal,
+  getCardVerificationNotes,
+  updateCardVerificationNote,
+  updateCardFields,
+  insertCard,
+  updateProposalStatus,
+  type ProposalRow,
+} from "./db.server";
 
 export { JRC_SOURCES } from "./jrc-sources.server";
 export type { SourceKey } from "./jrc-sources.server";
