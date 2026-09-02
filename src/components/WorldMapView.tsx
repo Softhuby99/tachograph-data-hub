@@ -74,7 +74,7 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
     return map;
   }, [cards]);
 
-  const { shapes, markers } = useMemo(() => {
+  const { shapes, markers, labelPositions } = useMemo(() => {
     const topo = worldTopo as unknown as Parameters<typeof feature>[0];
     const geo = feature(
       topo,
@@ -98,7 +98,12 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
       const p = projection(lonlat);
       if (p) markers.push({ name, xy: [p[0], p[1]] });
     }
-    return { shapes, markers };
+    const labelPositions = new Map<string, [number, number]>();
+    for (const [name, lonlat] of Object.entries(LABEL_COORDINATES)) {
+      const p = projection(lonlat);
+      if (p) labelPositions.set(name, [p[0], p[1]]);
+    }
+    return { shapes, markers, labelPositions };
   }, []);
 
   /** Reverse alias lookup: atlas name -> app country name that has data. */
@@ -115,10 +120,10 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
     for (const s of shapes) {
       const app = atlasToApp.get(s.name);
       if (!app) continue;
-       const adjusted = LABEL_COORDINATES[app];
+       const adjusted = labelPositions.get(app);
        out.push({
          country: app,
-         xy: adjusted ? (projection(adjusted) as [number, number]) : s.centroid,
+         xy: adjusted ?? s.centroid,
          cards: counts.get(app) ?? [],
        });
     }
@@ -128,7 +133,7 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
       out.push({ country: m.name, xy: m.xy, cards: list });
     }
     return out;
-  }, [shapes, markers, atlasToApp, counts]);
+  }, [shapes, markers, labelPositions, atlasToApp, counts]);
 
   // Native, non-passive wheel handling (React onWheel is passive).
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
