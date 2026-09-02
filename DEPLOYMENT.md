@@ -116,9 +116,9 @@ Market Analytics, Approval Timeline, World Map, and **Update Monitor** →
 ## 8. Updating the app
 
 ```bash
-docker pull ghcr.io/<owner>/tachograph-cards-web:latest
+docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
 docker stop tacho && docker rm tacho
-docker run -d --name tacho ... ghcr.io/<owner>/tachograph-cards-web:latest
+docker run -d --name tacho ... ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
 ```
 
 The PostgreSQL volume (`./pgdata`) persists across rebuilds, so manual edits,
