@@ -219,6 +219,9 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
 function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const auth = useAuth();
+  const authMode = useAuthMode();
+  const authEnabled = authMode.data?.enabled ?? true;
+  const canEdit = !authEnabled || !!auth.session;
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates">("data");
   const overridesQuery = useOverrides();
