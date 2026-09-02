@@ -81,11 +81,13 @@ and `VITE_SUPABASE_*` vars the node build needs (VITE_* baked at build time,
 SUPABASE_* at runtime for auth).
 
 ### 7. `DEPLOYMENT.md`
-New section "Web-Version (Vollversion) als Ein-Container" with step-by-step:
-clone → `.env` anpassen → `docker build -f Dockerfile.web -t tdh-web .` →
-`docker run -p 8080:8080 -v tdh_pgdata:/var/lib/postgresql/data tdh-web` →
-Browser auf `http://localhost:8080` → Sign-in via Lovable Cloud →
-Hinweise zum lokalen Cron-Endpunkt und zum Neustart/Reset des Daten-Volumes.
+New section "Web-Version (Vollversion) als Ein-Container (HTTPS)" with
+step-by-step: clone → `.env` anpassen → `docker build -f Dockerfile.web -t
+tdh-web .` → `docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data
+tdh-web` → Browser auf `https://localhost` (Self-Signed-Warnung bestätigen)
+→ Sign-in via Lovable Cloud → optional eigenes/Let's-Encrypt-Zertifikat via
+`-v ./certs:/certs:ro` mounten → Hinweise zum lokalen Cron-Endpunkt und zum
+Neustart/Reset des Daten-Volumes.
 
 ## Testing limits (honest)
 - The Lovable sandbox forces the Cloudflare Nitro preset, so a `node-server`
