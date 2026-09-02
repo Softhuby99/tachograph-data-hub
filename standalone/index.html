@@ -973,8 +973,8 @@ function openCountryModal(country) {
   const flag = first && first.iso ? '<img src="' + flagUrl(first.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '';
   const rows = cards.map(c => {
     const r = merged(c);
-    return '<tr onclick="openCardModal(\'' + c.id + '\')" style="cursor:pointer" title="Click for full details">' +
-      '<td><a href="#" class="ta-link" onclick="event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\')">' + esc(r.type_approval_number || '\u2014') + '</a></td>' +
+    return '<tr onclick="openCardModal(\'' + c.id + '\',' + JSON.stringify(country) + ')" style="cursor:pointer" title="Click for full details">' +
+      '<td><a href="#" class="ta-link" onclick="event.stopPropagation();event.preventDefault();openCardModal(\'' + c.id + '\',' + JSON.stringify(country) + ')">' + esc(r.type_approval_number || '\u2014') + '</a></td>' +
       '<td><span class="badge">' + esc(r.generation || '\u2014') + '</span></td>' +
       '<td>' + esc(r.date_status || '\u2014') + '</td>' +
       '<td>' + esc(r.current_manufacturer_normalized || r.current_manufacturer || '\u2014') + '</td></tr>';
