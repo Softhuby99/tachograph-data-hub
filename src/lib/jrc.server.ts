@@ -586,20 +586,18 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     };
   }
 
-  await supabaseAdmin.from("jrc_check_runs").insert([
-    {
-      source_type: result.source,
-      source_url: meta.url,
-      rows_parsed: result.rowsParsed,
-      proposals_created: result.created,
-      status: result.error ? "error" : "ok",
-      message: result.error
-        ? result.error
-        : result.baseline
-          ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
-          : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
-    },
-  ] as never);
+  await insertCheckRun({
+    source_type: result.source,
+    source_url: meta.url,
+    rows_parsed: result.rowsParsed,
+    proposals_created: result.created,
+    status: result.error ? "error" : "ok",
+    message: result.error
+      ? result.error
+      : result.baseline
+        ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
+        : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
+  });
 
   return result;
 }
