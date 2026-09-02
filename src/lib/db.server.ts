@@ -89,9 +89,43 @@ export type CheckRunRow = {
   message: string;
 };
 
-type SupabaseAdmin = Awaited<
-  ReturnType<typeof import("@/integrations/supabase/client.server")["supabaseAdmin"]>
->;
+// The admin client is a typed SupabaseClient<Database>; we only need a subset
+// of the chainable API, so a loose type keeps the dual-runtime code simple.
+type SupabaseAdmin = {
+  from(table: string): {
+    select(cols?: string): { data: unknown; error: { message: string } | null } & {
+      order(col: string, opts?: { ascending?: boolean }): {
+        data: unknown;
+        error: { message: string } | null;
+      } & {
+        limit(n: number): { data: unknown; error: { message: string } | null };
+        range(from: number, to: number): { data: unknown; error: { message: string } | null };
+      };
+      eq(col: string, val: unknown): {
+        data: unknown;
+        error: { message: string } | null;
+      } & {
+        maybeSingle(): { data: unknown; error: { message: string } | null };
+        order(col: string, opts?: { ascending?: boolean }): {
+          data: unknown;
+          error: { message: string } | null;
+        } & { limit(n: number): { data: unknown; error: { message: string } | null } };
+      };
+    };
+    insert(rows: unknown): { error: { message: string } | null };
+    update(row: unknown): {
+      error: { message: string } | null;
+      eq(col: string, val: unknown): { error: { message: string } | null };
+    };
+    upsert(rows: unknown, opts?: { onConflict?: string }): {
+      error: { message: string } | null;
+    };
+    delete(): {
+      error: { message: string } | null;
+      eq(col: string, val: unknown): { error: { message: string } | null };
+    };
+  };
+};
 
 async function supabaseAdmin(): Promise<SupabaseAdmin> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
