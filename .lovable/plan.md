@@ -8,12 +8,25 @@ Node.js app **and** PostgreSQL, serving **HTTPS** directly. A single
 container, no separate DB setup.
 
 HTTPS: the Node server handles TLS itself (`NITRO_SSL_CERT`/`NITRO_SSL_KEY`).
-The container entrypoint uses a mounted real certificate when present, else
-generates a self-signed one (browser warning expected, like the existing
-`test2` mode). A Let's Encrypt certificate can be mounted for production.
+The container entrypoint uses a mounted real certificate from
+`/certs/{fullchain,privkey}.pem` when present, else generates a self-signed one
+(browser warning expected, like the existing `test2` mode). In your homelab the
+OPNsense ACME client (Cloudflare certs) drops the real cert into that folder;
+test mode runs with the auto-generated self-signed cert.
 
 Data lives in PostgreSQL inside the container; login stays on the existing
 Lovable Cloud auth (remote Supabase) so no service-role key is needed.
+
+## Homelab / Betrieb (VLAN 2 / DMZ, OPNsense)
+- **Zertifikate**: OPNsense ACME-Automation legt die Cloudflare-Certs als
+  `/certs/fullchain.pem` + `/certs/privkey.pem` in den Container (Volume). Ohne
+  gemountete Certs läuft Testmodus mit Self-Signed. Kein Code-Änderung nötig.
+- **Egress (wichtig)**: ausgehend HTTPS (443) aus der DMZ erlauben — für (a)
+  Lovable-Cloud-Auth-Verifikation und (b) JRC-/TED-Abrufe des Update-Monitorings.
+- **Port**: HTTPS auf dem Docker-Host in VLAN 2 (z. B. `-p 443:443`).
+- **Persistenz**: Volume für die PostgreSQL-Daten (`tdh_pgdata`).
+- **Domain**: ACME-Domain muss auf die Docker-Host-IP in der DMZ zeigen
+  (Split-DNS intern oder extern).
 
 ## Key design decision: dual-backend data layer
 Server functions run in two runtimes:
@@ -81,13 +94,14 @@ and `VITE_SUPABASE_*` vars the node build needs (VITE_* baked at build time,
 SUPABASE_* at runtime for auth).
 
 ### 7. `DEPLOYMENT.md`
-New section "Web-Version (Vollversion) als Ein-Container (HTTPS)" with
-step-by-step: clone → `.env` anpassen → `docker build -f Dockerfile.web -t
-tdh-web .` → `docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data
-tdh-web` → Browser auf `https://localhost` (Self-Signed-Warnung bestätigen)
-→ Sign-in via Lovable Cloud → optional eigenes/Let's-Encrypt-Zertifikat via
-`-v ./certs:/certs:ro` mounten → Hinweise zum lokalen Cron-Endpunkt und zum
-Neustart/Reset des Daten-Volumes.
+New section "Web-Version (Vollversion) als Ein-Container (HTTPS, Homelab/DMZ)"
+with step-by-step: clone → `.env` anpassen (`SUPABASE_*`) →
+`docker build -f Dockerfile.web -t tdh-web .` → Testmodus:
+`docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data tdh-web` →
+Browser auf `https://<host>` (Self-Signed-Warnung bestätigen) → Live:
+OPNsense-ACME-Certs via `-v ./certs:/certs:ro` mounten → Sign-in via Lovable
+Cloud → egress 443 in der OPN-Firewall für Auth + JRC/TED freigeben →
+Hinweise zum lokalen Cron-Endpunkt und zum Neustart/Reset des Daten-Volumes.
 
 ## Testing limits (honest)
 - The Lovable sandbox forces the Cloudflare Nitro preset, so a `node-server`
