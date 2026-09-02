@@ -1019,8 +1019,9 @@ function openCardModal(id, fromCountry) {
   const flag = r.iso ? '<img src="' + flagUrl(r.iso,true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
   const fieldHtml = ([k,label]) =>
     '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
+  const backCountry = lastCountryModal ? "'" + lastCountryModal.replace(/'/g,"\\'") + "'" : '';
   const backBtn = lastCountryModal
-    ? '<button class="cm-back" onclick="openCountryModal(' + JSON.stringify(lastCountryModal) + ')" title="Back to list">&#8592; Back</button>'
+    ? '<button class="cm-back" onclick="openCountryModal(' + backCountry + ')" title="Back to list">&#8592; Back</button>'
     : '';
   const win = document.createElement('div');
   win.className = 'card-modal';
