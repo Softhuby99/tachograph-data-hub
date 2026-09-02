@@ -98,8 +98,8 @@ commit SHA. Required permission: `packages: write` (default for `GITHUB_TOKEN`).
 Pull a specific build:
 
 ```bash
-docker pull ghcr.io/<owner>/tachograph-cards-web:latest
-docker pull ghcr.io/<owner>/tachograph-cards-web:<short-sha>
+docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
+docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:<short-sha>
 ```
 
 ## 7. Verify
