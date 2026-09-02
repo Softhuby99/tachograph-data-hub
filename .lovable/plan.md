@@ -3,8 +3,14 @@
 ## Goal
 Run the complete web app (SSR, server functions, JRC/TED update monitoring,
 login, shared DB edits) locally in **one Docker container** that bundles the
-Node.js app **and** PostgreSQL. A single `docker run -p 8080:8080 tdh-web`
-starts everything. No nginx, no second container, no separate DB setup.
+Node.js app **and** PostgreSQL, serving **HTTPS** directly. A single
+`docker run -p 443:443 tdh-web` starts everything. No nginx, no second
+container, no separate DB setup.
+
+HTTPS: the Node server handles TLS itself (`NITRO_SSL_CERT`/`NITRO_SSL_KEY`).
+The container entrypoint uses a mounted real certificate when present, else
+generates a self-signed one (browser warning expected, like the existing
+`test2` mode). A Let's Encrypt certificate can be mounted for production.
 
 Data lives in PostgreSQL inside the container; login stays on the existing
 Lovable Cloud auth (remote Supabase) so no service-role key is needed.
@@ -55,15 +61,18 @@ Append `tachograph_card_overrides` + `cron_config` tables (copy schema from the
 existing Supabase migrations, no RLS needed locally — the app is trusted inside
 the container). Keep an optional pg_cron schedule pointing at localhost.
 
-### 5. Single Docker image (`Dockerfile.web`)
+### 5. Single Docker image (`Dockerfile.web`) — with HTTPS
 Multi-stage:
 1. Build stage: `bun install` → `NITRO_PRESET=node-server bun run build`
    → produces `.output/server/index.mjs`.
-2. Runtime stage: Node base image with PostgreSQL installed. A small
-   `supervisord` config starts `postgres` and `node .output/server/index.mjs`.
-   An entrypoint script inits the DB from `db/init.sql` on first boot, then
-   starts supervisord. App connects to `localhost:5432`. One port exposed
-   (8080). Data persisted via a Docker volume on the PG data dir.
+2. Runtime stage: Node base image with PostgreSQL + openssl installed. A small
+   `supervisord` config starts `postgres` and the Node app. An entrypoint
+   script: inits the DB from `db/init.sql` on first boot; uses a real cert
+   from a mounted `/certs/{fullchain,privkey}.pem` when present, else generates
+   a self-signed one; exports `NITRO_SSL_CERT`/`NITRO_SSL_KEY` so the Node
+   server serves HTTPS; then starts supervisord. App connects to
+   `localhost:5432`. HTTPS port 443 exposed. Data persisted via a Docker
+   volume on the PG data dir; certs via a mounted `/certs` volume.
 
 ### 6. `.env.example`
 Add `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` (defaults point at the
@@ -72,11 +81,13 @@ and `VITE_SUPABASE_*` vars the node build needs (VITE_* baked at build time,
 SUPABASE_* at runtime for auth).
 
 ### 7. `DEPLOYMENT.md`
-New section "Web-Version (Vollversion) als Ein-Container" with step-by-step:
-clone → `.env` anpassen → `docker build -f Dockerfile.web -t tdh-web .` →
-`docker run -p 8080:8080 -v tdh_pgdata:/var/lib/postgresql/data tdh-web` →
-Browser auf `http://localhost:8080` → Sign-in via Lovable Cloud →
-Hinweise zum lokalen Cron-Endpunkt und zum Neustart/Reset des Daten-Volumes.
+New section "Web-Version (Vollversion) als Ein-Container (HTTPS)" with
+step-by-step: clone → `.env` anpassen → `docker build -f Dockerfile.web -t
+tdh-web .` → `docker run -p 443:443 -v tdh_pgdata:/var/lib/postgresql/data
+tdh-web` → Browser auf `https://localhost` (Self-Signed-Warnung bestätigen)
+→ Sign-in via Lovable Cloud → optional eigenes/Let's-Encrypt-Zertifikat via
+`-v ./certs:/certs:ro` mounten → Hinweise zum lokalen Cron-Endpunkt und zum
+Neustart/Reset des Daten-Volumes.
 
 ## Testing limits (honest)
 - The Lovable sandbox forces the Cloudflare Nitro preset, so a `node-server`
