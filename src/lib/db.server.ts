@@ -9,6 +9,8 @@
 // because the app is an internal tool and the local PostgreSQL has no RLS.
 
 import type { Pool } from "pg";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
 let _pool: Pool | undefined;
 
