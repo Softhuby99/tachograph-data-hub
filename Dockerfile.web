@@ -6,8 +6,8 @@ ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-bookworm-slim AS build
 WORKDIR /app
 
-# OpenSSL 3 fix for Node 20 + bcrypt-style native modules if ever needed
-ENV NODE_OPTIONS=--openssl-legacy-provider
+# Pin the Nitro preset to a Node.js server (self-hosted Docker, native HTTPS/PG).
+ENV NITRO_PRESET=node-server
 
 COPY package.json bun.lock* yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 # Install with npm (lockfile-agnostic). Switch to pnpm/bun if your repo uses one.
