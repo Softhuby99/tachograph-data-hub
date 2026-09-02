@@ -121,6 +121,14 @@ CREATE TRIGGER update_jrc_update_proposals_updated_at
 BEFORE UPDATE ON public.jrc_update_proposals
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+CREATE TRIGGER update_tachograph_card_overrides_updated_at
+BEFORE UPDATE ON public.tachograph_card_overrides
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_cron_config_updated_at
+BEFORE UPDATE ON public.cron_config
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 -- ============================================================
 -- SEED DATA: tachograph_cards (53 records)
 -- ============================================================
