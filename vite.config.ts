@@ -11,5 +11,8 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // Allow overriding the Nitro preset for self-hosted Docker deployments
+    // (node-server). Defaults to the Lovable Cloudflare worker preset.
+    nitro: { preset: process.env.NITRO_PRESET || "cloudflare" },
   },
 });
