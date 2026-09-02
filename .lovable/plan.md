@@ -8,12 +8,25 @@ Node.js app **and** PostgreSQL, serving **HTTPS** directly. A single
 container, no separate DB setup.
 
 HTTPS: the Node server handles TLS itself (`NITRO_SSL_CERT`/`NITRO_SSL_KEY`).
-The container entrypoint uses a mounted real certificate when present, else
-generates a self-signed one (browser warning expected, like the existing
-`test2` mode). A Let's Encrypt certificate can be mounted for production.
+The container entrypoint uses a mounted real certificate from
+`/certs/{fullchain,privkey}.pem` when present, else generates a self-signed one
+(browser warning expected, like the existing `test2` mode). In your homelab the
+OPNsense ACME client (Cloudflare certs) drops the real cert into that folder;
+test mode runs with the auto-generated self-signed cert.
 
 Data lives in PostgreSQL inside the container; login stays on the existing
 Lovable Cloud auth (remote Supabase) so no service-role key is needed.
+
+## Homelab / Betrieb (VLAN 2 / DMZ, OPNsense)
+- **Zertifikate**: OPNsense ACME-Automation legt die Cloudflare-Certs als
+  `/certs/fullchain.pem` + `/certs/privkey.pem` in den Container (Volume). Ohne
+  gemountete Certs läuft Testmodus mit Self-Signed. Kein Code-Änderung nötig.
+- **Egress (wichtig)**: ausgehend HTTPS (443) aus der DMZ erlauben — für (a)
+  Lovable-Cloud-Auth-Verifikation und (b) JRC-/TED-Abrufe des Update-Monitorings.
+- **Port**: HTTPS auf dem Docker-Host in VLAN 2 (z. B. `-p 443:443`).
+- **Persistenz**: Volume für die PostgreSQL-Daten (`tdh_pgdata`).
+- **Domain**: ACME-Domain muss auf die Docker-Host-IP in der DMZ zeigen
+  (Split-DNS intern oder extern).
 
 ## Key design decision: dual-backend data layer
 Server functions run in two runtimes:
