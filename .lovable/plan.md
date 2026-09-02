@@ -3,8 +3,14 @@
 ## Goal
 Run the complete web app (SSR, server functions, JRC/TED update monitoring,
 login, shared DB edits) locally in **one Docker container** that bundles the
-Node.js app **and** PostgreSQL. A single `docker run -p 8080:8080 tdh-web`
-starts everything. No nginx, no second container, no separate DB setup.
+Node.js app **and** PostgreSQL, serving **HTTPS** directly. A single
+`docker run -p 443:443 tdh-web` starts everything. No nginx, no second
+container, no separate DB setup.
+
+HTTPS: the Node server handles TLS itself (`NITRO_SSL_CERT`/`NITRO_SSL_KEY`).
+The container entrypoint uses a mounted real certificate when present, else
+generates a self-signed one (browser warning expected, like the existing
+`test2` mode). A Let's Encrypt certificate can be mounted for production.
 
 Data lives in PostgreSQL inside the container; login stays on the existing
 Lovable Cloud auth (remote Supabase) so no service-role key is needed.
