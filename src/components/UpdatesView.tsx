@@ -78,40 +78,34 @@ type CheckRun = {
 export function UpdatesView() {
   const qc = useQueryClient();
   const { session, loading: authLoading } = useAuth();
-  const signedIn = !!session;
+  const fetchAuthMode = useServerFn(getAuthMode);
+  const authMode = useQuery({
+    queryKey: ["auth_mode"],
+    queryFn: () => fetchAuthMode(),
+  });
+  const authEnabled = authMode.data?.enabled ?? true;
+  const signedIn = !authEnabled || !!session;
   const [showHandled, setShowHandled] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
 
+  const fetchProposals = useServerFn(getProposals);
   const proposals = useQuery({
     queryKey: ["jrc_proposals"],
-    queryFn: async (): Promise<Proposal[]> => {
-      const { data, error } = await supabase
-        .from("jrc_update_proposals")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as unknown as Proposal[];
-    },
+    queryFn: async (): Promise<Proposal[]> => (await fetchProposals()) as Proposal[],
   });
 
+  const fetchCheckRuns = useServerFn(getCheckRuns);
   const lastRuns = useQuery({
     queryKey: ["jrc_last_run"],
-    queryFn: async (): Promise<CheckRun[]> => {
-      const { data, error } = await supabase
-        .from("jrc_check_runs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return (data ?? []) as unknown as CheckRun[];
-    },
+    queryFn: async (): Promise<CheckRun[]> => (await fetchCheckRuns()) as CheckRun[],
   });
 
   const check = useServerFn(checkUpdates);
   const checkOne = useServerFn(checkUpdateSource);
   const approve = useServerFn(approveJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
+
 
   const [running, setRunning] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
