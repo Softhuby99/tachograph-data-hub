@@ -4,8 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { saveCardOverride, resetCardOverride } from "@/lib/cards.functions";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  saveCardOverride,
+  resetCardOverride,
+  getCards,
+  getOverrides,
+} from "@/lib/cards.functions";
+import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
