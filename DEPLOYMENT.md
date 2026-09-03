@@ -183,14 +183,11 @@ Market Analytics, Approval Timeline, World Map, and **Update Monitor** →
 
 ## 8. Updating the app
 
-```bash
-docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
-docker stop tacho && docker rm tacho
-docker run -d --name tacho ... ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
-```
+See section 4.4 — as user `tdh` in `/opt/TDH`: pull the new image, stop and
+remove the container, start it again with the same `docker run` command.
 
-The PostgreSQL volume (`./pgdata`) persists across rebuilds, so manual edits,
-update proposals and check-run history are retained.
+The PostgreSQL volume (`/opt/TDH/pgdata`) persists across rebuilds, so manual
+edits, update proposals and check-run history are retained.
 
 ## 9. Backups
 
