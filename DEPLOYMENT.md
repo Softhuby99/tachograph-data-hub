@@ -58,22 +58,90 @@ self-signed cert for `DOMAIN` automatically. Browser warnings are expected.
    ```
 4. Set `DOMAIN` to your real hostname.
 
-## 4. Run the prebuilt image (from GitHub Container Registry)
+## 4. Deploy the prebuilt image to your webserver (VLAN 2 / DMZ)
+
+Target directory on the Docker host: **`/opt/TDH`**. The container does **not**
+run as root — a dedicated system user `tdh` owns the files and the container
+maps to it.
+
+### 4.1 Create the `tdh` user and directory (one-time, on the Proxmox VM)
 
 ```bash
+# dedicated, unprivileged system user (no login shell)
+sudo useradd --system --create-home --shell /usr/sbin/nologin tdh
+
+# give the user access to Docker (alternative: rootless docker)
+sudo usermod -aG docker tdh
+
+# project directory, owned by tdh
+sudo mkdir -p /opt/TDH
+sudo chown -R tdh:tdh /opt/TDH
+```
+
+### 4.2 Prepare the app directory as user `tdh`
+
+```bash
+sudo -iu tdh   # or: sudo su - tdh (with a temporary shell override)
+cd /opt/TDH
+
 mkdir -p ./certs ./pgdata
+cp .env.example .env    # or create it as shown in section 2
+nano .env               # set DOMAIN, DB_PASSWORD, AUTH_MODE=none, ...
+```
+
+### 4.3 Pull and run the image from GHCR
+
+```bash
+# still as user tdh, inside /opt/TDH
+docker login ghcr.io -u Softhuby99   # only needed while the package is private
+
+docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
+
 docker run -d --name tacho \
   --restart unless-stopped \
   -p 443:443 \
-  -v "$PWD/pgdata:/var/lib/postgresql/data" \
-  -v "$PWD/certs:/certs:ro" \
-  --env-file .env \
+  -v /opt/TDH/pgdata:/var/lib/postgresql/data \
+  -v /opt/TDH/certs:/certs:ro \
+  --env-file /opt/TDH/.env \
   ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
 ```
 
-The image is built by the GitHub Actions workflow
-`.github/workflows/build-web.yml` on the `Softhuby99/tachograph-data-hub`
-repository (see section 6). Clone it with `gh repo clone Softhuby99/tachograph-data-hub`.
+> The **daemon** still runs as root (Docker architecture), but the container
+> processes run as an unprivileged user inside the container, and all files
+> under `/opt/TDH` belong to `tdh`. For a fully rootless setup, install
+> rootless Docker for the `tdh` user and drop the `docker` group membership.
+>
+> Note: binding port 443 requires the container's root-level process
+> capability (`NET_BIND_SERVICE`), which Docker grants by default — this works
+> with the command above.
+
+### 4.4 The deployment flow via GitHub (ongoing updates)
+
+1. **Lovable → GitHub:** sync/push the project to `main` on
+   `Softhuby99/tachograph-data-hub` (or run the workflow manually via
+   `Actions → Build Web Docker image → Run workflow`).
+2. **GitHub Actions** builds the image and pushes it to GHCR
+   (`latest` + short commit SHA).
+3. **On your webserver** (as user `tdh`):
+
+   ```bash
+   cd /opt/TDH
+   docker pull ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
+   docker stop tacho && docker rm tacho
+   docker run -d --name tacho \
+     --restart unless-stopped \
+     -p 443:443 \
+     -v /opt/TDH/pgdata:/var/lib/postgresql/data \
+     -v /opt/TDH/certs:/certs:ro \
+     --env-file /opt/TDH/.env \
+     ghcr.io/softhuby99/tachograph-data-hub/tachograph-cards-web:latest
+   ```
+
+   Optionally automate this with [Watchtower](https://containrrr.dev/watchtower/)
+   or a small systemd/cron job on the host.
+
+The PostgreSQL volume (`/opt/TDH/pgdata`) persists across rebuilds, so manual
+edits, update proposals and check-run history are retained.
 
 First boot initialises PostgreSQL, applies `db/init.sql` (schema + seed data),
 and starts the Nitro server with HTTPS on port 443.
