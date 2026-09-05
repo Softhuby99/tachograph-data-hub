@@ -6,20 +6,75 @@ import worldTopo from "world-atlas/countries-110m.json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Minus, Plus, RotateCcw, Globe2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
 
 export type MapCard = {
   id: string;
   country: string;
+  country_flag?: string;
   generation: string;
+  application?: string;
+  tachograph_application_os?: string;
   type_approval_number: string;
   current_manufacturer_normalized: string;
   current_manufacturer: string;
   date_status: string;
   issued_by_authority: string;
   certificate_holder: string;
+  certified_security_platform?: string;
+  chip_certificate?: string;
   chip_platform_vendor: string;
+  security_certificate?: string;
+  security_certificate_lab?: string;
+  functional_certificate_lab?: string;
+  jrc_interoperability_status?: string;
+  jrc_certificate_source?: string;
+  primary_source?: string;
+  card_quantities?: string;
+  latest_tender?: string;
+  winner_contractor?: string;
+  procurement_status?: string;
+  procurement_scope?: string;
+  tender_source?: string;
+  verification_note?: string;
 };
+
+const CARD_FIELDS: Array<[keyof MapCard, string]> = [
+  ["country", "Country"],
+  ["generation", "Generation"],
+  ["application", "Application"],
+  ["tachograph_application_os", "Tachograph Application / OS"],
+  ["type_approval_number", "Type Approval Number"],
+  ["issued_by_authority", "Issued by Authority"],
+  ["date_status", "Date / Status"],
+  ["certificate_holder", "Certificate Holder"],
+  ["certified_security_platform", "Certified Security Platform"],
+  ["chip_certificate", "Chip Certificate"],
+  ["chip_platform_vendor", "Chip / Platform Vendor"],
+  ["security_certificate", "Security Certificate"],
+  ["security_certificate_lab", "Security Certificate Lab"],
+  ["functional_certificate_lab", "Functional Certificate Lab"],
+  ["jrc_interoperability_status", "JRC Interoperability Status"],
+  ["jrc_certificate_source", "JRC / Certificate Source"],
+  ["primary_source", "Primary Source"],
+  ["card_quantities", "Card Quantities"],
+];
+
+const PROCUREMENT_FIELDS: Array<[keyof MapCard, string]> = [
+  ["latest_tender", "Latest Tender / Procurement Procedure"],
+  ["winner_contractor", "Winner / Contractor"],
+  ["procurement_status", "Procurement Status"],
+  ["procurement_scope", "Procurement Scope"],
+  ["tender_source", "Tender Source"],
+  ["verification_note", "Verification Note"],
+];
+
 
 /** App country name -> name used by the world-atlas dataset. */
 const NAME_ALIASES: Record<string, string> = {
@@ -56,10 +111,19 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-export function WorldMapView({ cards }: { cards: MapCard[] }) {
+export function WorldMapView({
+  cards,
+  flagUrl,
+}: {
+  cards: MapCard[];
+  flagUrl?: (country: string, size?: 40 | 80) => string | null;
+}) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [selected, setSelected] = useState<string | null>(null);
+  const [countryModal, setCountryModal] = useState<string | null>(null);
+  const [cardModal, setCardModal] = useState<MapCard | null>(null);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
@@ -180,7 +244,13 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
   };
 
   const selectedCards = selected ? (counts.get(selected) ?? []) : [];
+  const countryCards = countryModal
+    ? [...(counts.get(countryModal) ?? [])].sort((a, b) =>
+        String(a.type_approval_number || "").localeCompare(String(b.type_approval_number || "")),
+      )
+    : [];
   const showNumbers = zoom >= 3.5;
+
 
   return (
     <div className="space-y-6">
@@ -267,8 +337,15 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
                       key={l.country}
                       transform={`translate(${l.xy[0]},${l.xy[1]}) scale(${1 / zoom})`}
                       className="cursor-pointer"
-                      onClick={() => setSelected(l.country)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelected(l.country);
+                        setCardModal(null);
+                        setCountryModal(l.country);
+                      }}
                     >
+
                       <circle
                         r={11}
                         className={
@@ -348,8 +425,18 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
                 </thead>
                 <tbody>
                   {selectedCards.map((c) => (
-                    <tr key={c.id} className="border-b last:border-0 align-top">
-                      <td className="py-2 pr-4 font-medium">{c.type_approval_number || "—"}</td>
+                    <tr
+                      key={c.id}
+                      className="cursor-pointer border-b align-top last:border-0 hover:bg-muted/50"
+                      title="Click for full details"
+                      onClick={() => {
+                        setCountryModal(null);
+                        setCardModal(c);
+                      }}
+                    >
+                      <td className="py-2 pr-4 font-medium text-primary underline-offset-2 hover:underline">
+                        {c.type_approval_number || "—"}
+                      </td>
                       <td className="py-2 pr-4">
                         <Badge variant="secondary">{c.generation || "—"}</Badge>
                       </td>
@@ -367,6 +454,125 @@ export function WorldMapView({ cards }: { cards: MapCard[] }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Country list window — opened by clicking the number on the map */}
+      <Dialog open={!!countryModal} onOpenChange={(o) => !o && setCountryModal(null)}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {countryModal && flagUrl?.(countryModal, 40) && (
+                <img
+                  src={flagUrl(countryModal, 40)!}
+                  alt={`${countryModal} flag`}
+                  className="h-6 w-9 rounded border object-cover"
+                />
+              )}
+              <span>
+                {countryModal} · {countryCards.length} type approval(s)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Type Approval</th>
+                <th className="py-2 pr-4 font-medium">Generation</th>
+                <th className="py-2 pr-4 font-medium">Date / Status</th>
+                <th className="py-2 pr-4 font-medium">Manufacturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countryCards.map((c) => (
+                <tr
+                  key={c.id}
+                  className="cursor-pointer border-b align-top last:border-0 hover:bg-muted/50"
+                  title="Click for full details"
+                  onClick={() => {
+                    setCountryModal(null);
+                    setCardModal(c);
+                  }}
+                >
+                  <td className="py-2 pr-4 font-medium text-primary underline-offset-2 hover:underline">
+                    {c.type_approval_number || "—"}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <Badge variant="secondary">{c.generation || "—"}</Badge>
+                  </td>
+                  <td className="py-2 pr-4">{c.date_status || "—"}</td>
+                  <td className="py-2 pr-4">
+                    {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full card details */}
+      <Dialog open={!!cardModal} onOpenChange={(o) => !o && setCardModal(null)}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {cardModal && flagUrl?.(cardModal.country, 40) && (
+                <img
+                  src={flagUrl(cardModal.country, 40)!}
+                  alt={`${cardModal.country} flag`}
+                  className="h-6 w-9 rounded border object-cover"
+                />
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const c = cardModal?.country ?? null;
+                  setCardModal(null);
+                  setCountryModal(c);
+                }}
+              >
+                <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
+              </Button>
+              <span>
+                {cardModal?.country} · {cardModal?.type_approval_number || "—"}
+              </span>
+              <Badge variant="secondary">{cardModal?.generation || "—"}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          {cardModal && (
+            <div className="space-y-6">
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">Card &amp; Certification</h3>
+                <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                  {CARD_FIELDS.map(([k, label]) => (
+                    <ModalField key={k as string} label={label} value={cardModal[k]} />
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">Procurement</h3>
+                <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                  {PROCUREMENT_FIELDS.map(([k, label]) => (
+                    <ModalField key={k as string} label={label} value={cardModal[k]} />
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+}
+
+function ModalField({ label, value }: { label: string; value?: string }) {
+  const text = String(value ?? "").trim();
+  return (
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="whitespace-pre-wrap break-words text-sm">{text || "—"}</div>
     </div>
   );
 }
