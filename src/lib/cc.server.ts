@@ -264,7 +264,11 @@ export async function extractPdfText(data: ArrayBuffer): Promise<string> {
     }
     return text;
   } finally {
-    await doc.destroy();
+    try {
+      await doc.destroy?.();
+    } catch {
+      /* older builds expose no destroy() */
+    }
   }
 }
 
