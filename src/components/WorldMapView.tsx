@@ -564,3 +564,15 @@ export function WorldMapView({
   );
 
 }
+
+function ModalField({ label, value }: { label: string; value?: string }) {
+  const text = String(value ?? "").trim();
+  return (
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="whitespace-pre-wrap break-words text-sm">{text || "—"}</div>
+    </div>
+  );
+}
