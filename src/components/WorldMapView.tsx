@@ -244,7 +244,13 @@ export function WorldMapView({
   };
 
   const selectedCards = selected ? (counts.get(selected) ?? []) : [];
+  const countryCards = countryModal
+    ? [...(counts.get(countryModal) ?? [])].sort((a, b) =>
+        String(a.type_approval_number || "").localeCompare(String(b.type_approval_number || "")),
+      )
+    : [];
   const showNumbers = zoom >= 3.5;
+
 
   return (
     <div className="space-y-6">
