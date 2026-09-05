@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
+import { formatQuantities } from "@/lib/utils";
 
 export type MapCard = {
   id: string;
@@ -544,7 +545,15 @@ export function WorldMapView({
                 <h3 className="mb-2 text-sm font-semibold">Card &amp; Certification</h3>
                 <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
                   {CARD_FIELDS.map(([k, label]) => (
-                    <ModalField key={k as string} label={label} value={cardModal[k]} />
+                    <ModalField
+                      key={k as string}
+                      label={label}
+                      value={
+                        k === "card_quantities"
+                          ? formatQuantities(String(cardModal[k] ?? ""))
+                          : cardModal[k]
+                      }
+                    />
                   ))}
                 </div>
               </section>
