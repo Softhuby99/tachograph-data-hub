@@ -32,6 +32,8 @@ export type MapCard = {
   chip_certificate?: string;
   chip_platform_vendor: string;
   security_certificate?: string;
+  certificate_issued_date?: string;
+  certificate_expiry_date?: string;
   security_certificate_lab?: string;
   functional_certificate_lab?: string;
   jrc_interoperability_status?: string;
@@ -59,6 +61,8 @@ const CARD_FIELDS: Array<[keyof MapCard, string]> = [
   ["chip_certificate", "Chip Certificate"],
   ["chip_platform_vendor", "Chip / Platform Vendor"],
   ["security_certificate", "Security Certificate"],
+  ["certificate_issued_date", "Date Certificate Issued"],
+  ["certificate_expiry_date", "Certificate Validity Expiration Date"],
   ["security_certificate_lab", "Security Certificate Lab"],
   ["functional_certificate_lab", "Functional Certificate Lab"],
   ["jrc_interoperability_status", "JRC Interoperability Status"],

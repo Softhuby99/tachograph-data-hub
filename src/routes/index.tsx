@@ -71,6 +71,8 @@ type TachoCard = {
   chip_platform_vendor: string;
   security_certificate: string;
   chip_certificate: string;
+  certificate_issued_date: string;
+  certificate_expiry_date: string;
   type_approval_number: string;
   certified_security_platform: string;
   certificate_holder: string;
@@ -209,6 +211,8 @@ const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["chip_certificate", "Chip Certificate"],
   ["chip_platform_vendor", "Chip / Platform Vendor"],
   ["security_certificate", "Security Certificate"],
+  ["certificate_issued_date", "Date Certificate Issued"],
+  ["certificate_expiry_date", "Certificate Validity Expiration Date"],
   ["security_certificate_lab", "Security Certificate Lab"],
   ["functional_certificate_lab", "Functional Certificate Lab"],
   ["jrc_interoperability_status", "JRC Interoperability Status"],
@@ -1411,6 +1415,8 @@ function certificationChain(card: TachoCard): {
     ["Security Certificate", card.security_certificate],
     ["Chip Certificate", card.chip_certificate],
     ["Certified Security Platform", card.certified_security_platform],
+    ["Date Certificate Issued", card.certificate_issued_date],
+    ["Certificate Validity Expiration Date", card.certificate_expiry_date],
   ]);
 
   const functional = match("Functional & interoperability certificate", [
