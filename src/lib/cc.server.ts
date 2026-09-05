@@ -199,9 +199,15 @@ export function deviceTypeOf(product: string, pps: string, category: string): Cc
   return null;
 }
 
-export function generationOf(product: string, pps: string, deviceType: CcDeviceType): string {
+/** generations() from cc_tachograph.py: PP refs + product/cert text. */
+export function generationOf(
+  product: string,
+  pps: string,
+  deviceType: CcDeviceType,
+  pdfText?: string,
+): string {
   if (deviceType !== "Card") return "";
-  const hay = `${product} ${pps}`.toUpperCase().replace(/\s+/g, "");
+  const hay = `${product} ${pps} ${pdfText ?? ""}`.toUpperCase().replace(/\s+/g, "");
   const gens = new Set<string>();
   if (/TACHOGRAPHCARD_V1\.02|PP-0070|\bG1\b|,G1|G1,/.test(hay)) gens.add("G1");
   if (/TC_PP|PP-0091|G2V1/.test(hay)) gens.add("G2.1");
