@@ -89,14 +89,66 @@ const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] =
   },
 ];
 
+// CC_PAT from cc_tachograph.py: how certificate numbers appear inside the
+// certification report PDFs (OCR variants included).
+const CC_TEXT_PATTERNS = [
+  /(?:EUCC[- ]?ANSSI|ANSSI[- ]?CC)[- ]?(\d{4})[/ _-](\d{2,3}(?:\s?v\d)?)(?:[- ]?([SMR]\s?\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{2})[- ]?(\d{5,6})(?:[- ]?(\d{2}))?/gi,
+  /BSI[- ]?DSZ[- ]?CC[- ]?(\d{4})(?:[- ]?(V\d))?/gi,
+];
+
 const CERT_IN_TEXT = /((?:EUCC-ANSSI|ANSSI-CC|NSCIB-CC|BSI-DSZ-CC)-[0-9A-Za-z/_.-]{3,30})/;
+
+/** normalise_cc() from cc_tachograph.py: unify OCR / spelling variants. */
+export function normaliseCc(raw: string): string {
+  let s = raw.toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
+  s = s.replace(/[/]/, "/"); // keep the ANSSI year/number slash
+  s = s.replace(/-([SMR])(\d{2})$/, "-$1$2");
+  return s.replace(/[.,;)]+$/, "");
+}
+
+/**
+ * cert_number() from cc_tachograph.py: pull the official certificate number
+ * out of the report PDF text; returns "" when nothing is found.
+ */
+export function certificateFromText(text: string): string {
+  const flat = text.replace(/\s+/g, " ");
+  for (const re of CC_TEXT_PATTERNS) {
+    re.lastIndex = 0;
+    const m = re.exec(flat);
+    if (!m) continue;
+    const prefix = /EUCC/i.test(m[0])
+      ? "EUCC-ANSSI"
+      : /ANSSI/i.test(m[0])
+        ? "ANSSI-CC"
+        : /NSCIB/i.test(m[0])
+          ? "NSCIB-CC"
+          : "BSI-DSZ-CC";
+    if (prefix === "EUCC-ANSSI" || prefix === "ANSSI-CC") {
+      const num = (m[2] ?? "").replace(/\s+/g, "");
+      const rev = (m[3] ?? "").replace(/\s+/g, "");
+      return normaliseCc(`${prefix}-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
+    }
+    if (prefix === "NSCIB-CC") {
+      return m[3] ? `NSCIB-CC-${m[2]}${m[3]}` : `NSCIB-CC-${m[1]}-${m[2]}`;
+    }
+    return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
+  }
+  const loose = CERT_IN_TEXT.exec(flat);
+  return loose ? normaliseCc(loose[1]) : "";
+}
 
 export function certificateNumber(
   product: string,
   reportUrl: string,
+  pdfText?: string,
 ): { number: string; source: string } {
+  if (pdfText) {
+    const fromPdf = certificateFromText(pdfText);
+    if (fromPdf) return { number: fromPdf, source: "Certificate PDF" };
+  }
   const inName = CERT_IN_TEXT.exec(product);
-  if (inName) return { number: inName[1].replace(/[.,;)]+$/, ""), source: "Product name" };
+  if (inName) return { number: normaliseCc(inName[1]), source: "Product name" };
   let file = reportUrl.split("/").pop() ?? "";
   try {
     file = decodeURIComponent(file);
