@@ -7,7 +7,16 @@ FROM node:${NODE_VERSION}-bookworm-slim AS build
 WORKDIR /app
 
 # Pin the Nitro preset to a Node.js server (self-hosted Docker, native HTTPS/PG).
-ENV NITRO_PRESET=node-server
+# Neutralize the Lovable/Supabase VITE_ vars that live in the committed .env so
+# they are NOT baked into the client bundle — a self-hosted container must not
+# phone home to the Lovable backend. dotenv never overwrites existing process
+# env, so these empty values win over the .env file. AUTH_MODE=none makes any
+# prerender use the no-auth path instead of requireSupabaseAuth.
+ENV NITRO_PRESET=node-server \
+    AUTH_MODE=none \
+    VITE_SUPABASE_URL="" \
+    VITE_SUPABASE_PUBLISHABLE_KEY="" \
+    VITE_SUPABASE_PROJECT_ID=""
 
 COPY package.json bun.lock* yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 # Install with npm (lockfile-agnostic). Switch to pnpm/bun if your repo uses one.
