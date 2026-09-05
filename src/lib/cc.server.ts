@@ -204,3 +204,149 @@ export async function fetchCcEntries(): Promise<CcEntry[]> {
   }
   return parseCcProducts(await res.text());
 }
+
+// ----------------------------------------------------------------- proposals
+
+export type CcCardRow = {
+  id: string;
+  country: string;
+  generation: string;
+  security_certificate: string;
+  certificate_issued_date: string;
+  certificate_expiry_date: string;
+  current_manufacturer: string;
+};
+
+type CcProposal = {
+  fingerprint: string;
+  kind: string;
+  card_id: string | null;
+  country: string;
+  generation: string;
+  jrc_manufacturer: string;
+  jrc_card_name: string;
+  jrc_certificate: string;
+  jrc_date: string;
+  jrc_eov: string;
+  jrc_type_approval: string;
+  source_url: string;
+  source_type: string;
+  source_label: string;
+  title: string;
+  payload: Record<string, string>;
+  changes: { fields: { field: string; label: string; old: string; new: string }[] };
+  status: string;
+};
+
+const SOURCE = "cc_certificates";
+const SOURCE_LABEL = "Common Criteria portal";
+
+function payloadOf(e: CcEntry): Record<string, string> {
+  return {
+    "Device type": e.deviceType,
+    "Security certificate": e.certificate || "not published",
+    "Certificate number from": e.certificateSource || "—",
+    Product: e.product,
+    Vendor: e.vendor,
+    Generation: e.generation,
+    "Protection profile(s)": e.protectionProfiles,
+    "Assurance level": e.assurance,
+    Scheme: e.scheme,
+    "Date Certificate Issued": e.issued,
+    "Certificate Validity Expiration Date": e.expires,
+    "Certification report": e.reportUrl,
+  };
+}
+
+/**
+ * Cards get field proposals (issue / expiry date) when the portal knows the
+ * certificate; everything else — and every Motion Sensor / Vehicle Unit entry —
+ * becomes an informational proposal.
+ */
+export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProposal[] {
+  const out: CcProposal[] = [];
+  const seen = new Set<string>();
+
+  for (const e of entries) {
+    const matches =
+      e.deviceType === "Card" && e.certificate
+        ? cards.filter((c) => {
+            const have = normCert(c.security_certificate || "");
+            if (!have) return false;
+            return have.includes(normCert(e.certificate)) || have.includes(baseCert(e.certificate));
+          })
+        : [];
+
+    if (matches.length > 0) {
+      for (const card of matches) {
+        const fields: CcProposal["changes"]["fields"] = [];
+        if (e.issued && (card.certificate_issued_date || "").trim() !== e.issued) {
+          fields.push({
+            field: "certificate_issued_date",
+            label: "Date Certificate Issued",
+            old: card.certificate_issued_date || "",
+            new: e.issued,
+          });
+        }
+        if (e.expires && (card.certificate_expiry_date || "").trim() !== e.expires) {
+          fields.push({
+            field: "certificate_expiry_date",
+            label: "Certificate Validity Expiration Date",
+            old: card.certificate_expiry_date || "",
+            new: e.expires,
+          });
+        }
+        if (fields.length === 0) continue;
+        const fp = `${SOURCE}:card:${card.id}:${normCert(e.certificate)}:${e.issued}:${e.expires}`;
+        if (seen.has(fp)) continue;
+        seen.add(fp);
+        out.push({
+          fingerprint: fp,
+          kind: "changed",
+          card_id: card.id,
+          country: card.country,
+          generation: card.generation || e.generation,
+          jrc_manufacturer: e.vendor,
+          jrc_card_name: e.product,
+          jrc_certificate: e.certificate,
+          jrc_date: e.issued,
+          jrc_eov: e.expires,
+          jrc_type_approval: "",
+          source_url: e.reportUrl || CC_PORTAL_URL,
+          source_type: SOURCE,
+          source_label: `${SOURCE_LABEL} · Card`,
+          title: `Card · ${card.country} · ${e.certificate} — certificate dates`,
+          payload: payloadOf(e),
+          changes: { fields },
+          status: "pending",
+        });
+      }
+      continue;
+    }
+
+    const fp = `${SOURCE}:${e.deviceType}:${normCert(e.certificate) || e.product}:${e.issued}:${e.expires}`;
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    out.push({
+      fingerprint: fp,
+      kind: "info",
+      card_id: null,
+      country: "",
+      generation: e.generation,
+      jrc_manufacturer: e.vendor,
+      jrc_card_name: e.product,
+      jrc_certificate: e.certificate,
+      jrc_date: e.issued,
+      jrc_eov: e.expires,
+      jrc_type_approval: "",
+      source_url: e.reportUrl || CC_PORTAL_URL,
+      source_type: SOURCE,
+      source_label: `${SOURCE_LABEL} · ${e.deviceType}`,
+      title: `${e.deviceType} · ${e.certificate || e.product} — ${e.vendor}`,
+      payload: payloadOf(e),
+      changes: { fields: [] },
+      status: "pending",
+    });
+  }
+  return out;
+}
