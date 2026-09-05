@@ -183,6 +183,8 @@ const FIELD_LABELS: Record<string, string> = {
   type_approval_number: "Type Approval Number",
   jrc_interoperability_status: "JRC Interoperability Status",
   jrc_certificate_source: "JRC / Certificate Source",
+  certificate_issued_date: "Date Certificate Issued",
+  certificate_expiry_date: "Certificate Validity Expiration Date",
 };
 
 function jrcStatusText(row: JrcRow): string {
@@ -449,6 +451,7 @@ export const UPDATE_SOURCE_ORDER = [
   "key_management",
   "security_updates",
   "manufacturer_codes",
+  "cc_certificates",
   "ted_procurement",
 ] as const;
 
@@ -547,6 +550,26 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
         candidates: candidates.length + extraCandidates,
         created,
         baseline,
+      };
+    } else if (source === "cc_certificates") {
+      // Common Criteria portal: card certificates are matched against the
+      // security certificate numbers already stored, motion sensor and vehicle
+      // unit entries are tracked as information only.
+      const { fetchCcEntries, buildCcProposals } = await import("./cc.server");
+      const { getCardsForCc } = await import("./db.server");
+      const entries = await fetchCcEntries();
+      const ccCards = await getCardsForCc();
+      const candidates = buildCcProposals(entries, ccCards);
+      const created = await insertProposals(
+        candidates.slice(0, 80) as unknown as ProposalInsert[],
+      );
+      result = {
+        source,
+        label: meta.label,
+        rowsParsed: entries.length,
+        candidates: candidates.length,
+        created,
+        baseline: false,
       };
     } else if (source === "ted_procurement") {
       const { fetchTedNotices, buildTedProposals } = await import("./ted.server");

@@ -7,6 +7,7 @@ export type SourceKey =
   | "key_management"
   | "security_updates"
   | "manufacturer_codes"
+  | "cc_certificates"
   | "ted_procurement";
 
 export const JRC_SOURCES: Record<SourceKey, { label: string; url: string }> = {
@@ -33,6 +34,10 @@ export const JRC_SOURCES: Record<SourceKey, { label: string; url: string }> = {
   manufacturer_codes: {
     label: "Manufacturer codes",
     url: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
+  },
+  cc_certificates: {
+    label: "Common Criteria certificates",
+    url: "https://www.commoncriteriaportal.org/products/index.cfm",
   },
   ted_procurement: {
     label: "TED procurement",

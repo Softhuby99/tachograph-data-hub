@@ -29,6 +29,7 @@ const SOURCE_LABELS: Record<string, string> = {
   key_management: "Key management",
   security_updates: "Security updates",
   manufacturer_codes: "Manufacturer codes",
+  cc_certificates: "Common Criteria certificates",
   ted_procurement: "TED procurement",
 };
 
@@ -39,6 +40,7 @@ const SOURCE_URLS: Record<string, string> = {
   key_management: "https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html",
   security_updates: "https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html",
   manufacturer_codes: "https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html",
+  cc_certificates: "https://www.commoncriteriaportal.org/products/index.cfm",
   ted_procurement: "https://ted.europa.eu/en/search/result",
 };
 
@@ -329,6 +331,9 @@ export function UpdatesView() {
                     <Badge variant="outline">
                       {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
                     </Badge>
+                    {(p.payload ?? {})["Device type"] && (
+                      <Badge variant="secondary">{(p.payload ?? {})["Device type"]}</Badge>
+                    )}
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}

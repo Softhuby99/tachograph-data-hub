@@ -145,6 +145,29 @@ export async function getCardsForJrc(): Promise<CardRow[]> {
   return (data ?? []) as unknown as CardRow[];
 }
 
+export async function getCardsForCc(): Promise<
+  {
+    id: string;
+    country: string;
+    generation: string;
+    security_certificate: string;
+    certificate_issued_date: string;
+    certificate_expiry_date: string;
+    current_manufacturer: string;
+  }[]
+> {
+  const cols =
+    "id,country,generation,security_certificate,certificate_issued_date,certificate_expiry_date,current_manufacturer";
+  if (isLocalDb()) {
+    const { rows } = await pool().query(`SELECT ${cols} FROM public.tachograph_cards`);
+    return rows as never;
+  }
+  const admin = await supabaseAdmin();
+  const { data, error } = await admin.from("tachograph_cards").select(cols);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as never;
+}
+
 export async function getCardsForTed(): Promise<Record<string, unknown>[]> {
   const cols =
     "id,country,generation,latest_tender,winner_contractor,procurement_status,tender_source";
