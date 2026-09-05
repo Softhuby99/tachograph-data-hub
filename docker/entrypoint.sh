@@ -34,10 +34,15 @@ if ! su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NA
   su postgres -c "createdb -O \"$DB_USER\" \"$DB_NAME\""
 fi
 
-# Seed / migrate schema. Idempotent (CREATE TABLE IF NOT EXISTS / ON CONFLICT).
-if [ -f /app/db/init.sql ]; then
-  echo "[entrypoint] Applying db/init.sql…"
-  su postgres -c "psql -d \"$DB_NAME\" -f /app/db/init.sql" || echo "[entrypoint] init.sql applied (some warnings are OK on re-run)."
+# The bundled SQL is a complete initial snapshot, not a recurring migration.
+# Only load it into a new/empty database so container replacements do not try
+# to insert the same fixed UUIDs into a persistent volume again.
+HAS_SCHEMA="$(su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT to_regclass('public.tachograph_cards') IS NOT NULL\"")"
+if [ "$HAS_SCHEMA" != "t" ] && [ -f /app/db/init.sql ]; then
+  echo "[entrypoint] Applying initial database snapshot…"
+  su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f /app/db/init.sql"
+else
+  echo "[entrypoint] Existing database detected; skipping initial snapshot."
 fi
 
 su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
