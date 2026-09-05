@@ -222,6 +222,37 @@ function isoToDe(value: string): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : value.trim();
 }
 
+// ----------------------------------------------------------- PDF text (port
+// of the pdftotext step in cc_tachograph.py)
+
+const CC_TEXT_MAX_PAGES = 4; // certificate number sits on the cover pages
+const CC_FETCH_CONCURRENCY = 4;
+
+/** Extract plain text from the first pages of a certificate / report PDF. */
+export async function extractPdfText(data: ArrayBuffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerPort = null as never; // run on the main thread (Worker runtime)
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(data),
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+  try {
+    const pages = Math.min(doc.numPages, CC_TEXT_MAX_PAGES);
+    let text = "";
+    for (let p = 1; p <= pages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      text += `${content.items.map((it) => ("str" in it ? it.str : "")).join(" ")}\n`;
+    }
+    return text;
+  } finally {
+    await doc.destroy();
+  }
+}
+
+
 // ------------------------------------------------------------------ fetching
 //
 // Port of scrape() in cc_tachograph.py: the portal index page carries the
