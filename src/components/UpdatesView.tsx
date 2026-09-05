@@ -331,6 +331,9 @@ export function UpdatesView() {
                     <Badge variant="outline">
                       {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
                     </Badge>
+                    {(p.payload ?? {})["Device type"] && (
+                      <Badge variant="secondary">{(p.payload ?? {})["Device type"]}</Badge>
+                    )}
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
