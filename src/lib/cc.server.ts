@@ -241,7 +241,7 @@ function isoToDe(value: string): string {
 // ----------------------------------------------------------- PDF text (port
 // of the pdftotext step in cc_tachograph.py)
 
-const CC_TEXT_MAX_PAGES = 4; // certificate number sits on the cover pages
+const CC_TEXT_MAX_PAGES = 8; // number + PP references sit on the first pages
 const CC_FETCH_CONCURRENCY = 4;
 
 /** Extract plain text from the first pages of a certificate / report PDF. */
