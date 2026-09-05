@@ -77,7 +77,7 @@ const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] =
     build: (m) => `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}`,
   },
   {
-    re: /NSCIB[-_ ]?CC[-_ ]?(\d{2})[-_](\d{5,6})/i,
+    re: /NSCIB[-_ ]?CC[-_ ]?(\d{2})[-_](\d{5,7})/i,
     build: (m) => `NSCIB-CC-${m[1]}-${m[2]}`,
   },
   {
@@ -97,8 +97,10 @@ const CC_TEXT_PATTERNS = [
   /EUCC[- ]?ANSSI[- ]?(\d{4})[- ]?(\d{2})[- ]?(\d{2})/gi,
   /ANSSI[- ]?CC[- ]?(\d{4})[/ _-](\d{2,3}(?:\s?v\d)?)(?:[- ]?([SMR]\s?\d{2}))?/gi,
   /NSCIB[- ]?CC[- ]?(\d{7})(?:[- ]?(\d{2}))?/gi,
-  /NSCIB[- ]?CC[- ]?(\d{2})-(\d{5,6})(?:-(\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{2})-(\d{5,7})(?:-(\d{2}))?/gi,
   /BSI[- ]?DSZ[- ]?CC[- ]?(\d{4})(?:[- ]?(V\d))?/gi,
+  /\b(OC)[- ](\d{4})[- ](\d{2})\b/g,
+  /\b(CRP)[- ]?(\d{3})\b/g,
 ];
 
 const CERT_IN_TEXT = /((?:EUCC-ANSSI|ANSSI-CC|NSCIB-CC|BSI-DSZ-CC)-[0-9A-Za-z/_.-]{3,30})/;
