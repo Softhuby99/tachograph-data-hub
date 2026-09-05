@@ -71,6 +71,8 @@ type TachoCard = {
   chip_platform_vendor: string;
   security_certificate: string;
   chip_certificate: string;
+  certificate_issued_date: string;
+  certificate_expiry_date: string;
   type_approval_number: string;
   certified_security_platform: string;
   certificate_holder: string;
