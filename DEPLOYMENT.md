@@ -30,19 +30,21 @@ Copy `.env.example` to `.env` and adjust:
 
 ```bash
 PORT=443
-AUTH_MODE=none                 # no login; set "oidc" later for Authentik (step 2)
-DB_HOST=127.0.0.1             # any non-empty value enables local PostgreSQL
+AUTH_MODE=none
+DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_NAME=tdh
 DB_USER=tdh
 DB_PASSWORD=changeme
 NITRO_SSL_CERT=/certs/fullchain.pem
 NITRO_SSL_KEY=/certs/privkey.pem
-DOMAIN=tdh.example.com         # CN for the self-signed cert in test mode
+DOMAIN=tdh.example.com
 ```
 
 > `DB_HOST` non-empty = local PostgreSQL mode. Leave `DB_HOST` unset to fall
 > back to the Lovable/Supabase backend (used by the preview).
+> Do not append comments after values in this file: Docker treats the comment
+> text as part of the environment-variable value.
 
 ## 3. TLS certificates
 
