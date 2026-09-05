@@ -6,20 +6,75 @@ import worldTopo from "world-atlas/countries-110m.json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Minus, Plus, RotateCcw, Globe2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
 
 export type MapCard = {
   id: string;
   country: string;
+  country_flag?: string;
   generation: string;
+  application?: string;
+  tachograph_application_os?: string;
   type_approval_number: string;
   current_manufacturer_normalized: string;
   current_manufacturer: string;
   date_status: string;
   issued_by_authority: string;
   certificate_holder: string;
+  certified_security_platform?: string;
+  chip_certificate?: string;
   chip_platform_vendor: string;
+  security_certificate?: string;
+  security_certificate_lab?: string;
+  functional_certificate_lab?: string;
+  jrc_interoperability_status?: string;
+  jrc_certificate_source?: string;
+  primary_source?: string;
+  card_quantities?: string;
+  latest_tender?: string;
+  winner_contractor?: string;
+  procurement_status?: string;
+  procurement_scope?: string;
+  tender_source?: string;
+  verification_note?: string;
 };
+
+const CARD_FIELDS: Array<[keyof MapCard, string]> = [
+  ["country", "Country"],
+  ["generation", "Generation"],
+  ["application", "Application"],
+  ["tachograph_application_os", "Tachograph Application / OS"],
+  ["type_approval_number", "Type Approval Number"],
+  ["issued_by_authority", "Issued by Authority"],
+  ["date_status", "Date / Status"],
+  ["certificate_holder", "Certificate Holder"],
+  ["certified_security_platform", "Certified Security Platform"],
+  ["chip_certificate", "Chip Certificate"],
+  ["chip_platform_vendor", "Chip / Platform Vendor"],
+  ["security_certificate", "Security Certificate"],
+  ["security_certificate_lab", "Security Certificate Lab"],
+  ["functional_certificate_lab", "Functional Certificate Lab"],
+  ["jrc_interoperability_status", "JRC Interoperability Status"],
+  ["jrc_certificate_source", "JRC / Certificate Source"],
+  ["primary_source", "Primary Source"],
+  ["card_quantities", "Card Quantities"],
+];
+
+const PROCUREMENT_FIELDS: Array<[keyof MapCard, string]> = [
+  ["latest_tender", "Latest Tender / Procurement Procedure"],
+  ["winner_contractor", "Winner / Contractor"],
+  ["procurement_status", "Procurement Status"],
+  ["procurement_scope", "Procurement Scope"],
+  ["tender_source", "Tender Source"],
+  ["verification_note", "Verification Note"],
+];
+
 
 /** App country name -> name used by the world-atlas dataset. */
 const NAME_ALIASES: Record<string, string> = {
