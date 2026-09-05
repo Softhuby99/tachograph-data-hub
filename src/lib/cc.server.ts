@@ -399,8 +399,18 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
   const products = extractJsonArray<PortalProduct>(html, "productList");
   const ppsList = extractJsonArray<PortalPp>(html, "ppsList");
   const ppById = new Map(ppsList.map((p) => [p.ID ?? "", ppNumber(p)]));
+  const ppNameById = new Map(ppsList.map((p) => [p.ID ?? "", decodeEntities(p.Name ?? "")]));
 
-  const tacho = products.filter((p) => /tachograph/i.test(p.name ?? ""));
+  // Like the script, which reads the whole product cell: the product name, its
+  // protection profile links and the category are all searched for "tachograph".
+  const tacho = products.filter((p) => {
+    const ppNames = (p.pps ?? "")
+      .split(",")
+      .map((id) => ppNameById.get(id.trim()) ?? "")
+      .join(" ");
+    return /tachograph/i.test(`${decodeEntities(p.name ?? "")} ${ppNames} ${p.category_name ?? ""}`);
+  });
+
   const out: CcEntry[] = [];
 
   const queue = [...tacho];
