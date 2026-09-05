@@ -217,100 +217,195 @@ export function generationOf(
   return Array.from(gens).join(", ");
 }
 
-function toDe(usDate: string): string {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(usDate.trim());
-  return m ? `${m[2]}.${m[1]}.${m[3]}` : usDate.trim();
+function isoToDe(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : value.trim();
 }
 
 // ------------------------------------------------------------------ fetching
+//
+// Port of scrape() in cc_tachograph.py: the portal index page carries the
+// complete product list as an embedded JSON array (productList / ppsList).
+// Every tachograph entry's certificate PDF is downloaded and read, exactly
+// like the script does with pdftotext.
 
-export function parseCcProducts(csv: string, pdfTexts: Map<string, string> = new Map()): CcEntry[] {
-  const rows = parseCsv(csv);
-  if (rows.length === 0) return [];
-  const header = rows[0].map((h) => h.trim());
-  const idx = (name: string) => header.indexOf(name);
-  const iCat = idx("Category");
-  const iName = idx("Name");
-  const iVendor = idx("Manufacturer");
-  const iScheme = idx("Scheme");
-  const iEal = idx("Assurance Level");
-  const iPp = idx("Protection Profile(s)");
-  const iIssued = idx("Certification Date");
-  const iExp = idx("Archived Date");
-  const iReport = idx("Certification Report URL");
+const CC_ARCHIVED_URL = "https://www.commoncriteriaportal.org/products/index.cfm?archived=1";
+const CC_FILES = "https://www.commoncriteriaportal.org/nfs/ccpfiles/files/epfiles/";
+const CC_UA = "Mozilla/5.0 (compatible; TachoCertMonitor/1.0)";
 
-  const out = new Map<string, CcEntry>();
-  for (const row of rows.slice(1)) {
-    const product = (row[iName] ?? "").replace(/&#x2f;/gi, "/").trim();
-    const pps = (row[iPp] ?? "").trim();
-    const category = (row[iCat] ?? "").trim();
-    const deviceType = deviceTypeOf(product, pps, category);
-    if (!deviceType) continue;
-    const reportUrl = (row[iReport] ?? "").trim();
-    const pdfText = pdfTexts.get(reportUrl);
-    const { number, source } = certificateNumber(product, reportUrl, pdfText);
-    const entry: CcEntry = {
-      certificate: number,
-      certificateSource: source,
-      deviceType,
-      product,
-      vendor: (row[iVendor] ?? "").replace(/&#x2f;/gi, "/").trim(),
-      scheme: (row[iScheme] ?? "").trim(),
-      assurance: (row[iEal] ?? "").trim(),
-      protectionProfiles: pps,
-      generation: generationOf(product, pps, deviceType, pdfText),
-      issued: toDe(row[iIssued] ?? ""),
-      expires: toDe(row[iExp] ?? ""),
-      reportUrl,
-    };
-    const key = `${entry.deviceType}|${entry.certificate || entry.product}|${entry.issued}`;
-    if (!out.has(key)) out.set(key, entry);
-  }
-  return Array.from(out.values());
-}
+type PortalProduct = {
+  name?: string;
+  pps?: string;
+  scheme_name?: string;
+  eal_name?: string;
+  certified?: string;
+  archived?: string;
+  cert1?: string;
+  pdf_cert?: string;
+  vendor_name?: string;
+  category_name?: string;
+};
 
-// ----------------------------------------------------------- PDF text (port
-// of the pdftotext step in cc_tachograph.py)
+type PortalPp = { ID?: string; Name?: string; PDF_PP?: string };
 
-const CC_TEXT_MAX_PAGES = 4; // certificate number sits on the cover pages
-const CC_FETCH_CONCURRENCY = 4;
-
-/** Extract plain text from the first pages of a certification report PDF. */
-export async function extractPdfText(data: ArrayBuffer): Promise<string> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
-  pdfjs.GlobalWorkerOptions.workerPort = null as never; // run on the main thread (Worker runtime)
-  const doc = await pdfjs.getDocument({
-    data: new Uint8Array(data),
-    isEvalSupported: false,
-    useSystemFonts: true,
-    disableFontFace: true,
-  }).promise;
-  try {
-    const pages = Math.min(doc.numPages, CC_TEXT_MAX_PAGES);
-    let text = "";
-    for (let p = 1; p <= pages; p++) {
-      const page = await doc.getPage(p);
-      const content = await page.getTextContent();
-      text += `${content.items.map((it) => ("str" in it ? it.str : "")).join(" ")}\n`;
-    }
-    return text;
-  } finally {
-    await doc.destroy();
-  }
-}
-
-async function fetchPdfTexts(urls: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  const queue = urls.filter((u) => /^https?:\/\//i.test(u) && /\.pdf(\?|$)/i.test(u));
-  async function worker() {
-    for (let url = queue.pop(); url; url = queue.pop()) {
-      try {
-        const res = await fetch(url, { headers: { "user-agent": "TachographCardsInfoTool/1.0" } });
-        if (!res.ok) continue;
-        out.set(url, await extractPdfText(await res.arrayBuffer()));
-      } catch {
-        /* unreadable PDFs fall back to filename/product-name rules */
+/** Read `var <name> = [ ... ]` out of the portal HTML. */
+export function extractJsonArray<T>(html: string, variable: string): T[] {
+  const marker = `var ${variable} = [`;
+  const start = html.indexOf(marker);
+  if (start < 0) return [];
+  const from = start + marker.length - 1;
+  let depth = 0;
+  for (let i = from; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(from, i + 1)) as T[];
+        } catch {
+          return [];
+        }
       }
+    }
+  }
+  return [];
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#x2f;/gi, "/")
+    .replace(/&#x3a;/gi, ":")
+    .replace(/&amp;/gi, "&")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+}
+
+/** PP number out of the portal's PP list entry ("...PP-0091..." / pp0091b.pdf). */
+function ppNumber(pp: PortalPp): string {
+  const fromName = /PP-(\d{4})/i.exec(pp.Name ?? "");
+  if (fromName) return `PP-${fromName[1]}`;
+  const fromFile = /pp(\d{4})/i.exec(pp.PDF_PP ?? "");
+  return fromFile ? `PP-${fromFile[1]}` : "";
+}
+
+async function fetchPdf(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { headers: { "user-agent": CC_UA } });
+    if (!res.ok) return "";
+    const buf = await res.arrayBuffer();
+    const head = new Uint8Array(buf.slice(0, 4));
+    if (String.fromCharCode(...head) !== "%PDF") return "";
+    return await extractPdfText(buf);
+  } catch {
+    return "";
+  }
+}
+
+const NON_CARD_PP: Record<string, CcDeviceType> = {
+  "PP-0093": "Motion Sensor",
+  "PP-0094": "Vehicle Unit",
+  "PP-0057": "Vehicle Unit",
+};
+
+function deviceFromPps(pps: string[], product: string): CcDeviceType {
+  for (const pp of pps) {
+    const hit = NON_CARD_PP[pp];
+    if (hit) return hit;
+  }
+  const hay = product.toLowerCase();
+  if (/motion sensor|kitas|\bsensor\b/.test(hay)) return "Motion Sensor";
+  if (/vehicle unit|\bdtco\b|\bvu\b/.test(hay)) return "Vehicle Unit";
+  return "Card";
+}
+
+const PP_GEN: Record<string, string> = { "PP-0070": "G1", "PP-0091": "G2.1" };
+
+/** generations() from cc_tachograph.py. */
+function generationsOf(pps: string[], product: string, certText: string, issued: string): string {
+  const gens = new Set<string>();
+  for (const pp of pps) if (PP_GEN[pp]) gens.add(PP_GEN[pp]);
+  const hay = `${product} ${certText}`.toUpperCase().replace(/\s+/g, "");
+  if (hay.includes("G2V2")) gens.add("G2.2");
+  if (gens.size === 0) {
+    const year = Number(issued.slice(0, 4));
+    if (year && year < 2018) return "G1 (derived from date)";
+    return "";
+  }
+  return Array.from(gens).sort().join(", ");
+}
+
+async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]> {
+  const res = await fetch(pageUrl, { headers: { "user-agent": CC_UA } });
+  if (!res.ok) {
+    throw new Error(`Common Criteria request failed [${res.status}]: ${res.statusText}`);
+  }
+  const html = await res.text();
+  const products = extractJsonArray<PortalProduct>(html, "productList");
+  const ppsList = extractJsonArray<PortalPp>(html, "ppsList");
+  const ppById = new Map(ppsList.map((p) => [p.ID ?? "", ppNumber(p)]));
+
+  const tacho = products.filter((p) => /tachograph/i.test(p.name ?? ""));
+  const out: CcEntry[] = [];
+
+  const queue = [...tacho];
+  async function worker() {
+    for (let item = queue.pop(); item; item = queue.pop()) {
+      const product = decodeEntities(item.name ?? "");
+      const certFile = (item.cert1 ?? "").trim();
+      const reportFile = (item.pdf_cert ?? "").trim();
+      const certUrl = certFile ? CC_FILES + encodeURIComponent(certFile) : "";
+      const reportUrl = reportFile ? CC_FILES + encodeURIComponent(reportFile) : "";
+
+      // Certificate PDF first; the report only as a fallback (the report text
+      // regularly names foreign certificates, e.g. the chip's).
+      const certOwnText = certUrl ? await fetchPdf(certUrl) : "";
+      const reportText = certOwnText ? "" : reportUrl ? await fetchPdf(reportUrl) : "";
+      const certText = `${certOwnText}\n${reportText}`;
+
+      let { number, source } = certificateNumber(product, certUrl || reportUrl, certOwnText);
+      if (!number) {
+        const guess = certificateNumber(product, reportUrl, "");
+        number = guess.number;
+        source = guess.source;
+      }
+      // Filename rules yield the number without the year suffix; the report
+      // head carries the full form.
+      if (source === "Certification report" && number.startsWith("BSI-DSZ-CC-")) {
+        const head = certText.slice(0, 600);
+        const m = new RegExp(`${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-V\\d)?-(\\d{4})`, "i").exec(head);
+        if (m) {
+          number = `${number}${(m[1] ?? "").toUpperCase()}-${m[2]}`;
+          source = "Report header";
+        }
+      }
+
+      const ppPortal = (item.pps ?? "")
+        .split(",")
+        .map((id) => ppById.get(id.trim()) ?? "")
+        .filter(Boolean);
+      const ppCert = Array.from(new Set((certText.match(/PP-\d{4}/gi) ?? []).map((s) => s.toUpperCase())));
+      const pps = (ppCert.length > 0 ? ppCert : ppPortal).sort();
+
+      const deviceType = deviceFromPps(pps, product);
+      out.push({
+        certificate: number,
+        certificateSource: source,
+        deviceType,
+        product,
+        vendor: decodeEntities(item.vendor_name ?? ""),
+        scheme: decodeEntities(item.scheme_name ?? ""),
+        assurance: (item.eal_name ?? "").trim(),
+        protectionProfiles: pps.join(" + "),
+        generation:
+          deviceType === "Card"
+            ? generationsOf(pps, product, certText, (item.certified ?? "").trim())
+            : "",
+        issued: isoToDe(item.certified ?? ""),
+        expires: isoToDe(item.archived ?? ""),
+        reportUrl: reportUrl || certUrl,
+        status,
+      });
     }
   }
   await Promise.all(Array.from({ length: CC_FETCH_CONCURRENCY }, worker));
@@ -318,24 +413,18 @@ async function fetchPdfTexts(urls: string[]): Promise<Map<string, string>> {
 }
 
 export async function fetchCcEntries(): Promise<CcEntry[]> {
-  const res = await fetch(CC_PRODUCTS_URL, {
-    headers: { "user-agent": "TachographCardsInfoTool/1.0" },
-  });
-  if (!res.ok) {
-    throw new Error(`Common Criteria request failed [${res.status}]: ${res.statusText}`);
+  const [valid, archived] = await Promise.all([
+    scrapePortal(CC_PORTAL_URL, "valid"),
+    scrapePortal(CC_ARCHIVED_URL, "archived"),
+  ]);
+  const out = new Map<string, CcEntry>();
+  for (const e of [...valid, ...archived]) {
+    const key = `${e.deviceType}|${e.certificate || e.product}|${e.issued}`;
+    if (!out.has(key)) out.set(key, e);
   }
-  const csv = await res.text();
-
-  // Script logic: open each tachograph certification report PDF and read the
-  // certificate number / generation markers straight from the document.
-  const tachoUrls = parseCsv(csv)
-    .slice(1)
-    .filter((row) => deviceTypeOf(row[1] ?? "", row[5] ?? "", row[0] ?? "") !== null)
-    .map((row) => (row[8] ?? "").trim())
-    .filter(Boolean);
-  const pdfTexts = await fetchPdfTexts(tachoUrls);
-  return parseCcProducts(csv, pdfTexts);
+  return Array.from(out.values());
 }
+
 
 // ----------------------------------------------------------------- proposals
 
