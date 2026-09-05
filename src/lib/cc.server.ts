@@ -89,14 +89,68 @@ const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] =
   },
 ];
 
+// CC_PAT from cc_tachograph.py: how certificate numbers appear inside the
+// certification report PDFs (OCR variants included).
+const CC_TEXT_PATTERNS = [
+  /EUCC[- ]?ANSSI[- ]?(\d{4})[- ]?(\d{2})[- ]?(\d{2})/gi,
+  /ANSSI[- ]?CC[- ]?(\d{4})[/ _-](\d{2,3}(?:\s?v\d)?)(?:[- ]?([SMR]\s?\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{7})(?:[- ]?(\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{2})-(\d{5,6})(?:-(\d{2}))?/gi,
+  /BSI[- ]?DSZ[- ]?CC[- ]?(\d{4})(?:[- ]?(V\d))?/gi,
+];
+
 const CERT_IN_TEXT = /((?:EUCC-ANSSI|ANSSI-CC|NSCIB-CC|BSI-DSZ-CC)-[0-9A-Za-z/_.-]{3,30})/;
+
+/** normalise_cc() from cc_tachograph.py: unify OCR / spelling variants. */
+export function normaliseCc(raw: string): string {
+  let s = raw.toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
+  s = s.replace(/[.,;)]+$/, "");
+  // ensure the revision suffix keeps its hyphen: "2022/38R01" -> "2022/38-R01"
+  s = s.replace(/([^-])([SMR]\d{2})$/, "$1-$2");
+  return s;
+}
+
+/**
+ * cert_number() from cc_tachograph.py: pull the official certificate number
+ * out of the report PDF text; returns "" when nothing is found.
+ */
+export function certificateFromText(text: string): string {
+  const flat = text.replace(/\s+/g, " ");
+  for (const re of CC_TEXT_PATTERNS) {
+    re.lastIndex = 0;
+    const m = re.exec(flat);
+    if (!m) continue;
+    if (/EUCC/i.test(m[0])) {
+      return `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}`;
+    }
+    if (/ANSSI/i.test(m[0])) {
+      const num = (m[2] ?? "").replace(/\s+/g, "");
+      const rev = (m[3] ?? "").replace(/\s+/g, "");
+      return normaliseCc(`ANSSI-CC-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
+    }
+    if (/NSCIB/i.test(m[0])) {
+      // long form (7 digits + optional suffix) keeps its digits untouched;
+      // the split form needs a real hyphen between the groups.
+      if (m[1].length === 7) return `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`;
+      return `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
+    }
+    return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
+  }
+  const loose = CERT_IN_TEXT.exec(flat);
+  return loose ? normaliseCc(loose[1]) : "";
+}
 
 export function certificateNumber(
   product: string,
   reportUrl: string,
+  pdfText?: string,
 ): { number: string; source: string } {
+  if (pdfText) {
+    const fromPdf = certificateFromText(pdfText);
+    if (fromPdf) return { number: fromPdf, source: "Certificate PDF" };
+  }
   const inName = CERT_IN_TEXT.exec(product);
-  if (inName) return { number: inName[1].replace(/[.,;)]+$/, ""), source: "Product name" };
+  if (inName) return { number: normaliseCc(inName[1]), source: "Product name" };
   let file = reportUrl.split("/").pop() ?? "";
   try {
     file = decodeURIComponent(file);
@@ -147,9 +201,15 @@ export function deviceTypeOf(product: string, pps: string, category: string): Cc
   return null;
 }
 
-export function generationOf(product: string, pps: string, deviceType: CcDeviceType): string {
+/** generations() from cc_tachograph.py: PP refs + product/cert text. */
+export function generationOf(
+  product: string,
+  pps: string,
+  deviceType: CcDeviceType,
+  pdfText?: string,
+): string {
   if (deviceType !== "Card") return "";
-  const hay = `${product} ${pps}`.toUpperCase().replace(/\s+/g, "");
+  const hay = `${product} ${pps} ${pdfText ?? ""}`.toUpperCase().replace(/\s+/g, "");
   const gens = new Set<string>();
   if (/TACHOGRAPHCARD_V1\.02|PP-0070|\bG1\b|,G1|G1,/.test(hay)) gens.add("G1");
   if (/TC_PP|PP-0091|G2V1/.test(hay)) gens.add("G2.1");
@@ -164,7 +224,7 @@ function toDe(usDate: string): string {
 
 // ------------------------------------------------------------------ fetching
 
-export function parseCcProducts(csv: string): CcEntry[] {
+export function parseCcProducts(csv: string, pdfTexts: Map<string, string> = new Map()): CcEntry[] {
   const rows = parseCsv(csv);
   if (rows.length === 0) return [];
   const header = rows[0].map((h) => h.trim());
@@ -187,7 +247,8 @@ export function parseCcProducts(csv: string): CcEntry[] {
     const deviceType = deviceTypeOf(product, pps, category);
     if (!deviceType) continue;
     const reportUrl = (row[iReport] ?? "").trim();
-    const { number, source } = certificateNumber(product, reportUrl);
+    const pdfText = pdfTexts.get(reportUrl);
+    const { number, source } = certificateNumber(product, reportUrl, pdfText);
     const entry: CcEntry = {
       certificate: number,
       certificateSource: source,
@@ -197,7 +258,7 @@ export function parseCcProducts(csv: string): CcEntry[] {
       scheme: (row[iScheme] ?? "").trim(),
       assurance: (row[iEal] ?? "").trim(),
       protectionProfiles: pps,
-      generation: generationOf(product, pps, deviceType),
+      generation: generationOf(product, pps, deviceType, pdfText),
       issued: toDe(row[iIssued] ?? ""),
       expires: toDe(row[iExp] ?? ""),
       reportUrl,
@@ -208,6 +269,54 @@ export function parseCcProducts(csv: string): CcEntry[] {
   return Array.from(out.values());
 }
 
+// ----------------------------------------------------------- PDF text (port
+// of the pdftotext step in cc_tachograph.py)
+
+const CC_TEXT_MAX_PAGES = 4; // certificate number sits on the cover pages
+const CC_FETCH_CONCURRENCY = 4;
+
+/** Extract plain text from the first pages of a certification report PDF. */
+export async function extractPdfText(data: ArrayBuffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerPort = null as never; // run on the main thread (Worker runtime)
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(data),
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+  try {
+    const pages = Math.min(doc.numPages, CC_TEXT_MAX_PAGES);
+    let text = "";
+    for (let p = 1; p <= pages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      text += `${content.items.map((it) => ("str" in it ? it.str : "")).join(" ")}\n`;
+    }
+    return text;
+  } finally {
+    await doc.destroy();
+  }
+}
+
+async function fetchPdfTexts(urls: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const queue = urls.filter((u) => /^https?:\/\//i.test(u) && /\.pdf(\?|$)/i.test(u));
+  async function worker() {
+    for (let url = queue.pop(); url; url = queue.pop()) {
+      try {
+        const res = await fetch(url, { headers: { "user-agent": "TachographCardsInfoTool/1.0" } });
+        if (!res.ok) continue;
+        out.set(url, await extractPdfText(await res.arrayBuffer()));
+      } catch {
+        /* unreadable PDFs fall back to filename/product-name rules */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: CC_FETCH_CONCURRENCY }, worker));
+  return out;
+}
+
 export async function fetchCcEntries(): Promise<CcEntry[]> {
   const res = await fetch(CC_PRODUCTS_URL, {
     headers: { "user-agent": "TachographCardsInfoTool/1.0" },
@@ -215,7 +324,17 @@ export async function fetchCcEntries(): Promise<CcEntry[]> {
   if (!res.ok) {
     throw new Error(`Common Criteria request failed [${res.status}]: ${res.statusText}`);
   }
-  return parseCcProducts(await res.text());
+  const csv = await res.text();
+
+  // Script logic: open each tachograph certification report PDF and read the
+  // certificate number / generation markers straight from the document.
+  const tachoUrls = parseCsv(csv)
+    .slice(1)
+    .filter((row) => deviceTypeOf(row[1] ?? "", row[5] ?? "", row[0] ?? "") !== null)
+    .map((row) => (row[8] ?? "").trim())
+    .filter(Boolean);
+  const pdfTexts = await fetchPdfTexts(tachoUrls);
+  return parseCcProducts(csv, pdfTexts);
 }
 
 // ----------------------------------------------------------------- proposals
