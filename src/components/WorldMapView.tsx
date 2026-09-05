@@ -419,8 +419,18 @@ export function WorldMapView({
                 </thead>
                 <tbody>
                   {selectedCards.map((c) => (
-                    <tr key={c.id} className="border-b last:border-0 align-top">
-                      <td className="py-2 pr-4 font-medium">{c.type_approval_number || "—"}</td>
+                    <tr
+                      key={c.id}
+                      className="cursor-pointer border-b align-top last:border-0 hover:bg-muted/50"
+                      title="Click for full details"
+                      onClick={() => {
+                        setCountryModal(null);
+                        setCardModal(c);
+                      }}
+                    >
+                      <td className="py-2 pr-4 font-medium text-primary underline-offset-2 hover:underline">
+                        {c.type_approval_number || "—"}
+                      </td>
                       <td className="py-2 pr-4">
                         <Badge variant="secondary">{c.generation || "—"}</Badge>
                       </td>
@@ -438,6 +448,113 @@ export function WorldMapView({
           )}
         </CardContent>
       </Card>
+
+      {/* Country list window — opened by clicking the number on the map */}
+      <Dialog open={!!countryModal} onOpenChange={(o) => !o && setCountryModal(null)}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {countryModal && flagUrl?.(countryModal, 40) && (
+                <img
+                  src={flagUrl(countryModal, 40)!}
+                  alt={`${countryModal} flag`}
+                  className="h-6 w-9 rounded border object-cover"
+                />
+              )}
+              <span>
+                {countryModal} · {countryCards.length} type approval(s)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Type Approval</th>
+                <th className="py-2 pr-4 font-medium">Generation</th>
+                <th className="py-2 pr-4 font-medium">Date / Status</th>
+                <th className="py-2 pr-4 font-medium">Manufacturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countryCards.map((c) => (
+                <tr
+                  key={c.id}
+                  className="cursor-pointer border-b align-top last:border-0 hover:bg-muted/50"
+                  title="Click for full details"
+                  onClick={() => {
+                    setCountryModal(null);
+                    setCardModal(c);
+                  }}
+                >
+                  <td className="py-2 pr-4 font-medium text-primary underline-offset-2 hover:underline">
+                    {c.type_approval_number || "—"}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <Badge variant="secondary">{c.generation || "—"}</Badge>
+                  </td>
+                  <td className="py-2 pr-4">{c.date_status || "—"}</td>
+                  <td className="py-2 pr-4">
+                    {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full card details */}
+      <Dialog open={!!cardModal} onOpenChange={(o) => !o && setCardModal(null)}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {cardModal && flagUrl?.(cardModal.country, 40) && (
+                <img
+                  src={flagUrl(cardModal.country, 40)!}
+                  alt={`${cardModal.country} flag`}
+                  className="h-6 w-9 rounded border object-cover"
+                />
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const c = cardModal?.country ?? null;
+                  setCardModal(null);
+                  setCountryModal(c);
+                }}
+              >
+                <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
+              </Button>
+              <span>
+                {cardModal?.country} · {cardModal?.type_approval_number || "—"}
+              </span>
+              <Badge variant="secondary">{cardModal?.generation || "—"}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          {cardModal && (
+            <div className="space-y-6">
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">Card &amp; Certification</h3>
+                <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                  {CARD_FIELDS.map(([k, label]) => (
+                    <ModalField key={k as string} label={label} value={cardModal[k]} />
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">Procurement</h3>
+                <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                  {PROCUREMENT_FIELDS.map(([k, label]) => (
+                    <ModalField key={k as string} label={label} value={cardModal[k]} />
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
+
 }
