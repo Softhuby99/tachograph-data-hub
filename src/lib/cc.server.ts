@@ -138,7 +138,10 @@ export function certificateFromText(text: string): string {
       if (m[1].length === 7) return `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`;
       return `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
     }
+    if (/^OC/i.test(m[0])) return `OC-${m[2]}-${m[3]} (ES)`;
+    if (/^CRP/i.test(m[0])) return `CRP${m[2]} (UK)`;
     return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
+
   }
   const loose = CERT_IN_TEXT.exec(flat);
   return loose ? normaliseCc(loose[1]) : "";
