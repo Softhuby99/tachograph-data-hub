@@ -305,14 +305,36 @@ export function extractJsonArray<T>(html: string, variable: string): T[] {
   return [];
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  nbsp: " ",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  ndash: "–",
+  mdash: "—",
+  eacute: "é",
+  egrave: "è",
+  agrave: "à",
+  ccedil: "ç",
+  ouml: "ö",
+  auml: "ä",
+  uuml: "ü",
+  szlig: "ß",
+  oacute: "ó",
+  iacute: "í",
+  aacute: "á",
+};
+
 function decodeEntities(value: string): string {
   return value
-    .replace(/&#x2f;/gi, "/")
-    .replace(/&#x3a;/gi, ":")
-    .replace(/&amp;/gi, "&")
-    .replace(/&nbsp;/gi, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_m, dec: string) => String.fromCodePoint(Number(dec)))
+    .replace(/&([a-z]+);/gi, (m, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
     .trim();
 }
+
 
 /** PP number out of the portal's PP list entry ("...PP-0091..." / pp0091b.pdf). */
 function ppNumber(pp: PortalPp): string {
