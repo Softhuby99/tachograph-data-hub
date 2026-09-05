@@ -854,7 +854,8 @@ function DetailView({
         <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
           {GROUP1_FIELDS.map(([k, label]) => {
             const key = k as string;
-            const value = String((card as Record<string, unknown>)[key] ?? "");
+            let value = String((card as Record<string, unknown>)[key] ?? "");
+            if (key === "card_quantities") value = formatQuantities(value);
             if (editing) {
               return (
                 <div key={key} className="md:col-span-1">
