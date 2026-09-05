@@ -109,7 +109,22 @@ export async function getAllCards(): Promise<Record<string, unknown>[]> {
     const { rows } = await pool().query(
       `SELECT ${CARD_COLUMNS} FROM public.tachograph_cards ORDER BY country`,
     );
-    return rows;
+    // node-postgres decodes DATE/TIMESTAMP columns as Date objects, while the
+    // hosted backend returns strings. Keep one browser-facing shape: React
+    // cannot render a Date object directly (the footer displays the reference
+    // date), and that otherwise trips the root error boundary after all three
+    // server requests have succeeded.
+    return rows.map((row) => ({
+      ...row,
+      data_reference_date:
+        row.data_reference_date instanceof Date
+          ? row.data_reference_date.toISOString().slice(0, 10)
+          : row.data_reference_date,
+      created_at:
+        row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+      updated_at:
+        row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+    }));
   }
   const admin = await supabaseAdmin();
   const { data, error } = await admin.from("tachograph_cards").select("*").order("country");
