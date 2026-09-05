@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
+import { formatQuantities } from "@/lib/utils";
 
 export type MapCard = {
   id: string;

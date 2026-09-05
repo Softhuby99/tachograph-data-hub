@@ -12,6 +12,7 @@ import {
 } from "@/lib/cards.functions";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
+import { formatQuantities } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
