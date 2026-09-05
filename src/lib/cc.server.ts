@@ -67,7 +67,7 @@ export function parseCsv(text: string): string[][] {
 
 const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] = [
   {
-    re: /ANSSI[-_]CC[-_](\d{4})[-_](\d{2,3})(?:[-_]?([SMR]\d{2}))?/i,
+    re: /ANSSI[-_]CC[-_](\d{4})[-_](\d{2,3}(?:v\d)?)(?:[-_]?([SMR]\d{2}))?/i,
     build: (m) => `ANSSI-CC-${m[1]}/${m[2]}${m[3] ? `-${m[3].toUpperCase()}` : ""}`,
   },
   {
@@ -124,10 +124,23 @@ export function baseCert(value: string): string {
 
 export function deviceTypeOf(product: string, pps: string, category: string): CcDeviceType | null {
   const hay = `${product} ${pps} ${category}`.toLowerCase();
-  if (/ms_pp|pp-0093|motion sensor/.test(hay)) return "Motion Sensor";
-  if (/vu_pp|pp-0094|pp-0057|vehicle unit/.test(hay) && !/tachographcard|tc_pp/.test(hay))
+  // Protection profile tokens are matched on their own, so unrelated products
+  // (e.g. a database with "DBMS_PP") never look like a motion sensor.
+  const pp = new Set(
+    pps
+      .toLowerCase()
+      .split(/[,;]/)
+      .map((t) => t.trim()),
+  );
+  const has = (...tokens: string[]) => tokens.some((t) => pp.has(t));
+  const tachoContext =
+    /tacho|dtco|motion sensor|vehicle unit/.test(hay) ||
+    has("tc_pp", "ms_pp", "vu_pp", "tachographcard_v1.02");
+  if (!tachoContext) return null;
+  if (has("ms_pp") || /pp-0093|motion sensor/.test(hay)) return "Motion Sensor";
+  if ((has("vu_pp") || /pp-0094|pp-0057|vehicle unit/.test(hay)) && !has("tachographcard_v1.02", "tc_pp"))
     return "Vehicle Unit";
-  if (/tc_pp|pp-0091|pp-0070|tachographcard|tachograph card|tacho/.test(hay)) {
+  if (has("tc_pp", "tachographcard_v1.02") || /pp-0091|pp-0070|tachograph card|tacho/.test(hay)) {
     if (/vehicle unit|dtco/.test(hay)) return "Vehicle Unit";
     return "Card";
   }
