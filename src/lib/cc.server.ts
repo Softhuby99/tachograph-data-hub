@@ -85,6 +85,15 @@ const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] =
     build: (m) => `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`,
   },
   { re: /\bCC-(\d{2})-(\d{6})\b/i, build: (m) => `NSCIB-CC-${m[1]}-${m[2]}` },
+  // Old French scheme files: "2003_12en.pdf" -> ANSSI-CC-2003/12
+  {
+    re: /^(\d{4})[_-](\d{2})(?:en|fr)?\.pdf$/i,
+    build: (m) => `ANSSI-CC-${m[1]}/${m[2]}`,
+  },
+  // Spanish scheme: "2012-32-CCRA.pdf" / "2012-32-INF-2355.pdf"
+  { re: /^(\d{4})-(\d{2})-(?:CCRA|INF)/i, build: (m) => `OC-${m[1]}-${m[2]} (ES)` },
+  // UK scheme: "CRP272 v1.0 ....pdf"
+  { re: /\bCRP[- ]?(\d{3})\b/i, build: (m) => `CRP${m[1]} (UK)` },
   {
     re: /^(\d{4})(V\d)?[a-c](?:_pdf)?\.pdf$/i,
     build: (m) => `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`,
@@ -436,7 +445,9 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
       // Certificate PDF first; the report only as a fallback (the report text
       // regularly names foreign certificates, e.g. the chip's).
       const certOwnText = certUrl ? await fetchPdf(certUrl) : "";
-      const reportText = certOwnText ? "" : reportUrl ? await fetchPdf(reportUrl) : "";
+      // The report is read as well, but only for protection-profile detection:
+      // its text regularly names foreign certificate numbers (e.g. the chip's).
+      const reportText = reportUrl ? await fetchPdf(reportUrl) : "";
       const certText = `${certOwnText}\n${reportText}`;
 
       let { number, source } = certificateNumber(product, certUrl || reportUrl, certOwnText);
