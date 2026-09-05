@@ -92,8 +92,10 @@ const FILENAME_RULES: { re: RegExp; build: (m: RegExpMatchArray) => string }[] =
 // CC_PAT from cc_tachograph.py: how certificate numbers appear inside the
 // certification report PDFs (OCR variants included).
 const CC_TEXT_PATTERNS = [
-  /(?:EUCC[- ]?ANSSI|ANSSI[- ]?CC)[- ]?(\d{4})[/ _-](\d{2,3}(?:\s?v\d)?)(?:[- ]?([SMR]\s?\d{2}))?/gi,
-  /NSCIB[- ]?CC[- ]?(\d{2})[- ]?(\d{5,6})(?:[- ]?(\d{2}))?/gi,
+  /EUCC[- ]?ANSSI[- ]?(\d{4})[- ]?(\d{2})[- ]?(\d{2})/gi,
+  /ANSSI[- ]?CC[- ]?(\d{4})[/ _-](\d{2,3}(?:\s?v\d)?)(?:[- ]?([SMR]\s?\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{7})(?:[- ]?(\d{2}))?/gi,
+  /NSCIB[- ]?CC[- ]?(\d{2})-(\d{5,6})(?:-(\d{2}))?/gi,
   /BSI[- ]?DSZ[- ]?CC[- ]?(\d{4})(?:[- ]?(V\d))?/gi,
 ];
 
@@ -118,19 +120,18 @@ export function certificateFromText(text: string): string {
     re.lastIndex = 0;
     const m = re.exec(flat);
     if (!m) continue;
-    const prefix = /EUCC/i.test(m[0])
-      ? "EUCC-ANSSI"
-      : /ANSSI/i.test(m[0])
-        ? "ANSSI-CC"
-        : /NSCIB/i.test(m[0])
-          ? "NSCIB-CC"
-          : "BSI-DSZ-CC";
-    if (prefix === "EUCC-ANSSI" || prefix === "ANSSI-CC") {
+    if (/EUCC/i.test(m[0])) {
+      return `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}`;
+    }
+    if (/ANSSI/i.test(m[0])) {
       const num = (m[2] ?? "").replace(/\s+/g, "");
       const rev = (m[3] ?? "").replace(/\s+/g, "");
-      return normaliseCc(`${prefix}-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
+      return normaliseCc(`ANSSI-CC-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
     }
-    if (prefix === "NSCIB-CC") {
+    if (/NSCIB/i.test(m[0])) {
+      // long form (7 digits + optional suffix) keeps its digits untouched;
+      // the split form needs a real hyphen between the groups.
+      if (m[1].length === 7) return `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`;
       return `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
     }
     return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
