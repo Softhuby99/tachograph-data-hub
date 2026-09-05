@@ -219,7 +219,9 @@ export type Database = {
       tachograph_cards: {
         Row: {
           application: string
+          certificate_expiry_date: string
           certificate_holder: string
+          certificate_issued_date: string
           certified_security_platform: string
           chip_certificate: string
           chip_platform_vendor: string
@@ -252,7 +254,9 @@ export type Database = {
         }
         Insert: {
           application?: string
+          certificate_expiry_date?: string
           certificate_holder?: string
+          certificate_issued_date?: string
           certified_security_platform?: string
           chip_certificate?: string
           chip_platform_vendor?: string
@@ -285,7 +289,9 @@ export type Database = {
         }
         Update: {
           application?: string
+          certificate_expiry_date?: string
           certificate_holder?: string
+          certificate_issued_date?: string
           certified_security_platform?: string
           chip_certificate?: string
           chip_platform_vendor?: string
