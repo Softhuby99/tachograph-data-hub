@@ -25,6 +25,8 @@ export type CcEntry = {
   issued: string; // DD.MM.YYYY
   expires: string; // DD.MM.YYYY
   reportUrl: string;
+  status: string; // "valid" | "archived"
+
 };
 
 // ---------------------------------------------------------------- csv parsing
