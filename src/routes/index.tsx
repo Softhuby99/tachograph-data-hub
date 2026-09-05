@@ -620,6 +620,8 @@ const TIMELINE_FIELDS: Array<[keyof TachoCard, string]> = [
   ["certificate_holder", "Certificate Holder"],
   ["chip_platform_vendor", "Chip / Platform Vendor"],
   ["security_certificate", "Security Certificate"],
+  ["certificate_issued_date", "Date Certificate Issued"],
+  ["certificate_expiry_date", "Certificate Validity Expiration Date"],
   ["jrc_interoperability_status", "JRC Interoperability Status"],
   ["latest_tender", "Latest Tender"],
   ["procurement_status", "Procurement Status"],
