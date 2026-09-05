@@ -331,8 +331,15 @@ export function WorldMapView({
                       key={l.country}
                       transform={`translate(${l.xy[0]},${l.xy[1]}) scale(${1 / zoom})`}
                       className="cursor-pointer"
-                      onClick={() => setSelected(l.country)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelected(l.country);
+                        setCardModal(null);
+                        setCountryModal(l.country);
+                      }}
                     >
+
                       <circle
                         r={11}
                         className={
