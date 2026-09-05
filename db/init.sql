@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS public.tachograph_cards (
   chip_platform_vendor text NOT NULL DEFAULT '',
   security_certificate text NOT NULL DEFAULT '',
   chip_certificate text NOT NULL DEFAULT '',
+  certificate_issued_date text NOT NULL DEFAULT '',
+  certificate_expiry_date text NOT NULL DEFAULT '',
   type_approval_number text NOT NULL DEFAULT '',
   certified_security_platform text NOT NULL DEFAULT '',
   certificate_holder text NOT NULL DEFAULT '',
