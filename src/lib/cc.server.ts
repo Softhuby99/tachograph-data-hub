@@ -368,11 +368,17 @@ const NON_CARD_PP: Record<string, CcDeviceType> = {
   "PP-0057": "Vehicle Unit",
 };
 
+const CARD_PP = new Set(["PP-0070", "PP-0091"]);
+
 function deviceFromPps(pps: string[], product: string): CcDeviceType {
+  // A card profile wins: report PDFs of card certificates regularly reference
+  // the vehicle-unit profile as well (e.g. ANSSI-CC-2022/36v2-R01).
+  if (pps.some((pp) => CARD_PP.has(pp))) return "Card";
   for (const pp of pps) {
     const hit = NON_CARD_PP[pp];
     if (hit) return hit;
   }
+
   const hay = product.toLowerCase();
   if (/motion sensor|kitas|\bsensor\b/.test(hay)) return "Motion Sensor";
   if (/vehicle unit|\bdtco\b|\bvu\b/.test(hay)) return "Vehicle Unit";
