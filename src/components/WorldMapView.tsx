@@ -111,10 +111,19 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-export function WorldMapView({ cards }: { cards: MapCard[] }) {
+export function WorldMapView({
+  cards,
+  flagUrl,
+}: {
+  cards: MapCard[];
+  flagUrl?: (country: string, size?: 40 | 80) => string | null;
+}) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [selected, setSelected] = useState<string | null>(null);
+  const [countryModal, setCountryModal] = useState<string | null>(null);
+  const [cardModal, setCardModal] = useState<MapCard | null>(null);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
