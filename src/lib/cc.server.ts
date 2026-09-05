@@ -102,9 +102,10 @@ const CERT_IN_TEXT = /((?:EUCC-ANSSI|ANSSI-CC|NSCIB-CC|BSI-DSZ-CC)-[0-9A-Za-z/_.
 /** normalise_cc() from cc_tachograph.py: unify OCR / spelling variants. */
 export function normaliseCc(raw: string): string {
   let s = raw.toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
-  s = s.replace(/[/]/, "/"); // keep the ANSSI year/number slash
-  s = s.replace(/-([SMR])(\d{2})$/, "-$1$2");
-  return s.replace(/[.,;)]+$/, "");
+  s = s.replace(/[.,;)]+$/, "");
+  // ensure the revision suffix keeps its hyphen: "2022/38R01" -> "2022/38-R01"
+  s = s.replace(/([^-])([SMR]\d{2})$/, "$1-$2");
+  return s;
 }
 
 /**
@@ -130,7 +131,7 @@ export function certificateFromText(text: string): string {
       return normaliseCc(`${prefix}-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
     }
     if (prefix === "NSCIB-CC") {
-      return m[3] ? `NSCIB-CC-${m[2]}${m[3]}` : `NSCIB-CC-${m[1]}-${m[2]}`;
+      return `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
     }
     return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
   }
