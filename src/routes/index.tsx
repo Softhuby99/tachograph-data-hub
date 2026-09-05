@@ -37,7 +37,7 @@ import {
   RefreshCw,
   Globe2,
 } from "lucide-react";
-import thalesLogo from "@/assets/thales-logo.png.asset.json";
+import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
 
 export const Route = createFileRoute("/")({
@@ -296,7 +296,7 @@ function TachographTool() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="shrink-0 rounded-md bg-white px-2 py-1.5 shadow-sm ring-1 ring-border">
-              <img src={thalesLogo.url} alt="Thales logo" className="h-7 w-auto object-contain" />
+              <img src={thalesLogoUrl} alt="Thales logo" className="h-7 w-auto object-contain" />
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Tachograph Cards Info Tool</h1>
