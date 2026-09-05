@@ -222,7 +222,7 @@ function toDe(usDate: string): string {
 
 // ------------------------------------------------------------------ fetching
 
-export function parseCcProducts(csv: string): CcEntry[] {
+export function parseCcProducts(csv: string, pdfTexts: Map<string, string> = new Map()): CcEntry[] {
   const rows = parseCsv(csv);
   if (rows.length === 0) return [];
   const header = rows[0].map((h) => h.trim());
@@ -245,7 +245,8 @@ export function parseCcProducts(csv: string): CcEntry[] {
     const deviceType = deviceTypeOf(product, pps, category);
     if (!deviceType) continue;
     const reportUrl = (row[iReport] ?? "").trim();
-    const { number, source } = certificateNumber(product, reportUrl);
+    const pdfText = pdfTexts.get(reportUrl);
+    const { number, source } = certificateNumber(product, reportUrl, pdfText);
     const entry: CcEntry = {
       certificate: number,
       certificateSource: source,
@@ -255,7 +256,7 @@ export function parseCcProducts(csv: string): CcEntry[] {
       scheme: (row[iScheme] ?? "").trim(),
       assurance: (row[iEal] ?? "").trim(),
       protectionProfiles: pps,
-      generation: generationOf(product, pps, deviceType),
+      generation: generationOf(product, pps, deviceType, pdfText),
       issued: toDe(row[iIssued] ?? ""),
       expires: toDe(row[iExp] ?? ""),
       reportUrl,
@@ -266,6 +267,54 @@ export function parseCcProducts(csv: string): CcEntry[] {
   return Array.from(out.values());
 }
 
+// ----------------------------------------------------------- PDF text (port
+// of the pdftotext step in cc_tachograph.py)
+
+const CC_TEXT_MAX_PAGES = 4; // certificate number sits on the cover pages
+const CC_FETCH_CONCURRENCY = 4;
+
+/** Extract plain text from the first pages of a certification report PDF. */
+export async function extractPdfText(data: ArrayBuffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerPort = null as never; // run on the main thread (Worker runtime)
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(data),
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+  try {
+    const pages = Math.min(doc.numPages, CC_TEXT_MAX_PAGES);
+    let text = "";
+    for (let p = 1; p <= pages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      text += `${content.items.map((it) => ("str" in it ? it.str : "")).join(" ")}\n`;
+    }
+    return text;
+  } finally {
+    await doc.destroy();
+  }
+}
+
+async function fetchPdfTexts(urls: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const queue = urls.filter((u) => /^https?:\/\//i.test(u) && /\.pdf(\?|$)/i.test(u));
+  async function worker() {
+    for (let url = queue.pop(); url; url = queue.pop()) {
+      try {
+        const res = await fetch(url, { headers: { "user-agent": "TachographCardsInfoTool/1.0" } });
+        if (!res.ok) continue;
+        out.set(url, await extractPdfText(await res.arrayBuffer()));
+      } catch {
+        /* unreadable PDFs fall back to filename/product-name rules */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: CC_FETCH_CONCURRENCY }, worker));
+  return out;
+}
+
 export async function fetchCcEntries(): Promise<CcEntry[]> {
   const res = await fetch(CC_PRODUCTS_URL, {
     headers: { "user-agent": "TachographCardsInfoTool/1.0" },
@@ -273,7 +322,17 @@ export async function fetchCcEntries(): Promise<CcEntry[]> {
   if (!res.ok) {
     throw new Error(`Common Criteria request failed [${res.status}]: ${res.statusText}`);
   }
-  return parseCcProducts(await res.text());
+  const csv = await res.text();
+
+  // Script logic: open each tachograph certification report PDF and read the
+  // certificate number / generation markers straight from the document.
+  const tachoUrls = parseCsv(csv)
+    .slice(1)
+    .filter((row) => deviceTypeOf(row[1] ?? "", row[5] ?? "", row[0] ?? "") !== null)
+    .map((row) => (row[8] ?? "").trim())
+    .filter(Boolean);
+  const pdfTexts = await fetchPdfTexts(tachoUrls);
+  return parseCcProducts(csv, pdfTexts);
 }
 
 // ----------------------------------------------------------------- proposals
