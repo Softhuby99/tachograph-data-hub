@@ -1415,6 +1415,8 @@ function certificationChain(card: TachoCard): {
     ["Security Certificate", card.security_certificate],
     ["Chip Certificate", card.chip_certificate],
     ["Certified Security Platform", card.certified_security_platform],
+    ["Date Certificate Issued", card.certificate_issued_date],
+    ["Certificate Validity Expiration Date", card.certificate_expiry_date],
   ]);
 
   const functional = match("Functional & interoperability certificate", [
