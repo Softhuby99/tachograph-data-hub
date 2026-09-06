@@ -270,6 +270,24 @@ export function ToolsView({
                 {filteredCards.length})
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!cards.length) {
+                  toast.error("Nothing to export.");
+                  return;
+                }
+                const stamp = new Date().toISOString().slice(0, 10);
+                download(
+                  JSON.stringify(cards, null, 2),
+                  `tachograph-cards-${stamp}.json`,
+                  "application/json;charset=utf-8",
+                );
+                toast.success(`${cards.length} row(s) exported as JSON.`);
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export all · JSON
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             Columns: {columns.map(labelFor).join(" · ")}
