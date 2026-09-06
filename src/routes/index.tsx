@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   saveCardOverride,
+  importCards,
   resetCardOverride,
   getCards,
   getOverrides,
@@ -235,6 +236,14 @@ function TachographTool() {
   const overrides = overridesQuery.data ?? {};
 
   const saveOverrideFn = useServerFn(saveCardOverride);
+  const importCardsFn = useServerFn(importCards);
+
+  const handleImport = async (rows: Record<string, string>[]) => {
+    const res = await importCardsFn({ data: { rows } });
+    await qc.invalidateQueries({ queryKey: ["tachograph_cards"] });
+    await qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    return res;
+  };
   const resetOverrideFn = useServerFn(resetCardOverride);
 
   const cards = useMemo(
@@ -398,7 +407,9 @@ function TachographTool() {
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} />}
         {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
-        {!isLoading && !error && tab === "tools" && <ToolsView cards={cards} />}
+        {!isLoading && !error && tab === "tools" && (
+          <ToolsView cards={cards} onImport={handleImport} />
+        )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
           Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
