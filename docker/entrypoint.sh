@@ -69,13 +69,20 @@ su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT 'ALTER TABLE public.'||tablen
 su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
 
 # --- 3. Self-signed cert fallback for test mode ---
-if [ ! -f /certs/fullchain.pem ] || [ ! -f /certs/privkey.pem ]; then
+# Skip entirely when native TLS is disabled (NITRO_SSL_CERT empty) — e.g. when
+# the app runs plain HTTP behind a reverse proxy. Also skip when the certs
+# volume is read-only and already non-empty, since we couldn't write anyway.
+if [ -n "${NITRO_SSL_CERT:-}" ] && { [ ! -f /certs/fullchain.pem ] || [ ! -f /certs/privkey.pem ]; }; then
   DOMAIN_CN="${DOMAIN:-tdh.local}"
-  echo "[entrypoint] No certs found — generating self-signed cert for CN=$DOMAIN_CN (test mode)."
-  mkdir -p /certs
-  openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-    -keyout /certs/privkey.pem -out /certs/fullchain.pem \
-    -subj "/CN=$DOMAIN_CN" 2>/dev/null
+  if [ -w /certs ]; then
+    echo "[entrypoint] No certs found — generating self-signed cert for CN=$DOMAIN_CN (test mode)."
+    mkdir -p /certs
+    openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+      -keyout /certs/privkey.pem -out /certs/fullchain.pem \
+      -subj "/CN=$DOMAIN_CN" 2>/dev/null
+  else
+    echo "[entrypoint] Certs missing and /certs not writable — Nitro will start without TLS."
+  fi
 fi
 
 echo "[entrypoint] Starting supervisord (PostgreSQL + Nitro)…"
