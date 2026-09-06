@@ -498,12 +498,14 @@ function DataView({
   cards,
   overrides,
   canEdit,
+  editHint,
   onSave,
   onReset,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
   canEdit: boolean;
+  editHint: string;
   onSave: (id: string, patch: Partial<TachoCard>) => void;
   onReset: (id: string) => void;
 }) {
