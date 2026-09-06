@@ -287,24 +287,35 @@ export function buildProposals(
   const meta = JRC_SOURCES[source];
   for (const row of latestPerApproval(rows)) {
     const card = matchCard(row, cards);
-    // Rows already represented in the dataset are only re-checked when they
-    // were published after the data reference date. Entries with no matching
-    // card (typically older G1 approvals missing from the dataset) are always
-    // proposed, regardless of their publication date.
-    if (card && sinceMs && parseJrcDate(row.date) < sinceMs) continue;
-    const changes = card ? diffRow(row, card) : [];
-    if (card && changes.length === 0) continue;
 
     // Country resolution from the JRC type approval table (see ta-country.ts).
-    // Only used when the entry is unknown in the dataset, or to flag a conflict.
-    // Only documented sources (JRC card name, type approval PDF) may fill the
-    // country. The eNN prefix names the issuing authority, not the card's
-    // country, and is tracked separately.
+    // Computed early because a country conflict must bypass the date filter —
+    // it flags stored data as wrong, independent of when the JRC row was
+    // published.
     const documented = documentedCountry(row.typeApproval);
     const fromName = !documented ? resolveFromCardName(row.cardName) : null;
     const resolved = documented || fromName;
     const authorityLabel = approvalAuthorityLabel(row.typeApproval);
     const conflict = card ? countryConflict(row.typeApproval, card.country) : null;
+
+    // Rows already represented in the dataset are only re-checked when they
+    // were published after the data reference date — UNLESS there is a
+    // country conflict, which must always surface as a proposal.
+    if (card && sinceMs && parseJrcDate(row.date) < sinceMs && !conflict) continue;
+
+    const changes = card ? diffRow(row, card) : [];
+    // Country conflicts become an actionable field change so the user can
+    // approve correcting the stored country to the documented one.
+    if (conflict) {
+      changes.push({
+        field: "country",
+        label: FIELD_LABELS["country"] ?? "Country",
+        old: card?.country ?? "",
+        new: conflict.country,
+      });
+    }
+    if (card && changes.length === 0) continue;
+
     const country = card?.country || resolved?.country || "";
     const payload: Record<string, string> = {};
     if (resolved) {
@@ -339,7 +350,9 @@ export function buildProposals(
       source_type: source,
       source_label: meta.label,
       title: card
-        ? `${card.country} · ${row.typeApproval}`
+        ? conflict
+          ? `${card.country} → ${conflict.country} · ${row.typeApproval}`
+          : `${card.country} · ${row.typeApproval}`
         : `New entry · ${country ? `${country} · ` : ""}${row.typeApproval}`,
       payload,
 
