@@ -162,6 +162,7 @@
     <button id="tabAnalytics" onclick="switchTab('analytics')">Market Analytics</button>
     <button id="tabMap" onclick="switchTab('map')">Map</button>
     <button id="tabUpdates" onclick="switchTab('updates')">Updates</button>
+    <button id="tabTools" onclick="switchTab('tools')">Tools</button>
   </div>
 </header>
 
@@ -206,6 +207,34 @@
     <div class="card">
       <h3 id="mapDetailTitle">Details</h3>
       <div id="mapDetail"><p style="color:#64748b;font-size:13px;">Click a country (or its number) on the map to see the type approval numbers and their details here.</p></div>
+    </div>
+  </div>
+</div>
+
+<div id="viewTools" class="view">
+  <div class="analytics">
+    <div class="card">
+      <h3>Export data</h3>
+      <p style="color:#94a3b8;font-size:13px;">
+        Download all card, certification and procurement data as a CSV file (UTF-8, opens directly
+        in Excel). Manual edits are included.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn" onclick="exportCsv(';')">Export all &middot; semicolon</button>
+        <button class="btn secondary" onclick="exportCsv(',')">Export all &middot; comma</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h3>Import data</h3>
+      <p style="color:#94a3b8;font-size:13px;">
+        Upload a CSV file (semicolon, comma or tab separated) with the same columns as the export.
+        Existing records are matched by id &mdash; or by Country + Type Approval Number +
+        Generation &mdash; and only changed fields are updated. Rows without a match are added as
+        new records. Empty cells are ignored and never clear existing values.
+      </p>
+      <input id="importFile" type="file" accept=".csv,text/csv" style="display:none" onchange="importCsvFile(this)" />
+      <div style="margin-top:10px;"><button class="btn" onclick="document.getElementById('importFile').click()">Import CSV</button></div>
+      <div id="importResult" style="margin-top:12px;font-size:13px;color:#e2e8f0;"></div>
     </div>
   </div>
 </div>
@@ -515,15 +544,138 @@ function resetEdits() {
 ['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', () => { renderList(); renderDetail(); }));
 
 // ---------- Analytics ----------
+// ------------------------------------------------------------ Tools: CSV export / import
+const CSV_LABELS = {
+  country: 'Country', country_flag: 'Country Flag', generation: 'Generation',
+  application: 'Application', current_manufacturer: 'Current Manufacturer',
+  current_manufacturer_normalized: 'Current Manufacturer (normalized)',
+  chip_platform_vendor: 'Chip / Platform Vendor', security_certificate: 'Security Certificate',
+  chip_certificate: 'Chip Certificate', certificate_issued_date: 'Date Certificate Issued',
+  certificate_expiry_date: 'Certificate Validity Expiration Date',
+  type_approval_number: 'Type Approval Number',
+  certified_security_platform: 'Certified Security Platform',
+  certificate_holder: 'Certificate Holder', date_status: 'Date / Status',
+  issued_by_authority: 'Issued by Authority',
+  jrc_interoperability_status: 'JRC Interoperability Status',
+  functional_certificate_lab: 'Functional Certificate Lab',
+  security_certificate_lab: 'Security Certificate Lab',
+  tachograph_application_os: 'Tachograph Application / OS',
+  distinction_from_manufacturer: 'Distinction from Manufacturer',
+  jrc_certificate_source: 'JRC / Certificate Source', primary_source: 'Primary Source',
+  card_quantities: 'Card Quantities', latest_tender: 'Latest Tender / Procurement Procedure',
+  winner_contractor: 'Winner / Contractor', procurement_status: 'Procurement Status',
+  procurement_scope: 'Procurement Scope', tender_source: 'Tender Source',
+  verification_note: 'Verification Note', data_reference_date: 'Last Data Update'
+};
+const CSV_SKIP = ['created_at','updated_at'];
+function csvLabel(k){ return CSV_LABELS[k] || k.replace(/_/g,' ').replace(/\b\w/g, m=>m.toUpperCase()); }
+function csvColumns(rows){
+  const keys = new Set();
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!CSV_SKIP.includes(k)) keys.add(k); }));
+  const pref = ['id'].concat(Object.keys(CSV_LABELS)).filter(k => keys.has(k));
+  const rest = [...keys].filter(k => !pref.includes(k)).sort();
+  return pref.concat(rest);
+}
+function exportCsv(delim){
+  const rows = DATA.map(merged);
+  if (!rows.length) { alert('Nothing to export.'); return; }
+  const cols = csvColumns(rows);
+  const esc = v => { const s = String(v==null?'':v).replace(/\r?\n/g,' ').trim();
+    return /["\n;,\t]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const lines = [cols.map(c => esc(csvLabel(c))).join(delim)];
+  rows.forEach(r => lines.push(cols.map(c => esc(r[c])).join(delim)));
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tachograph-cards-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+function parseCsvText(text){
+  const clean = String(text).replace(/^\uFEFF/, '');
+  const first = clean.split(/\r?\n/)[0] || '';
+  const cand = [[';', (first.match(/;/g)||[]).length], [',', (first.match(/,/g)||[]).length], ['\t', (first.match(/\t/g)||[]).length]];
+  const delim = cand.sort((a,b)=>b[1]-a[1])[0][0];
+  const rows = []; let row = []; let field = ''; let q = false;
+  for (let i=0;i<clean.length;i++){
+    const c = clean[i];
+    if (q){ if (c === '"'){ if (clean[i+1] === '"'){ field += '"'; i++; } else q = false; } else field += c; continue; }
+    if (c === '"'){ q = true; continue; }
+    if (c === delim){ row.push(field); field=''; continue; }
+    if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; continue; }
+    if (c === '\r') continue;
+    field += c;
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => String(v).trim() !== ''));
+}
+function csvKeyForHeader(h){
+  const t = String(h||'').trim(); if (!t) return null;
+  for (const k of Object.keys(CSV_LABELS)) if (CSV_LABELS[k].toLowerCase() === t.toLowerCase()) return k;
+  const snake = t.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return snake || null;
+}
+function csvMatchKey(r){
+  return [r.country, r.type_approval_number, r.generation].map(v => String(v==null?'':v).trim().toLowerCase()).join('|');
+}
+function importCsvFile(input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { try { applyCsvImport(String(reader.result)); }
+    catch (e) { $('importResult').innerHTML = '<span style="color:#f87171;">Import failed: ' + esc(e.message) + '</span>'; }
+    input.value = ''; };
+  reader.readAsText(file, 'utf-8');
+}
+function applyCsvImport(text){
+  const rows = parseCsvText(text);
+  if (rows.length < 2){ $('importResult').innerHTML = '<span style="color:#f87171;">No data rows found in the file.</span>'; return; }
+  const keys = rows[0].map(csvKeyForHeader);
+  const byId = {}; const byKey = {};
+  DATA.forEach(r => { byId[r.id] = r; byKey[csvMatchKey(r)] = r; });
+  let updated = 0, created = 0, unchanged = 0;
+  const errors = [];
+  rows.slice(1).forEach((cells, i) => {
+    const rec = {};
+    keys.forEach((k, j) => { if (k) rec[k] = String(cells[j]==null?'':cells[j]).trim(); });
+    const target = (rec.id && byId[rec.id]) || byKey[csvMatchKey(rec)];
+    if (target){
+      const cur = merged(target);
+      const patch = Object.assign({}, overrides[target.id] || {});
+      let changed = false;
+      Object.keys(rec).forEach(k => {
+        if (k === 'id' || CSV_SKIP.includes(k)) return;
+        if (rec[k] === '') return;
+        if (String(cur[k]==null?'':cur[k]) !== rec[k]){ patch[k] = rec[k]; changed = true; }
+      });
+      if (changed){ overrides[target.id] = patch; updated++; } else unchanged++;
+    } else {
+      if (!rec.country){ errors.push('Row ' + (i+2) + ': no country - skipped.'); return; }
+      const row = {};
+      Object.keys(rec).forEach(k => { if (k !== 'id' && rec[k] !== '') row[k] = rec[k]; });
+      extraRows.push(row); created++;
+    }
+  });
+  saveOverrides(overrides);
+  saveExtra(extraRows);
+  rebuildData();
+  let html = '<strong>' + updated + '</strong> record(s) updated &middot; <strong>' + created +
+    '</strong> added &middot; ' + unchanged + ' unchanged';
+  if (errors.length) html += '<ul style="color:#f87171;margin:8px 0 0 18px;font-size:12px;">' +
+    errors.slice(0,20).map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>';
+  $('importResult').innerHTML = html;
+}
+
 function switchTab(t) {
   $('tabData').classList.toggle('active', t==='data');
   $('tabAnalytics').classList.toggle('active', t==='analytics');
   $('tabMap').classList.toggle('active', t==='map');
   $('tabUpdates').classList.toggle('active', t==='updates');
+  $('tabTools').classList.toggle('active', t==='tools');
   $('viewData').classList.toggle('active', t==='data');
   $('viewAnalytics').classList.toggle('active', t==='analytics');
   $('viewMap').classList.toggle('active', t==='map');
   $('viewUpdates').classList.toggle('active', t==='updates');
+  $('viewTools').classList.toggle('active', t==='tools');
   if (t==='analytics') renderAnalytics();
   if (t==='map') renderMap();
   if (t==='updates') renderUpdates();
