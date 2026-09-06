@@ -11,15 +11,23 @@ const ALLOWED_HOSTS = new Set([
   "www.commoncriteriaportal.org",
 ]);
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB (default)
 const TIMEOUT_MS = 15_000;
+
+// The Common Criteria portal ships its whole product list inside one HTML page
+// (~20 MB, ~20 s), so it needs far higher limits than the small JRC tables.
+const LARGE_HOSTS = new Set(["www.commoncriteriaportal.org"]);
+const LARGE_MAX_BYTES = 40 * 1024 * 1024; // 40 MB
+const LARGE_TIMEOUT_MS = 90_000;
+const maxBytesFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_MAX_BYTES : MAX_BYTES);
+const timeoutFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_TIMEOUT_MS : TIMEOUT_MS);
 
 /** Fetch with manual redirect following — each hop must stay in the allowlist. */
 async function fetchFollowRedirects(url: URL, maxHops = 5): Promise<Response> {
   let current = url;
   for (let hop = 0; hop < maxHops; hop++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutFor(current.hostname));
     try {
       const res = await fetch(current.toString(), {
         headers: { "user-agent": "TachographCardsInfoTool/1.0" },
@@ -71,12 +79,13 @@ export const Route = createFileRoute("/api/public/fetch")({
           const reader = res.body?.getReader();
           if (!reader) return new Response("No body", { status: 502 });
           const chunks: Uint8Array[] = [];
+          const limit = maxBytesFor(target.hostname);
           let total = 0;
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
             total += value.byteLength;
-            if (total > MAX_BYTES) {
+            if (total > limit) {
               return new Response("Response too large", { status: 502 });
             }
             chunks.push(value);
