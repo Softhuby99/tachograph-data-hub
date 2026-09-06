@@ -179,6 +179,7 @@ type CardRow = {
 export type FieldChange = { field: string; label: string; old: string; new: string };
 
 const FIELD_LABELS: Record<string, string> = {
+  country: "Country",
   generation: "Generation",
   current_manufacturer: "Current Manufacturer",
   tachograph_application_os: "Tachograph Application / OS",
