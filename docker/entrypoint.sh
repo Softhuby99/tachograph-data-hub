@@ -45,6 +45,27 @@ else
   echo "[entrypoint] Existing database detected; skipping initial snapshot."
 fi
 
+# --- 2b. Apply incremental schema migrations (idempotent, tracked) ---
+su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"CREATE TABLE IF NOT EXISTS public.schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());\""
+
+if [ -d /app/db/migrations ]; then
+  for f in $(ls /app/db/migrations/*.sql 2>/dev/null | sort); do
+    name="$(basename "$f")"
+    applied="$(su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT 1 FROM public.schema_migrations WHERE filename='$name'\"")"
+    if [ "$applied" = "1" ]; then
+      echo "[entrypoint] Migration $name already applied."
+      continue
+    fi
+    echo "[entrypoint] Applying migration $name…"
+    su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f \"$f\""
+    su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"INSERT INTO public.schema_migrations (filename) VALUES ('$name') ON CONFLICT DO NOTHING;\""
+  done
+fi
+
+# Ensure ownership of everything in the app schema stays with the app user.
+su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT 'ALTER TABLE public.'||tablename||' OWNER TO \\\"$DB_USER\\\";' FROM pg_tables WHERE schemaname='public'\"" \
+  | su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\"" >/dev/null || true
+
 su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
 
 # --- 3. Self-signed cert fallback for test mode ---
