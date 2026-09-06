@@ -473,6 +473,7 @@ function TachographTool() {
             cards={cards}
             overrides={overrides}
             canEdit={canEdit}
+            editHint={adminRequired ? "Admin login required to edit" : "Sign in to edit"}
             onSave={saveOverride}
             onReset={resetOverride}
           />
