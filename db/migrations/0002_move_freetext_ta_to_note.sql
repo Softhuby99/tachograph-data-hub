@@ -13,7 +13,7 @@ SET verification_note = CONCAT(
   CASE WHEN verification_note != '' THEN CONCAT(E'\n', verification_note) ELSE '' END
 )
 WHERE type_approval_number != ''
-  AND type_approval_number !~* '^e\d{1,2}[-_]'
+  AND type_approval_number !~* '^e\d{1,2}[-_*]'
   AND verification_note NOT LIKE '[TA-ORIG: %'
   AND verification_note NOT LIKE '%' || E'\n' || '[TA-ORIG: %';
 
@@ -21,7 +21,7 @@ WHERE type_approval_number != ''
 UPDATE public.tachograph_cards
 SET type_approval_number = ''
 WHERE type_approval_number != ''
-  AND type_approval_number !~* '^e\d{1,2}[-_]';
+  AND type_approval_number !~* '^e\d{1,2}[-_*]';
 
 -- Rollback (run manually if needed):
 -- UPDATE public.tachograph_cards
