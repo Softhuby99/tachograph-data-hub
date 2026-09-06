@@ -240,7 +240,10 @@ function TachographTool() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
   const overridesQuery = useOverrides();
-  const overrides = overridesQuery.data ?? {};
+  const overrides = useMemo(
+    () => overridesQuery.data ?? {},
+    [overridesQuery.data],
+  );
 
   const saveOverrideFn = useServerFn(saveCardOverride);
   const importCardsFn = useServerFn(importCards);
