@@ -1587,14 +1587,14 @@ function renderCrossCheck(){
     const stored = String(r.country||'').trim();
     if (!ta || /^not identified/i.test(ta)) continue;
     checked++;
-    const hit = resolveTaCountry(ta);
-    if (!hit) { unknown.add(ta); continue; }
-    if (!hit[1] || !stored) continue;
-    const listed = hit[0].toLowerCase().split(',').map(s=>s.trim());
+    const documented = documentedCountry(ta);
+    if (!documented) { unknown.add(ta); continue; }
+    if (!stored) continue;
+    const listed = documented[0].toLowerCase().split(',').map(s=>s.trim());
     if (listed.includes(stored.toLowerCase())) continue;
     const key = ta + '|' + stored;
     if (seen.has(key)) continue; seen.add(key);
-    conflicts.push({ta, stored, resolved: hit[0], evidence: hit[2]});
+    conflicts.push({ta, stored, resolved: documented[0], evidence: documented[2]});
   }
   const list = conflicts.map(c =>
     '<li><code>' + c.ta + '</code> &mdash; stored <b>' + c.stored + '</b>, documented <b>' +
@@ -1602,10 +1602,11 @@ function renderCrossCheck(){
   const un = [...unknown];
   el.innerHTML =
     '<p>' + checked + ' record(s) checked &middot; ' + conflicts.length + ' conflict(s) &middot; ' +
-    un.length + ' type approval(s) not in the reference list.</p>' +
+    un.length + ' type approval(s) without documented country.</p>' +
     (list ? '<ul style="margin:8px 0 0 18px;font-size:12px;">' + list + '</ul>' : '') +
-    (un.length ? '<p style="margin-top:8px;font-size:12px;color:#94a3b8;">Not in reference list: ' +
-      un.slice(0,40).join(' &middot; ') + (un.length>40?' &hellip;':'') + '</p>' : '');
+    (un.length ? '<p style="margin-top:8px;font-size:12px;color:#94a3b8;">Country not documented (issuer prefix only): ' +
+      un.slice(0,40).map(ta => { const a = approvalAuthorityLabel(ta); return ta + (a ? ' [' + a + ']' : ''); }).join(' &middot; ') +
+      (un.length>40?' &hellip;':'') + '</p>' : '');
 }
 </script>
 </body>
