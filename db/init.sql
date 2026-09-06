@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS public.tachograph_cards (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Idempotent column upgrades for existing installations (init.sql only runs on first init)
+ALTER TABLE public.tachograph_cards
+  ADD COLUMN IF NOT EXISTS certificate_issued_date text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS certificate_expiry_date text NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS public.jrc_update_proposals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   fingerprint text NOT NULL UNIQUE,
