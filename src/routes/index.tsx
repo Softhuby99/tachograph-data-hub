@@ -855,12 +855,14 @@ function DetailView({
   card,
   edited,
   canEdit,
+  editHint,
   onSave,
   onReset,
 }: {
   card: TachoCard;
   edited: boolean;
   canEdit: boolean;
+  editHint: string;
   onSave: (patch: Partial<TachoCard>) => void;
   onReset: () => void;
 }) {
