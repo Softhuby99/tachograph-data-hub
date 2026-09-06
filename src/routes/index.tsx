@@ -37,9 +37,11 @@ import {
   Pencil,
   RefreshCw,
   Globe2,
+  Wrench,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
+import { ToolsView } from "@/components/ToolsView";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -228,7 +230,7 @@ function TachographTool() {
   const authEnabled = authMode.data?.enabled ?? true;
   const canEdit = !authEnabled || !!auth.session;
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates">("data");
+  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
   const overridesQuery = useOverrides();
   const overrides = overridesQuery.data ?? {};
 
@@ -358,6 +360,13 @@ function TachographTool() {
             >
               <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
+            <Button
+              variant={tab === "tools" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("tools")}
+            >
+              <Wrench className="mr-2 h-4 w-4" /> Tools
+            </Button>
             <span className="mx-1 h-8 w-px bg-border" />
             {authEnabled &&
               (auth.session ? (
@@ -389,9 +398,10 @@ function TachographTool() {
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} />}
         {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
+        {!isLoading && !error && tab === "tools" && <ToolsView cards={cards} />}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Data as of: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
+          Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
           authorities &amp; public procurement records.
         </footer>
       </main>
