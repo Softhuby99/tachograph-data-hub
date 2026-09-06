@@ -697,11 +697,12 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
     const fp = `${SOURCE}:${e.deviceType}:${normCert(e.certificate) || e.product}:${e.issued}:${e.expires}`;
     if (seen.has(fp)) continue;
     seen.add(fp);
+    const certCountry = certificationCountry(e);
     out.push({
       fingerprint: fp,
       kind: "info",
       card_id: null,
-      country: "",
+      country: certCountry,
       generation: e.generation,
       jrc_manufacturer: e.vendor,
       jrc_card_name: e.product,
@@ -712,8 +713,9 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
       source_url: e.reportUrl || CC_PORTAL_URL,
       source_type: SOURCE,
       source_label: `${SOURCE_LABEL} · ${e.deviceType}`,
-      title: `${e.deviceType} · ${e.certificate || e.product} — ${e.vendor}`,
+      title: `${e.deviceType} · ${certCountry ? `${certCountry} · ` : ""}${e.certificate || e.product} — ${e.vendor}`,
       payload: payloadOf(e),
+
       changes: { fields: [] },
       status: "pending",
     });
