@@ -11,8 +11,20 @@ import { getAllProposals, getRecentCheckRuns } from "@/lib/db.server";
 // ---- reads (public; no auth) ---------------------------------------------
 
 export const getProposals = createServerFn({ method: "GET" }).handler(async () => {
-  return await getAllProposals();
+  const { resolveTaCountry } = await import("@/lib/ta-country");
+  const rows = await getAllProposals();
+  // Older proposals were stored before country resolution existed — fill the
+  // country in for display (the stored row is not modified).
+  return rows.map((p) => {
+    if (p.country) return p;
+    const hit = resolveTaCountry(p.jrc_type_approval ?? "");
+    const payload = (p.payload ?? {}) as Record<string, string>;
+    const fromPayload = payload["Resolved country"] || payload["Certification country"] || "";
+    const country = hit?.country || (fromPayload === "not derivable" ? "" : fromPayload);
+    return country ? { ...p, country } : p;
+  });
 });
+
 
 export const getCheckRuns = createServerFn({ method: "GET" }).handler(async () => {
   return await getRecentCheckRuns(20);
