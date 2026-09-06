@@ -1316,7 +1316,7 @@ function renderUpdates() {
           '<div class="chg"><span>' + esc(c.label) + '</span><span class="old">' + esc(c.old || '—') + '</span><span class="new">' + esc(c.new) + '</span></div>').join('') + '</div>' : '');
     const actions = p.status === 'pending'
       ? '<div class="actions">' +
-          (p.kind === 'new' ? '<input class="country" id="c_' + p.id + '" value="' + esc(p.country||'') + '" placeholder="Country for new entry" />' : '') +
+          (p.kind === 'new' ? (function(){ var g = resolveTaCountry((p.row && p.row.typeApproval) || ''); var val = p.country || (g ? g[0] : ''); var assumed = !p.country && g && !g[1]; return '<input class="country" id="c_' + p.id + '" value="' + esc(val) + '" placeholder="Country for new entry" />' + (assumed ? '<span style="font-size:11px;color:#94a3b8;margin-left:6px;">assumed from issuer prefix - please confirm</span>' : ''); })() : '') +
           (p.kind === 'info' ? '' : '<button class="btn" onclick="applyProposal(\'' + p.id + '\')">Approve &amp; apply</button>') +
           '<button class="btn secondary" onclick="dismissProposal(\'' + p.id + '\')">Dismiss</button></div>'
       : '';
