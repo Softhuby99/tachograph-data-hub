@@ -424,7 +424,12 @@ export function UpdatesView() {
                       onClick={() =>
                         approveMutation.mutate({
                           id: p.id,
-                          country: newCountry[p.id] ?? p.country ?? "",
+                          country:
+                            newCountry[p.id] ??
+                            p.country ??
+                            resolveTaCountry(p.jrc_type_approval ?? "")?.country ??
+                            "",
+
                         })
                       }
                       disabled={approveMutation.isPending || !signedIn}
