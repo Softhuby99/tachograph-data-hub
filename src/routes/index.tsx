@@ -135,7 +135,6 @@ function useAuthMode() {
   });
 }
 
-
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
@@ -229,11 +228,22 @@ function TachographTool() {
   const auth = useAuth();
   const authMode = useAuthMode();
   const authEnabled = authMode.data?.enabled ?? true;
-  const canEdit = !authEnabled || !!auth.session;
+  const adminRequired = authMode.data?.adminRequired ?? false;
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [adminInput, setAdminInput] = useState("");
+  // In local mode with ADMIN_TOKEN: can edit only after entering the token.
+  // In Supabase mode: can edit with a session.
+  // In local mode without ADMIN_TOKEN: always can edit.
+  const adminUnlocked = !adminRequired || !!adminToken;
+  const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
   const overridesQuery = useOverrides();
-  const overrides = overridesQuery.data ?? {};
+  const overrides = useMemo(
+    () => overridesQuery.data ?? {},
+    [overridesQuery.data],
+  );
 
   const saveOverrideFn = useServerFn(saveCardOverride);
   const importCardsFn = useServerFn(importCards);
@@ -285,6 +295,29 @@ function TachographTool() {
   };
 
   const resetOverride = (id: string) => resetMutation.mutate(id);
+
+  // Read stored admin token on mount (local mode with ADMIN_TOKEN).
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    const stored = localStorage.getItem("admin-token");
+    if (stored) setAdminToken(stored);
+  }, []);
+
+  const submitAdminToken = () => {
+    const token = adminInput.trim();
+    if (!token) return;
+    localStorage.setItem("admin-token", token);
+    setAdminToken(token);
+    setAdminInput("");
+    setAdminLoginOpen(false);
+    toast.success("Admin token saved.");
+  };
+
+  const signOutAdmin = () => {
+    localStorage.removeItem("admin-token");
+    setAdminToken(null);
+    toast.info("Signed out of admin mode.");
+  };
 
   // One-time migration: push edits that still live in this browser's localStorage
   // into the shared database, then clear them locally.
@@ -387,6 +420,44 @@ function TachographTool() {
                   <Link to="/auth">Sign in</Link>
                 </Button>
               ))}
+            {adminRequired &&
+              (adminToken ? (
+                <Button variant="ghost" size="sm" onClick={signOutAdmin}>
+                  Admin sign out
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setAdminLoginOpen(true)}>
+                  <ShieldCheck className="mr-2 h-4 w-4" /> Admin login
+                </Button>
+              ))}
+            {adminRequired && adminLoginOpen && (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="password"
+                  placeholder="Admin token"
+                  className="h-8 w-40"
+                  value={adminInput}
+                  onChange={(e) => setAdminInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitAdminToken();
+                  }}
+                  autoFocus
+                />
+                <Button size="sm" onClick={submitAdminToken}>
+                  OK
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAdminLoginOpen(false);
+                    setAdminInput("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -400,6 +471,7 @@ function TachographTool() {
             cards={cards}
             overrides={overrides}
             canEdit={canEdit}
+            editHint={adminRequired ? "Admin login required to edit" : "Sign in to edit"}
             onSave={saveOverride}
             onReset={resetOverride}
           />
@@ -412,8 +484,8 @@ function TachographTool() {
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
-          authorities &amp; public procurement records.
+          Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
+          national authorities &amp; public procurement records.
         </footer>
       </main>
     </div>
@@ -424,12 +496,14 @@ function DataView({
   cards,
   overrides,
   canEdit,
+  editHint,
   onSave,
   onReset,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
   canEdit: boolean;
+  editHint: string;
   onSave: (id: string, patch: Partial<TachoCard>) => void;
   onReset: (id: string) => void;
 }) {
@@ -541,8 +615,6 @@ function DataView({
         <ManufacturerTimeline manufacturer={manufacturer} cards={filtered} />
       )}
 
-
-
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <div>
           <div className="mb-2 flex items-center justify-between">
@@ -609,6 +681,7 @@ function DataView({
               card={selected}
               edited={!!overrides[selected.id]}
               canEdit={canEdit}
+              editHint={editHint}
               onSave={(patch) => onSave(selected.id, patch)}
               onReset={() => onReset(selected.id)}
             />
@@ -661,9 +734,7 @@ function ManufacturerTimeline({
   const entries = useMemo(() => {
     const list = cards.map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }));
     if (sortBy === "name") {
-      return list.sort((a, b) =>
-        a.card.country.localeCompare(b.card.country),
-      );
+      return list.sort((a, b) => a.card.country.localeCompare(b.card.country));
     }
     return list.sort((a, b) => {
       if (!a.date) return 1;
@@ -772,18 +843,18 @@ function ManufacturerTimeline({
   );
 }
 
-
-
 function DetailView({
   card,
   edited,
   canEdit,
+  editHint,
   onSave,
   onReset,
 }: {
   card: TachoCard;
   edited: boolean;
   canEdit: boolean;
+  editHint: string;
   onSave: (patch: Partial<TachoCard>) => void;
   onReset: () => void;
 }) {
@@ -859,7 +930,7 @@ function DetailView({
                 </Button>
               )}
               {!editing && !canEdit && (
-                <span className="text-xs text-muted-foreground">Sign in to edit</span>
+                <span className="text-xs text-muted-foreground">{editHint}</span>
               )}
               {editing && (
                 <>
@@ -910,7 +981,6 @@ function DetailView({
           )}
         </CardContent>
       </Card>
-
 
       {/* Group 2 */}
       <Card>
@@ -1453,15 +1523,7 @@ function certificationChain(card: TachoCard): {
   return { typeApproval: ta, security, functional };
 }
 
-function ChainGroup({
-  title,
-  items,
-  empty,
-}: {
-  title: string;
-  items: ChainItem[];
-  empty: string;
-}) {
+function ChainGroup({ title, items, empty }: { title: string; items: ChainItem[]; empty: string }) {
   return (
     <div>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1497,7 +1559,9 @@ function CertificationChainPanel({ card }: { card: TachoCard }) {
     <div className="mt-4 rounded-md border bg-muted/30 p-3">
       <div className="mb-3 flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
-        <span className="text-sm font-semibold">Certification chain — who tested / approved what</span>
+        <span className="text-sm font-semibold">
+          Certification chain — who tested / approved what
+        </span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <ChainGroup
@@ -1523,7 +1587,6 @@ function CertificationChainPanel({ card }: { card: TachoCard }) {
     </div>
   );
 }
-
 
 function Field({
   label,

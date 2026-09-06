@@ -108,7 +108,6 @@ export function UpdatesView() {
   const approve = useServerFn(approveJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
 
-
   const [running, setRunning] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [sourceState, setSourceState] = useState<
@@ -331,7 +330,8 @@ export function UpdatesView() {
                     <Badge variant="outline">
                       {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
                     </Badge>
-                    {(p.country || (p.payload ?? {})["Resolved country"] ||
+                    {(p.country ||
+                      (p.payload ?? {})["Resolved country"] ||
                       (p.payload ?? {})["Certification country"]) && (
                       <Badge variant="secondary">
                         {p.country ||

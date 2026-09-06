@@ -7,7 +7,8 @@
 // certificate number — that one is derived from the certification report file
 // name and from the product name (both contain it in practice).
 
-export const CC_PRODUCTS_URL = "https://www.commoncriteriaportal.org/products/certified_products.csv";
+export const CC_PRODUCTS_URL =
+  "https://www.commoncriteriaportal.org/products/certified_products.csv";
 export const CC_PORTAL_URL = "https://www.commoncriteriaportal.org/products/index.cfm";
 
 export type CcDeviceType = "Card" | "Motion Sensor" | "Vehicle Unit";
@@ -26,7 +27,6 @@ export type CcEntry = {
   expires: string; // DD.MM.YYYY
   reportUrl: string;
   status: string; // "valid" | "archived"
-
 };
 
 // ---------------------------------------------------------------- csv parsing
@@ -221,7 +221,10 @@ export function deviceTypeOf(product: string, pps: string, category: string): Cc
     has("tc_pp", "ms_pp", "vu_pp", "tachographcard_v1.02");
   if (!tachoContext) return null;
   if (has("ms_pp") || /pp-0093|motion sensor/.test(hay)) return "Motion Sensor";
-  if ((has("vu_pp") || /pp-0094|pp-0057|vehicle unit/.test(hay)) && !has("tachographcard_v1.02", "tc_pp"))
+  if (
+    (has("vu_pp") || /pp-0094|pp-0057|vehicle unit/.test(hay)) &&
+    !has("tachographcard_v1.02", "tc_pp")
+  )
     return "Vehicle Unit";
   if (has("tc_pp", "tachographcard_v1.02") || /pp-0091|pp-0070|tachograph card|tacho/.test(hay)) {
     if (/vehicle unit|dtco/.test(hay)) return "Vehicle Unit";
@@ -284,7 +287,6 @@ export async function extractPdfText(data: ArrayBuffer): Promise<string> {
     }
   }
 }
-
 
 // ------------------------------------------------------------------ fetching
 //
@@ -366,7 +368,6 @@ function decodeEntities(value: string): string {
     .trim();
 }
 
-
 /** PP number out of the portal's PP list entry ("...PP-0091..." / pp0091b.pdf). */
 function ppNumber(pp: PortalPp): string {
   const fromName = /PP-(\d{4})/i.exec(pp.Name ?? "");
@@ -445,7 +446,9 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
       .split(",")
       .map((id) => ppNameById.get(id.trim()) ?? "")
       .join(" ");
-    return /tachograph/i.test(`${decodeEntities(p.name ?? "")} ${ppNames} ${p.category_name ?? ""}`);
+    return /tachograph/i.test(
+      `${decodeEntities(p.name ?? "")} ${ppNames} ${p.category_name ?? ""}`,
+    );
   });
 
   const out: CcEntry[] = [];
@@ -480,7 +483,10 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
       // their year.
       if (number.startsWith("BSI-DSZ-CC-")) {
         const head = (certOwnText || certText).slice(0, 600);
-        const m = new RegExp(`${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-V\\d)?-(\\d{4})`, "i").exec(head);
+        const m = new RegExp(
+          `${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-V\\d)?-(\\d{4})`,
+          "i",
+        ).exec(head);
         if (m) {
           number = `${number}${(m[1] ?? "").toUpperCase()}-${m[2]}`;
           source = source === "Certificate PDF" ? "Certificate PDF (header)" : "Report header";
@@ -491,7 +497,9 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
         .split(",")
         .map((id) => ppById.get(id.trim()) ?? "")
         .filter(Boolean);
-      const ppCert = Array.from(new Set((certText.match(/PP-\d{4}/gi) ?? []).map((s) => s.toUpperCase())));
+      const ppCert = Array.from(
+        new Set((certText.match(/PP-\d{4}/gi) ?? []).map((s) => s.toUpperCase())),
+      );
       const pps = (ppCert.length > 0 ? ppCert : ppPortal).sort();
 
       const deviceType = deviceFromPps(pps, product);
@@ -531,7 +539,6 @@ export async function fetchCcEntries(): Promise<CcEntry[]> {
   }
   return Array.from(out.values());
 }
-
 
 // ----------------------------------------------------------------- proposals
 
@@ -642,7 +649,6 @@ function payloadOf(e: CcEntry): Record<string, string> {
     "Certification report": e.reportUrl,
   };
 }
-
 
 /**
  * Cards get field proposals (issue / expiry date) when the portal knows the
