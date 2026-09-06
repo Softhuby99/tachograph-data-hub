@@ -1005,9 +1005,11 @@ async function runUpdateCheck() {
     renderUpdates();
     await new Promise(r => setTimeout(r, 30));
     try {
-      const res = (key === 'card_status' || key === 'other_certificates')
-        ? await checkCardSource(key)
-        : await checkInfoSource(key);
+      const res = key === 'cc_certificates'
+        ? await checkCcSource()
+        : (key === 'card_status' || key === 'other_certificates')
+          ? await checkCardSource(key)
+          : await checkInfoSource(key);
       totalRows += res.rows; totalNew += res.created;
       sourceState[key] = res.created > 0 ? 'updated' : 'clean';
       runs[key] = { message: res.baseline
