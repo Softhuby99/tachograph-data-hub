@@ -97,10 +97,9 @@ export const Route = createFileRoute("/api/public/fetch")({
           if (e instanceof Error && e.name === "AbortError") {
             return new Response("Request timed out", { status: 504 });
           }
-          return new Response(
-            `Upstream error: ${e instanceof Error ? e.message : String(e)}`,
-            { status: 502 },
-          );
+          return new Response(`Upstream error: ${e instanceof Error ? e.message : String(e)}`, {
+            status: 502,
+          });
         }
       },
     },

@@ -145,8 +145,7 @@ export function parseOtherCertificates(html: string): OtherCertRow[] {
     if (width < 6) continue;
     const raw = width >= 7 ? row.values.slice(-7) : row.values.slice(-6);
     const rawAttrs = width >= 7 ? row.attrs.slice(-7) : row.attrs.slice(-6);
-    const v =
-      width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], "", raw[5]];
+    const v = width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], "", raw[5]];
     const annexAttr = width >= 7 ? rawAttrs[6] : rawAttrs[5];
     if (v[0].toLowerCase().startsWith("manufacturer")) continue;
     if (!v[0] && !v[1]) continue;
@@ -167,7 +166,6 @@ export function parseOtherCertificates(html: string): OtherCertRow[] {
   }
   return out;
 }
-
 
 // ------------------------------------------------------ public key certs (DT)
 

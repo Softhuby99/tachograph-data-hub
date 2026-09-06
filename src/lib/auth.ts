@@ -44,5 +44,4 @@ const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) 
   });
 });
 
-export const optionalAuth =
-  process.env["AUTH_MODE"] === "none" ? noneAuth : requireSupabaseAuth;
+export const optionalAuth = process.env["AUTH_MODE"] === "none" ? noneAuth : requireSupabaseAuth;

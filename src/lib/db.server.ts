@@ -92,7 +92,6 @@ export type CheckRunRow = {
   message: string;
 };
 
-
 type SupabaseAdmin = SupabaseClient<Database>;
 
 async function supabaseAdmin(): Promise<SupabaseAdmin> {
@@ -121,10 +120,8 @@ export async function getAllCards(): Promise<Record<string, unknown>[]> {
         row.data_reference_date instanceof Date
           ? row.data_reference_date.toISOString().slice(0, 10)
           : row.data_reference_date,
-      created_at:
-        row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-      updated_at:
-        row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+      created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+      updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
     }));
   }
   const admin = await supabaseAdmin();
@@ -238,9 +235,7 @@ export async function saveOverride(
 
 export async function deleteOverride(cardId: string): Promise<void> {
   if (isLocalDb()) {
-    await pool().query("DELETE FROM public.tachograph_card_overrides WHERE card_id = $1", [
-      cardId,
-    ]);
+    await pool().query("DELETE FROM public.tachograph_card_overrides WHERE card_id = $1", [cardId]);
     return;
   }
   const admin = await supabaseAdmin();
@@ -286,10 +281,7 @@ export async function getKnownFingerprints(): Promise<Set<string>> {
   return known;
 }
 
-export async function insertProposals(
-  items: ProposalRow[],
-  known: Set<string>,
-): Promise<number> {
+export async function insertProposals(items: ProposalRow[], known: Set<string>): Promise<number> {
   const fresh = items.filter((c) => !known.has(c.fingerprint));
   for (const f of fresh) known.add(f.fingerprint);
   if (fresh.length === 0) return 0;
@@ -341,10 +333,9 @@ export async function insertProposals(
 
 export async function getProposal(id: string): Promise<ProposalRow | null> {
   if (isLocalDb()) {
-    const { rows } = await pool().query(
-      "SELECT * FROM public.jrc_update_proposals WHERE id = $1",
-      [id],
-    );
+    const { rows } = await pool().query("SELECT * FROM public.jrc_update_proposals WHERE id = $1", [
+      id,
+    ]);
     return (rows[0] as unknown as ProposalRow) ?? null;
   }
   const admin = await supabaseAdmin();
@@ -405,9 +396,7 @@ export async function upsertSnapshots(
     for (let i = 0; i < rows.length; i += 200) {
       const chunk = rows.slice(i, i + 200);
       let idx = 0;
-      const valuesSql = chunk
-        .map(() => `($${++idx},$${++idx},$${++idx},$${++idx})`)
-        .join(",");
+      const valuesSql = chunk.map(() => `($${++idx},$${++idx},$${++idx},$${++idx})`).join(",");
       const values: unknown[] = [];
       for (const r of chunk) values.push(r.source_type, r.entry_key, r.fingerprint, r.updated_at);
       await pool().query(
@@ -442,7 +431,14 @@ export async function insertCheckRun(row: {
     await pool().query(
       `INSERT INTO public.jrc_check_runs (source_type, source_url, rows_parsed, proposals_created, status, message)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [row.source_type, row.source_url, row.rows_parsed, row.proposals_created, row.status, row.message],
+      [
+        row.source_type,
+        row.source_url,
+        row.rows_parsed,
+        row.proposals_created,
+        row.status,
+        row.message,
+      ],
     );
     return;
   }
@@ -506,18 +502,15 @@ export async function updateCardVerificationNote(id: string, note: string): Prom
   if (error) throw new Error(error.message);
 }
 
-export async function updateCardFields(
-  id: string,
-  patch: Record<string, string>,
-): Promise<void> {
+export async function updateCardFields(id: string, patch: Record<string, string>): Promise<void> {
   if (isLocalDb()) {
     const cols = Object.keys(patch);
     if (cols.length === 0) return;
     const sets = cols.map((c, i) => `"${c}" = $${i + 2}`).join(",");
-    await pool().query(
-      `UPDATE public.tachograph_cards SET ${sets} WHERE id = $1`,
-      [id, ...cols.map((c) => patch[c])],
-    );
+    await pool().query(`UPDATE public.tachograph_cards SET ${sets} WHERE id = $1`, [
+      id,
+      ...cols.map((c) => patch[c]),
+    ]);
     return;
   }
   const admin = await supabaseAdmin();

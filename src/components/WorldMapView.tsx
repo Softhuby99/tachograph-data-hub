@@ -6,12 +6,7 @@ import worldTopo from "world-atlas/countries-110m.json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
 import { formatQuantities } from "@/lib/utils";
 
@@ -80,12 +75,11 @@ const PROCUREMENT_FIELDS: Array<[keyof MapCard, string]> = [
   ["verification_note", "Verification Note"],
 ];
 
-
 /** App country name -> name used by the world-atlas dataset. */
 const NAME_ALIASES: Record<string, string> = {
   "Bosnia and Herzegovina": "Bosnia and Herz.",
   "North Macedonia": "Macedonia",
-  "Türkiye": "Turkey",
+  Türkiye: "Turkey",
 };
 
 /** Micro states missing from the 110m dataset — rendered as point markers. */
@@ -189,12 +183,12 @@ export function WorldMapView({
     for (const s of shapes) {
       const app = atlasToApp.get(s.name);
       if (!app) continue;
-       const adjusted = labelPositions.get(app);
-       out.push({
-         country: app,
-         xy: adjusted ?? s.centroid,
-         cards: counts.get(app) ?? [],
-       });
+      const adjusted = labelPositions.get(app);
+      out.push({
+        country: app,
+        xy: adjusted ?? s.centroid,
+        cards: counts.get(app) ?? [],
+      });
     }
     for (const m of markers) {
       const list = counts.get(m.name);
@@ -256,7 +250,6 @@ export function WorldMapView({
     : [];
   const showNumbers = zoom >= 3.5;
 
-
   return (
     <div className="space-y-6">
       <Card>
@@ -273,7 +266,12 @@ export function WorldMapView({
               <Button size="icon" variant="outline" onClick={() => zoomBy(1.5)} title="Zoom in">
                 <Plus className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="outline" onClick={() => zoomBy(1 / 1.5)} title="Zoom out">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => zoomBy(1 / 1.5)}
+                title="Zoom out"
+              >
                 <Minus className="h-4 w-4" />
               </Button>
               <Button size="icon" variant="outline" onClick={reset} title="Reset view">
@@ -350,7 +348,6 @@ export function WorldMapView({
                         setCountryModal(l.country);
                       }}
                     >
-
                       <circle
                         r={11}
                         className={
@@ -575,7 +572,6 @@ export function WorldMapView({
       </Dialog>
     </div>
   );
-
 }
 
 function ModalField({ label, value }: { label: string; value?: string }) {

@@ -34,7 +34,6 @@ export const getProposals = createServerFn({ method: "GET" }).handler(async () =
   });
 });
 
-
 export const getCheckRuns = createServerFn({ method: "GET" }).handler(async () => {
   return await getRecentCheckRuns(20);
 });

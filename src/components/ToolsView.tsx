@@ -5,7 +5,6 @@ import { Download, Upload, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
 
-
 export type ExportRow = Record<string, unknown>;
 
 /** Human-readable column titles; anything else falls back to a prettified key. */
@@ -46,14 +45,14 @@ const COLUMN_LABELS: Record<string, string> = {
 const SKIP_COLUMNS = new Set(["id", "created_at", "updated_at"]);
 
 function labelFor(key: string) {
-  return (
-    COLUMN_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())
-  );
+  return COLUMN_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 function buildCsv(rows: ExportRow[], columns: string[], delimiter: string) {
   const escape = (v: unknown) => {
-    const s = String(v ?? "").replace(/\r?\n/g, " ").trim();
+    const s = String(v ?? "")
+      .replace(/\r?\n/g, " ")
+      .trim();
     return /["\n;,\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [columns.map((c) => escape(labelFor(c))).join(delimiter)];
@@ -94,17 +93,36 @@ export function parseCsv(text: string): string[][] {
     const c = clean[i];
     if (quoted) {
       if (c === '"') {
-        if (clean[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+        if (clean[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else quoted = false;
       } else field += c;
       continue;
     }
-    if (c === '"') { quoted = true; continue; }
-    if (c === delimiter) { row.push(field); field = ""; continue; }
-    if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+    if (c === '"') {
+      quoted = true;
+      continue;
+    }
+    if (c === delimiter) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+    if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
     if (c === "\r") continue;
     field += c;
   }
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  if (field !== "" || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
   return rows.filter((r) => r.some((v) => v.trim() !== ""));
 }
 
@@ -116,7 +134,10 @@ export function keyForHeader(header: string): string | null {
     ([, label]) => label.toLowerCase() === h.toLowerCase(),
   );
   if (byLabel) return byLabel[0];
-  const snake = h.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const snake = h
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
   if (snake === "id") return "id";
   if (Object.prototype.hasOwnProperty.call(COLUMN_LABELS, snake)) return snake;
   return snake || null;
@@ -148,9 +169,12 @@ export function ToolsView({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<
-    { updated: number; created: number; unchanged: number; errors: string[] } | null
-  >(null);
+  const [result, setResult] = useState<{
+    updated: number;
+    created: number;
+    unchanged: number;
+    errors: string[];
+  } | null>(null);
 
   const handleFile = async (file: File) => {
     setResult(null);
@@ -180,7 +204,8 @@ export function ToolsView({
 
   const columns = useMemo(() => {
     const keys = new Set<string>();
-    for (const row of cards) for (const k of Object.keys(row)) if (!SKIP_COLUMNS.has(k)) keys.add(k);
+    for (const row of cards)
+      for (const k of Object.keys(row)) if (!SKIP_COLUMNS.has(k)) keys.add(k);
     const preferred = Object.keys(COLUMN_LABELS).filter((k) => keys.has(k));
     const rest = [...keys].filter((k) => !preferred.includes(k)).sort();
     return [...preferred, ...rest];
@@ -220,10 +245,7 @@ export function ToolsView({
         continue;
       }
       const conflict = countryConflict(ta, stored);
-      if (
-        conflict &&
-        !conflicts.some((c) => c.ta === ta && c.stored === stored)
-      ) {
+      if (conflict && !conflicts.some((c) => c.ta === ta && c.stored === stored)) {
         conflicts.push({
           ta,
           stored,
@@ -236,7 +258,6 @@ export function ToolsView({
     return { conflicts, unknown: [...unknown], checked };
   }, [cards]);
 
-
   return (
     <div className="space-y-6">
       <Card>
@@ -247,9 +268,9 @@ export function ToolsView({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Download the consolidated card, certification and procurement data as a CSV file
-            (UTF-8, opens directly in Excel). {cards.length} record(s) in the database · last data
-            update {lastUpdate}.
+            Download the consolidated card, certification and procurement data as a CSV file (UTF-8,
+            opens directly in Excel). {cards.length} record(s) in the database · last data update{" "}
+            {lastUpdate}.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => exportRows(cards, "tachograph-cards", ";")}>
@@ -266,8 +287,7 @@ export function ToolsView({
                 variant="secondary"
                 onClick={() => exportRows(filteredCards, "tachograph-cards-filtered", ";")}
               >
-                <Download className="mr-2 h-4 w-4" /> Export current filter (
-                {filteredCards.length})
+                <Download className="mr-2 h-4 w-4" /> Export current filter ({filteredCards.length})
               </Button>
             )}
             <Button
@@ -318,11 +338,7 @@ export function ToolsView({
               if (f) void handleFile(f);
             }}
           />
-          <Button
-            variant="outline"
-            disabled={importing}
-            onClick={() => fileRef.current?.click()}
-          >
+          <Button variant="outline" disabled={importing} onClick={() => fileRef.current?.click()}>
             {importing ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -333,8 +349,8 @@ export function ToolsView({
           {result && (
             <div className="rounded-md border bg-muted/40 p-3 text-sm">
               <p>
-                {result.updated} record(s) updated · {result.created} added ·{" "}
-                {result.unchanged} unchanged
+                {result.updated} record(s) updated · {result.created} added · {result.unchanged}{" "}
+                unchanged
               </p>
               {result.errors.length > 0 && (
                 <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
@@ -356,12 +372,11 @@ export function ToolsView({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Compares every type approval number in the database with the documented
-            country sources (type approval PDF, JRC card name). Entries resolved only
-            from the eNN issuer prefix appear as "country not documented".
-            {" "}
-            {check.checked} record(s) checked · {check.conflicts.length} conflict(s) ·{" "}
-            {check.unknown.length} type approval(s) without documented country.
+            Compares every type approval number in the database with the documented country sources
+            (type approval PDF, JRC card name). Entries resolved only from the eNN issuer prefix
+            appear as "country not documented". {check.checked} record(s) checked ·{" "}
+            {check.conflicts.length} conflict(s) · {check.unknown.length} type approval(s) without
+            documented country.
           </p>
           {check.conflicts.length > 0 && (
             <div className="rounded-md border bg-muted/40 p-3">
@@ -381,9 +396,12 @@ export function ToolsView({
           {check.unknown.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Country not documented (issuer prefix only):{" "}
-              {check.unknown.slice(0, 40).map((ta) =>
-                approvalAuthorityLabel(ta) ? `${ta} [${approvalAuthorityLabel(ta)}]` : ta,
-              ).join(" · ")}
+              {check.unknown
+                .slice(0, 40)
+                .map((ta) =>
+                  approvalAuthorityLabel(ta) ? `${ta} [${approvalAuthorityLabel(ta)}]` : ta,
+                )
+                .join(" · ")}
               {check.unknown.length > 40 ? " …" : ""}
             </p>
           )}
@@ -409,7 +427,8 @@ export function ToolsView({
                 );
               }}
             >
-              <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length}) · CSV
+              <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length}) ·
+              CSV
             </Button>
             <Button
               variant="outline"
@@ -439,6 +458,5 @@ export function ToolsView({
         </CardContent>
       </Card>
     </div>
-
   );
 }

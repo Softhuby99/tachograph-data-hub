@@ -14,7 +14,12 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
-import { countryConflict, documentedCountry, resolveFromCardName, approvalAuthorityLabel } from "./ta-country";
+import {
+  countryConflict,
+  documentedCountry,
+  resolveFromCardName,
+  approvalAuthorityLabel,
+} from "./ta-country";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
@@ -126,15 +131,17 @@ export async function fetchOtherCertificateInfoEntries(): Promise<{
         "Mandatory security updates": r.mandatoryUpdates,
         Annex: r.generation
           ? `${r.generation} (${
-              r.generation === "G1" ? "Annex 1B" : r.generation === "G2.1" ? "Annex 1C" : "Annex 1C v2"
+              r.generation === "G1"
+                ? "Annex 1B"
+                : r.generation === "G2.1"
+                  ? "Annex 1C"
+                  : "Annex 1C v2"
             })`
           : "",
       },
     })),
   };
 }
-
-
 
 function parseJrcDate(value: string): number {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
@@ -163,7 +170,6 @@ export function latestPerApproval(rows: JrcRow[]): JrcRow[] {
   }
   return Array.from(best.values());
 }
-
 
 type CardRow = {
   id: string;
@@ -208,7 +214,6 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
     return true;
   });
 }
-
 
 export function diffRow(row: JrcRow, card: CardRow): FieldChange[] {
   const proposed: Record<string, string> = {
@@ -607,9 +612,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       const entries = await fetchCcEntries();
       const ccCards = await getCardsForCc();
       const candidates = buildCcProposals(entries, ccCards);
-      const created = await insertProposals(
-        candidates.slice(0, 80) as unknown as ProposalInsert[],
-      );
+      const created = await insertProposals(candidates.slice(0, 80) as unknown as ProposalInsert[]);
       result = {
         source,
         label: meta.label,
@@ -717,10 +720,7 @@ export async function approveProposal(id: string, country: string) {
       for (const card of affected) {
         const existingNote = (card.verification_note ?? "").trim();
         if (existingNote.includes(note)) continue;
-        await updateCardVerificationNote(
-          card.id,
-          existingNote ? `${existingNote}\n${note}` : note,
-        );
+        await updateCardVerificationNote(card.id, existingNote ? `${existingNote}\n${note}` : note);
       }
     }
   } else if (proposal.card_id) {

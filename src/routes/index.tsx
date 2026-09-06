@@ -135,7 +135,6 @@ function useAuthMode() {
   });
 }
 
-
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
@@ -424,11 +423,7 @@ function TachographTool() {
                   Admin sign out
                 </Button>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAdminLoginOpen(true)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setAdminLoginOpen(true)}>
                   <ShieldCheck className="mr-2 h-4 w-4" /> Admin login
                 </Button>
               ))}
@@ -486,8 +481,8 @@ function TachographTool() {
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
-          Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW, national
-          authorities &amp; public procurement records.
+          Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
+          national authorities &amp; public procurement records.
         </footer>
       </main>
     </div>
@@ -617,8 +612,6 @@ function DataView({
         <ManufacturerTimeline manufacturer={manufacturer} cards={filtered} />
       )}
 
-
-
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <div>
           <div className="mb-2 flex items-center justify-between">
@@ -738,9 +731,7 @@ function ManufacturerTimeline({
   const entries = useMemo(() => {
     const list = cards.map((c) => ({ card: c, date: parseApprovalDate(c.date_status) }));
     if (sortBy === "name") {
-      return list.sort((a, b) =>
-        a.card.country.localeCompare(b.card.country),
-      );
+      return list.sort((a, b) => a.card.country.localeCompare(b.card.country));
     }
     return list.sort((a, b) => {
       if (!a.date) return 1;
@@ -848,8 +839,6 @@ function ManufacturerTimeline({
     </Card>
   );
 }
-
-
 
 function DetailView({
   card,
@@ -989,7 +978,6 @@ function DetailView({
           )}
         </CardContent>
       </Card>
-
 
       {/* Group 2 */}
       <Card>
@@ -1532,15 +1520,7 @@ function certificationChain(card: TachoCard): {
   return { typeApproval: ta, security, functional };
 }
 
-function ChainGroup({
-  title,
-  items,
-  empty,
-}: {
-  title: string;
-  items: ChainItem[];
-  empty: string;
-}) {
+function ChainGroup({ title, items, empty }: { title: string; items: ChainItem[]; empty: string }) {
   return (
     <div>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1576,7 +1556,9 @@ function CertificationChainPanel({ card }: { card: TachoCard }) {
     <div className="mt-4 rounded-md border bg-muted/30 p-3">
       <div className="mb-3 flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
-        <span className="text-sm font-semibold">Certification chain — who tested / approved what</span>
+        <span className="text-sm font-semibold">
+          Certification chain — who tested / approved what
+        </span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <ChainGroup
@@ -1602,7 +1584,6 @@ function CertificationChainPanel({ card }: { card: TachoCard }) {
     </div>
   );
 }
-
 
 function Field({
   label,
