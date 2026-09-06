@@ -338,11 +338,12 @@ export function ToolsView({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Compares every type approval number in the database with the JRC country
-            resolution (type approval PDF, JRC card name, or issuing authority prefix).
+            Compares every type approval number in the database with the documented
+            country sources (type approval PDF, JRC card name). Entries resolved only
+            from the eNN issuer prefix appear as "country not documented".
             {" "}
             {check.checked} record(s) checked · {check.conflicts.length} conflict(s) ·{" "}
-            {check.unknown.length} type approval(s) not found in the reference list.
+            {check.unknown.length} type approval(s) without documented country.
           </p>
           {check.conflicts.length > 0 && (
             <div className="rounded-md border bg-muted/40 p-3">
