@@ -22,6 +22,70 @@ const LARGE_TIMEOUT_MS = 90_000;
 const maxBytesFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_MAX_BYTES : MAX_BYTES);
 const timeoutFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_TIMEOUT_MS : TIMEOUT_MS);
 
+type PortalProduct = {
+  name?: string;
+  pps?: string;
+  category_name?: string;
+};
+
+type PortalPp = { ID?: string; Name?: string };
+
+/** Read one JSON array embedded as `var <name> = [...]` in the portal page. */
+function extractPortalArray<T>(html: string, variable: string): T[] {
+  const marker = `var ${variable} = [`;
+  const start = html.indexOf(marker);
+  if (start < 0) return [];
+  const from = start + marker.length - 1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = from; i < html.length; i++) {
+    const ch = html[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(from, i + 1)) as T[];
+        } catch {
+          return [];
+        }
+      }
+    }
+  }
+  return [];
+}
+
+/**
+ * The archive page is about 18 MB. Returning it through the public endpoint can
+ * exceed an intermediary response limit even though the upstream fetch itself
+ * succeeds. Keep only tachograph products plus the PP lookup used by the
+ * offline parser; the resulting response is normally only a few kilobytes.
+ */
+function compactCommonCriteriaPage(html: string): string {
+  const products = extractPortalArray<PortalProduct>(html, "productList");
+  const pps = extractPortalArray<PortalPp>(html, "ppsList");
+  if (products.length === 0 || pps.length === 0) {
+    throw new Error("Common Criteria product data was not found");
+  }
+  const ppNames = new Map(pps.map((pp) => [String(pp.ID ?? ""), String(pp.Name ?? "")]));
+  const tachographProducts = products.filter((product) => {
+    const profiles = String(product.pps ?? "")
+      .split(",")
+      .map((id) => ppNames.get(id.trim()) ?? "")
+      .join(" ");
+    return /tachograph/i.test(`${product.name ?? ""} ${profiles} ${product.category_name ?? ""}`);
+  });
+  return `var productList = ${JSON.stringify(tachographProducts)};\nvar ppsList = ${JSON.stringify(pps)};`;
+}
+
 /** Fetch with manual redirect following — each hop must stay in the allowlist. */
 async function fetchFollowRedirects(url: URL, maxHops = 5): Promise<Response> {
   let current = url;
@@ -96,7 +160,12 @@ export const Route = createFileRoute("/api/public/fetch")({
             body.set(c, offset);
             offset += c.length;
           }
-          return new Response(body, {
+          const responseBody =
+            target.hostname === "www.commoncriteriaportal.org" &&
+            target.pathname === "/products/index.cfm"
+              ? compactCommonCriteriaPage(new TextDecoder().decode(body))
+              : body;
+          return new Response(responseBody, {
             headers: {
               "content-type": "text/plain; charset=utf-8",
               "cache-control": "public, max-age=3600",
