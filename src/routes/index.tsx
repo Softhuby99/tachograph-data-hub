@@ -294,6 +294,29 @@ function TachographTool() {
 
   const resetOverride = (id: string) => resetMutation.mutate(id);
 
+  // Read stored admin token on mount (local mode with ADMIN_TOKEN).
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    const stored = localStorage.getItem("admin-token");
+    if (stored) setAdminToken(stored);
+  }, []);
+
+  const submitAdminToken = () => {
+    const token = adminInput.trim();
+    if (!token) return;
+    localStorage.setItem("admin-token", token);
+    setAdminToken(token);
+    setAdminInput("");
+    setAdminLoginOpen(false);
+    toast.success("Admin token saved.");
+  };
+
+  const signOutAdmin = () => {
+    localStorage.removeItem("admin-token");
+    setAdminToken(null);
+    toast.info("Signed out of admin mode.");
+  };
+
   // One-time migration: push edits that still live in this browser's localStorage
   // into the shared database, then clear them locally.
   useEffect(() => {
