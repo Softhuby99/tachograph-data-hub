@@ -12,15 +12,24 @@ import { getAllProposals, getRecentCheckRuns } from "@/lib/db.server";
 
 export const getProposals = createServerFn({ method: "GET" }).handler(async () => {
   const { resolveTaCountry } = await import("@/lib/ta-country");
+  const { certificationCountry } = await import("@/lib/cc.server");
   const rows = await getAllProposals();
   // Older proposals were stored before country resolution existed — fill the
-  // country in for display (the stored row is not modified).
+  // country in for display (the stored row is not modified). JRC entries
+  // resolve via the e-number country list; Common Criteria entries via the
+  // certification scheme / certificate prefix.
   return rows.map((p) => {
     if (p.country) return p;
     const hit = resolveTaCountry(p.jrc_type_approval ?? "");
     const payload = (p.payload ?? {}) as Record<string, string>;
     const fromPayload = payload["Resolved country"] || payload["Certification country"] || "";
-    const country = hit?.country || (fromPayload === "not derivable" ? "" : fromPayload);
+    let country = hit?.country || (fromPayload === "not derivable" ? "" : fromPayload);
+    if (!country) {
+      country = certificationCountry({
+        scheme: payload["Scheme"],
+        certificate: payload["Security certificate"],
+      });
+    }
     return country ? { ...p, country } : p;
   });
 });

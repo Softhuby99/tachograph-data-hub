@@ -393,7 +393,7 @@ export function UpdatesView() {
                       <Input
                         className="h-9 w-56"
                         placeholder={isInfo ? "Country to note this on" : "Country for new entry"}
-                        value={newCountry[p.id] ?? ""}
+                        value={newCountry[p.id] ?? p.country ?? ""}
                         onChange={(e) => setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))}
                       />
                     )}
@@ -402,7 +402,7 @@ export function UpdatesView() {
                       onClick={() =>
                         approveMutation.mutate({
                           id: p.id,
-                          country: newCountry[p.id] ?? "",
+                          country: newCountry[p.id] ?? p.country ?? "",
                         })
                       }
                       disabled={approveMutation.isPending || !signedIn}
