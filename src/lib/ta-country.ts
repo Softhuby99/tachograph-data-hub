@@ -4409,3 +4409,139 @@ export function countryConflict(typeApproval: string, storedCountry: string) {
   const listed = hit.country.toLowerCase().split(",").map((s) => s.trim());
   return listed.includes(stored) ? null : hit;
 }
+
+/** Only documented resolutions (JRC card name, type approval PDF) may fill a
+ * country field. Prefix-derived ("assumed") hits never do — the eNN prefix
+ * names the issuing authority, not the card's country. */
+export function documentedCountry(typeApproval: string): TaCountryEntry | null {
+  const hit = resolveTaCountry(typeApproval);
+  return hit && hit.confidence === "documented" ? hit : null;
+}
+
+/** Issuer prefix, e.g. "e1" from "e1-0004-00". */
+export function taPrefix(typeApproval: string): string {
+  const m = /^(e\d{1,2})/i.exec((typeApproval ?? "").trim());
+  return m ? m[1]!.toLowerCase() : "";
+}
+
+/** Prefixes whose issuing-authority mapping is uncertain (kept, but flagged). */
+const UNSAFE_PREFIXES = new Set(["e31", "e42", "e51", "e54", "e55", "e56", "e58"]);
+
+export function prefixUnsafe(typeApproval: string): boolean {
+  return UNSAFE_PREFIXES.has(taPrefix(typeApproval));
+}
+
+/** "Typgenehmigung erteilt von: <authority> (eNN)". The authority issued the
+ * approval; it is NOT evidence for the card's country. */
+export function approvalAuthorityLabel(typeApproval: string): string {
+  const hit = resolveTaCountry(typeApproval);
+  const prefix = taPrefix(typeApproval);
+  const auth =
+    hit?.authority?.trim() ||
+    (hit?.authorityCountry ? `Authority of ${hit.authorityCountry}` : "");
+  const suffix = prefix ? ` (${prefix}${prefixUnsafe(typeApproval) ? ", mapping uncertain" : ""})` : "";
+  if (auth) return `${auth}${suffix}`;
+  return prefix ? prefix : "";
+}
+
+// Company / vendor phrases that must be stripped from a JRC card name before
+// country matching — "Austria Card", "IDEMIA The Netherlands", "Thales DIS …"
+// etc. are manufacturers, not countries.
+const COMPANY_NOISE = [
+  "austria card", "idemia", "thales", "imprimerie nationale", "bundesdruckerei",
+  "trüb ag", "trueb ag", "trüb", "polska wytwórnia", "pwpw", "certsign",
+  "gemalto", "oberthur", "morpho", "sagemcom", "giesecke", "g&d",
+  "national bank of", "the netherlands", "netherlands bv", "b.v.",
+];
+
+// Word-boundary alias -> canonical country. Covers the EU/AETR scope of the
+// JRC type approval list.
+const COUNTRY_ALIASES: [string, string][] = [
+  ["germany", "Germany"], ["deutschland", "Germany"],
+  ["france", "France"], ["frankreich", "France"],
+  ["poland", "Poland"], ["polen", "Poland"],
+  ["netherlands", "Netherlands"], ["niederlande", "Netherlands"],
+  ["italy", "Italy"], ["italien", "Italy"],
+  ["spain", "Spain"], ["spanien", "Spain"],
+  ["austria", "Austria"], ["österreich", "Austria"], ["oesterreich", "Austria"],
+  ["belgium", "Belgium"], ["belgien", "Belgium"],
+  ["bulgaria", "Bulgaria"], ["bulgarien", "Bulgaria"],
+  ["croatia", "Croatia"], ["kroatien", "Croatia"],
+  ["cyprus", "Cyprus"], ["zypern", "Cyprus"],
+  ["czechia", "Czechia"], ["czech republic", "Czechia"], ["tschechien", "Czechia"],
+  ["denmark", "Denmark"], ["dänemark", "Denmark"], ["daenemark", "Denmark"],
+  ["estonia", "Estonia"], ["estland", "Estonia"],
+  ["finland", "Finland"], ["finnland", "Finland"],
+  ["greece", "Greece"], ["griechenland", "Greece"],
+  ["hungary", "Hungary"], ["ungarn", "Hungary"],
+  ["iceland", "Iceland"], ["island", "Iceland"],
+  ["ireland", "Ireland"], ["irland", "Ireland"],
+  ["latvia", "Latvia"], ["lettland", "Latvia"],
+  ["liechtenstein", "Liechtenstein"],
+  ["lithuania", "Lithuania"], ["litauen", "Lithuania"],
+  ["luxembourg", "Luxembourg"], ["luxemburg", "Luxembourg"],
+  ["malta", "Malta"],
+  ["norway", "Norway"], ["norwegen", "Norway"],
+  ["portugal", "Portugal"],
+  ["romania", "Romania"], ["rumänien", "Romania"], ["rumaenien", "Romania"],
+  ["slovakia", "Slovakia"], ["slowakei", "Slovakia"],
+  ["slovenia", "Slovenia"], ["slowenien", "Slovenia"],
+  ["sweden", "Sweden"], ["schweden", "Sweden"],
+  ["switzerland", "Switzerland"], ["schweiz", "Switzerland"],
+  ["united kingdom", "United Kingdom"], ["great britain", "United Kingdom"],
+  ["turkey", "Türkiye"], ["türkiye", "Türkiye"], ["turkiye", "Türkiye"],
+  ["serbia", "Serbia"], ["serbien", "Serbia"],
+  ["ukraine", "Ukraine"],
+  ["moldova", "Moldova"], ["moldau", "Moldova"],
+  ["georgia", "Georgia"], ["georgien", "Georgia"],
+  ["armenia", "Armenia"], ["armenien", "Armenia"],
+  ["azerbaijan", "Azerbaijan"], ["aserbaidschan", "Azerbaijan"],
+  ["kazakhstan", "Kazakhstan"], ["kasachstan", "Kazakhstan"],
+  ["russia", "Russia"], ["russland", "Russia"],
+  ["belarus", "Belarus"], ["weißrussland", "Belarus"],
+  ["kyrgyzstan", "Kyrgyzstan"], ["kirgisistan", "Kyrgyzstan"],
+  ["israel", "Israel"],
+  ["bosnia", "Bosnia and Herzegovina"], ["bosnien", "Bosnia and Herzegovina"],
+  ["albania", "Albania"], ["albanien", "Albania"],
+  ["north macedonia", "North Macedonia"], ["macedonia", "North Macedonia"], ["mazedonien", "North Macedonia"],
+  ["andorra", "Andorra"],
+  ["san marino", "San Marino"],
+  ["monaco", "Monaco"],
+  ["montenegro", "Montenegro"],
+  ["kosovo", "Kosovo"],
+  ["uzbekistan", "Uzbekistan"], ["usbekistan", "Uzbekistan"],
+  ["turkmenistan", "Turkmenistan"],
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Resolves a country from a JRC card name: company phrases are removed first,
+ * then country names are matched on word boundaries. Returns a documented
+ * entry only when exactly one distinct country is found.
+ */
+export function resolveFromCardName(cardName: string): TaCountryEntry | null {
+  let text = ` ${(cardName ?? "").toLowerCase()} `;
+  for (const noise of COMPANY_NOISE) {
+    text = text.split(noise).join(" ");
+  }
+  const found = new Set<string>();
+  for (const [alias, country] of COUNTRY_ALIASES) {
+    if (new RegExp(`\\b${escapeRegExp(alias)}\\b`, "i").test(text)) found.add(country);
+  }
+  if (found.size !== 1) return null;
+  const country = [...found][0]!;
+  return {
+    ta: "",
+    country,
+    confidence: "documented",
+    basis: "JRC-Kartenname",
+    evidence: (cardName ?? "").slice(0, 160),
+    generation: "",
+    authority: "",
+    authorityCountry: "",
+    pdf: "",
+  };
+}
