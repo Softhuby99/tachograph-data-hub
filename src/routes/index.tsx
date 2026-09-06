@@ -418,6 +418,48 @@ function TachographTool() {
                   <Link to="/auth">Sign in</Link>
                 </Button>
               ))}
+            {adminRequired &&
+              (adminToken ? (
+                <Button variant="ghost" size="sm" onClick={signOutAdmin}>
+                  Admin sign out
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAdminLoginOpen(true)}
+                >
+                  <ShieldCheck className="mr-2 h-4 w-4" /> Admin login
+                </Button>
+              ))}
+            {adminRequired && adminLoginOpen && (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="password"
+                  placeholder="Admin token"
+                  className="h-8 w-40"
+                  value={adminInput}
+                  onChange={(e) => setAdminInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitAdminToken();
+                  }}
+                  autoFocus
+                />
+                <Button size="sm" onClick={submitAdminToken}>
+                  OK
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAdminLoginOpen(false);
+                    setAdminInput("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
