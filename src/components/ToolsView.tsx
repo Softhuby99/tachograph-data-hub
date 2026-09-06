@@ -63,8 +63,8 @@ function buildCsv(rows: ExportRow[], columns: string[], delimiter: string) {
   return "\uFEFF" + lines.join("\r\n");
 }
 
-function download(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+function download(content: string, filename: string, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
