@@ -46,7 +46,7 @@ Ohne Admin-Token läuft die lokale Anwendung nur lesend; Schreibversuche bekomme
 **2.4 Kein Standard-Datenbankpasswort**
 Der eingebaute Ersatzwert `tdh` entfällt an **beiden** Stellen: `docker/entrypoint.sh` und `src/lib/db.server.ts`. Fehlt das Passwort, startet die Anwendung nicht und sagt im Log, was fehlt.
 
-*Gestrichen:* der ursprüngliche Punkt „Rate-Limit-Log" — im Code existiert kein Rate-Limit, das Warnen könnte. Falls gewünscht, baue ich eines als eigenen Punkt; bitte kurz sagen.
+*Gestrichen:* der ursprüngliche Punkt „Rate-Limit-Log" — im Code existiert kein Rate-Limit, das Warnen könnte, und nach 2.1/2.2 wird auch keines gebaut. Sollte später eines nötig werden, gehört es nicht in die Anwendung, sondern in die Plattform-Schutzregel (Online) bzw. in nginx (Docker).
 
 ## Paket 3 — Kleinigkeiten
 
