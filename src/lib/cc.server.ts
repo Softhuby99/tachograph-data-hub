@@ -553,7 +553,60 @@ type CcProposal = {
 const SOURCE = "cc_certificates";
 const SOURCE_LABEL = "Common Criteria portal";
 
+const SCHEME_COUNTRY: Record<string, string> = {
+  de: "Germany",
+  deu: "Germany",
+  germany: "Germany",
+  fr: "France",
+  fra: "France",
+  france: "France",
+  nl: "Netherlands",
+  nld: "Netherlands",
+  netherlands: "Netherlands",
+  es: "Spain",
+  esp: "Spain",
+  spain: "Spain",
+  it: "Italy",
+  ita: "Italy",
+  italy: "Italy",
+  se: "Sweden",
+  swe: "Sweden",
+  sweden: "Sweden",
+  no: "Norway",
+  nor: "Norway",
+  norway: "Norway",
+  uk: "United Kingdom",
+  gb: "United Kingdom",
+  "united kingdom": "United Kingdom",
+  tr: "Turkey",
+  tur: "Turkey",
+  turkey: "Turkey",
+  pl: "Poland",
+  pol: "Poland",
+  poland: "Poland",
+  eu: "European Union (EUCC)",
+};
+
+/** Country of the certification scheme that issued the certificate. */
+export function certificationCountry(e: {
+  scheme?: string;
+  certificate?: string;
+  reportUrl?: string;
+}): string {
+  const scheme = (e.scheme ?? "").trim().toLowerCase();
+  if (scheme && SCHEME_COUNTRY[scheme]) return SCHEME_COUNTRY[scheme];
+  const cert = (e.certificate ?? "").toUpperCase();
+  if (cert.startsWith("BSI-")) return "Germany";
+  if (cert.startsWith("EUCC-ANSSI") || cert.startsWith("ANSSI-")) return "France";
+  if (cert.startsWith("NSCIB-")) return "Netherlands";
+  if (cert.startsWith("CRP")) return "United Kingdom";
+  if (cert.startsWith("OC-") || cert.includes("(ES)")) return "Spain";
+  if (cert.startsWith("EUCC-")) return "European Union (EUCC)";
+  return "";
+}
+
 function payloadOf(e: CcEntry): Record<string, string> {
+  const certCountry = certificationCountry(e);
   return {
     "Device type": e.deviceType,
     "Security certificate": e.certificate || "not published",
@@ -564,11 +617,16 @@ function payloadOf(e: CcEntry): Record<string, string> {
     "Protection profile(s)": e.protectionProfiles,
     "Assurance level": e.assurance,
     Scheme: e.scheme,
+    "Certification country": certCountry || "not derivable",
+    "Country note": certCountry
+      ? "Country of the certification scheme — not the issuing member state of a card."
+      : "No country could be derived from the certificate scheme.",
     "Date Certificate Issued": e.issued,
     "Certificate Validity Expiration Date": e.expires,
     "Certification report": e.reportUrl,
   };
 }
+
 
 /**
  * Cards get field proposals (issue / expiry date) when the portal knows the
@@ -639,11 +697,12 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
     const fp = `${SOURCE}:${e.deviceType}:${normCert(e.certificate) || e.product}:${e.issued}:${e.expires}`;
     if (seen.has(fp)) continue;
     seen.add(fp);
+    const certCountry = certificationCountry(e);
     out.push({
       fingerprint: fp,
       kind: "info",
       card_id: null,
-      country: "",
+      country: certCountry,
       generation: e.generation,
       jrc_manufacturer: e.vendor,
       jrc_card_name: e.product,
@@ -654,8 +713,9 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
       source_url: e.reportUrl || CC_PORTAL_URL,
       source_type: SOURCE,
       source_label: `${SOURCE_LABEL} · ${e.deviceType}`,
-      title: `${e.deviceType} · ${e.certificate || e.product} — ${e.vendor}`,
+      title: `${e.deviceType} · ${certCountry ? `${certCountry} · ` : ""}${e.certificate || e.product} — ${e.vendor}`,
       payload: payloadOf(e),
+
       changes: { fields: [] },
       status: "pending",
     });

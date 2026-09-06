@@ -324,17 +324,26 @@ export function UpdatesView() {
                   <CardTitle className="text-base">
                     {p.title ||
                       (p.kind === "new"
-                        ? `New JRC entry · ${p.jrc_type_approval || "—"}`
+                        ? `New JRC entry · ${p.country ? `${p.country} · ` : ""}${p.jrc_type_approval || "—"}`
                         : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`)}
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">
                       {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
                     </Badge>
+                    {(p.country || (p.payload ?? {})["Resolved country"] ||
+                      (p.payload ?? {})["Certification country"]) && (
+                      <Badge variant="secondary">
+                        {p.country ||
+                          (p.payload ?? {})["Resolved country"] ||
+                          (p.payload ?? {})["Certification country"]}
+                      </Badge>
+                    )}
                     {(p.payload ?? {})["Device type"] && (
                       <Badge variant="secondary">{(p.payload ?? {})["Device type"]}</Badge>
                     )}
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
+
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
                     </Badge>
