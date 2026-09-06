@@ -14,3 +14,6 @@
 - [x] 3.2 eslint --fix — index.tsx overrides in useMemo gewrappt; restliche warnings in auto-gen shadcn/previewAuthStorage
 - [x] Version 2.13
 - [x] Persistenten Common-Criteria-502 behoben: große Portal-Antwort serverseitig auf Tachograph-Produkte und benötigte Schutzprofile reduziert
+- [x] Version 2.15
+- [x] Falsche Flagge nach Länderkorrektur behoben — Land und Flagge werden zentral in src/lib/country-flag.ts abgeleitet; normalizeCountry() räumt Leerzeichen und geschützte Leerzeichen aus JRC-Zellen weg und matcht unabhängig von Groß-/Kleinschreibung, damit die ISO-Suche nicht mehr scheitert und auf die veraltete gespeicherte country_flag zurückfällt. Schreibpfade (Freigabe-Ablauf und manuelle Bearbeitung) normalisieren das Land und setzen country_flag mit — die gespeicherte Flagge kann dem Landfeld nicht mehr widersprechen. Standalone gespiegelt.
+- [x] Analytics-Aufklapplisten als Fenster — Klick auf einen Generations-Balken oder „Show countries" öffnet ein Fenster im Stil der Kartenansicht (Land, Typgenehmigung, Generation, Hersteller bzw. Datum/Status) statt einer Liste unterhalb des Diagramms. Standalone gespiegelt (openDrillModal, gemeinsame Fenster-Chrome via spawnModalWindow).

@@ -8,6 +8,7 @@ import {
   deleteOverride,
   insertCard,
 } from "@/lib/db.server";
+import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
 
 // Shared, database-backed manual edits of card fields.
 // The original row in tachograph_cards stays untouched; the patch is merged on read.
@@ -38,6 +39,15 @@ export const saveCardOverride = createServerFn({ method: "POST" })
 
     const existing = await getOverridePatch(data.cardId);
     const merged = { ...(existing ?? {}), ...data.patch };
+
+    // Editing the country must also move the flag. Without this the override
+    // changes the country while the card row keeps its old country_flag, and
+    // the record shows the previous country's flag whenever the ISO lookup
+    // misses (e.g. on a value with trailing whitespace).
+    if (typeof merged["country"] === "string") {
+      merged["country"] = normalizeCountry(merged["country"]);
+      merged["country_flag"] = flagEmoji(merged["country"]);
+    }
 
     if (Object.keys(merged).length === 0) {
       await deleteOverride(data.cardId);

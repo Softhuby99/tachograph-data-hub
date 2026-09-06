@@ -274,7 +274,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.14";
+const APP_VERSION = "2.15";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -378,9 +378,27 @@ let editing = false;
 
 const COUNTRY_ISO = {Albania:'al',Armenia:'am',Austria:'at',Azerbaijan:'az',Belarus:'by',Belgium:'be','Bosnia and Herzegovina':'ba',Bulgaria:'bg',Croatia:'hr',Cyprus:'cy',Czechia:'cz',Denmark:'dk',Estonia:'ee',Finland:'fi',France:'fr',Georgia:'ge',Germany:'de',Greece:'gr',Hungary:'hu',Iceland:'is',Ireland:'ie',Israel:'il',Italy:'it',Kazakhstan:'kz',Kyrgyzstan:'kg',Latvia:'lv',Liechtenstein:'li',Lithuania:'lt',Luxembourg:'lu',Malta:'mt',Moldova:'md',Monaco:'mc',Montenegro:'me',Netherlands:'nl','North Macedonia':'mk',Norway:'no',Poland:'pl',Portugal:'pt',Romania:'ro',Russia:'ru','San Marino':'sm',Serbia:'rs',Slovakia:'sk',Slovenia:'si',Spain:'es',Sweden:'se',Switzerland:'ch',Tajikistan:'tj',Turkmenistan:'tm','Türkiye':'tr',Ukraine:'ua','United Kingdom':'gb',Uzbekistan:'uz'};
 
+/**
+ * Canonical country name: collapses stray/non-breaking whitespace and matches
+ * case-insensitively, so a value like "Germany " still resolves. Without this
+ * the ISO lookup misses and the record falls back to its stored country_flag,
+ * which may still be the flag of the country it had before a correction.
+ * Mirrors normalizeCountry() in src/lib/country-flag.ts.
+ */
+function normalizeCountry(country) {
+  const cleaned = String(country == null ? '' : country).replace(/[\s\u00a0\u202f]+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (COUNTRY_ISO[cleaned]) return cleaned;
+  const lower = cleaned.toLowerCase();
+  for (const name of Object.keys(COUNTRY_ISO)) {
+    if (name.toLowerCase() === lower) return name;
+  }
+  return cleaned;
+}
+
 /** ISO code for a record — falls back to the country name when iso is missing. */
 function isoOf(r) {
-  return (r && r.iso) || (r && COUNTRY_ISO[r.country]) || '';
+  return (r && r.iso) || (r && COUNTRY_ISO[normalizeCountry(r.country)]) || '';
 }
 
 function flagUrl(iso, big) {
@@ -690,8 +708,6 @@ function switchTab(t) {
   if (t==='tools') renderCrossCheck();
 }
 
-let drillGen = null;
-let drillMan = null;
 
 function renderAnalytics() {
   const rows = DATA.map(merged);
@@ -716,34 +732,25 @@ function renderAnalytics() {
   })).sort((a,b) => b.approvals - a.approvals || b.countries - a.countries);
   const mfgMax = mfgList[0]?.approvals || 1;
 
-  // Drill lists
-  const genDrill = drillGen ? rows.filter(r => r.generation===drillGen).map(r => `${r.country_flag||''} ${r.country}`).sort() : null;
-  const manDrill = drillMan ? rows.filter(r => (r.current_manufacturer_normalized||r.current_manufacturer)===drillMan).map(r => `${r.country_flag||''} ${r.country} (${r.generation})`).sort() : null;
-
   $('analyticsContent').innerHTML = `
     <h2>Market Analytics — ${total} records</h2>
     <div class="grid">
       <div class="card">
         <h3>Countries per Generation</h3>
         ${gens.map(g => `
-          <div class="bar-row" onclick="drillGen='${g}'; renderAnalytics();">
+          <div class="bar-row" onclick="openDrillModal('gen','${g}')">
             <div class="label">${g}</div>
             <div class="bar-track"><div class="bar-fill" style="width:${genCounts[g]/genMax*100}%"></div></div>
             <div class="val">${genCounts[g]} (${(genCounts[g]/total*100).toFixed(1)}%)</div>
           </div>
         `).join('')}
-        ${drillGen ? `
-          <div class="drill">
-            <h4>Countries with ${drillGen} <button class="btn secondary" style="float:right;padding:2px 8px" onclick="drillGen=null; renderAnalytics();">Close</button></h4>
-            <ul>${genDrill.map(c => `<li>${c}</li>`).join('')}</ul>
-          </div>` : ''}
       </div>
 
       <div class="card">
         <h3>Market Share by Generation</h3>
         ${gens.map(g => {
           const pct = genCounts[g]/total*100;
-          return `<div class="bar-row" onclick="drillGen='${g}'; renderAnalytics();">
+          return `<div class="bar-row" onclick="openDrillModal('gen','${g}')">
             <div class="label">${g}</div>
             <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
             <div class="val">${pct.toFixed(1)}%</div>
@@ -764,15 +771,10 @@ function renderAnalytics() {
                 <td class="n">${m.share.toFixed(1)}%</td>
                 <td style="width:200px"><div class="bar-track" style="height:14px"><div class="bar-fill" style="width:${m.approvals/mfgMax*100}%; background:linear-gradient(90deg,#059669,#34d399)"></div></div></td>
               </tr>
-              <tr><td colspan="5" style="padding:0"><button class="btn secondary" style="margin:0 0 6px; padding:2px 8px; font-size:11px" onclick="drillMan=${JSON.stringify(m.name).replace(/"/g,'&quot;')}; renderAnalytics();">Show countries</button></td></tr>
+              <tr><td colspan="5" style="padding:0"><button class="btn secondary" style="margin:0 0 6px; padding:2px 8px; font-size:11px" onclick="openDrillModal('mfg',${JSON.stringify(m.name).replace(/"/g,'&quot;')})">Show countries</button></td></tr>
             `).join('')}
           </tbody>
         </table>
-        ${drillMan ? `
-          <div class="drill">
-            <h4>${drillMan} — countries <button class="btn secondary" style="float:right;padding:2px 8px" onclick="drillMan=null; renderAnalytics();">Close</button></h4>
-            <ul>${manDrill.map(c => `<li>${c}</li>`).join('')}</ul>
-          </div>` : ''}
       </div>
     </div>
   `;
@@ -1428,6 +1430,68 @@ function openCountryModal(country) {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   });
+}
+
+// ---------- Shared window chrome: append a .card-modal and make it draggable ----------
+function spawnModalWindow(innerHtml) {
+  const win = document.createElement('div');
+  win.className = 'card-modal';
+  win.id = 'cardModal';
+  win.innerHTML = innerHtml;
+  document.body.appendChild(win);
+  const head = win.querySelector('#cardModalHead');
+  if (head) head.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cm-close')) return;
+    const rect = win.getBoundingClientRect();
+    const drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const move = ev => {
+      win.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - drag.dx)) + 'px';
+      win.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - drag.dy)) + 'px';
+      win.style.transform = 'none';
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+  return win;
+}
+
+/**
+ * Drill-down window for the analytics view. Clicking a generation bar or a
+ * manufacturer's "Show countries" opens this instead of pushing a list below
+ * the chart, matching the country window of the map view.
+ */
+function openDrillModal(kind, value) {
+  closeCardModal();
+  const rows = DATA.map(merged).filter(r => kind === 'gen'
+    ? r.generation === value
+    : (r.current_manufacturer_normalized || r.current_manufacturer) === value);
+  rows.sort((a,b) => String(a.country||'').localeCompare(String(b.country||''))
+    || String(a.type_approval_number||'').localeCompare(String(b.type_approval_number||'')));
+  const countries = new Set(rows.map(r => r.country)).size;
+  const body = rows.map(r => {
+    const flag = isoOf(r)
+      ? '<img src="' + flagUrl(isoOf(r),false) + '" onerror="this.style.display=\'none\'" style="height:14px;border-radius:2px;vertical-align:-2px;margin-right:6px"/>'
+      : '<span style="margin-right:6px">' + (r.country_flag||'') + '</span>';
+    return '<tr onclick="openCardModal(\'' + r.id + '\')" style="cursor:pointer" title="Click for full details">' +
+      '<td>' + flag + esc(r.country || '\u2014') + '</td>' +
+      '<td>' + esc(r.type_approval_number || '\u2014') + '</td>' +
+      '<td><span class="badge">' + esc(r.generation || '\u2014') + '</span></td>' +
+      '<td>' + esc((kind === 'gen'
+        ? (r.current_manufacturer_normalized || r.current_manufacturer)
+        : r.date_status) || '\u2014') + '</td></tr>';
+  }).join('');
+  const title = kind === 'gen' ? 'Generation ' + esc(value) : esc(value);
+  spawnModalWindow(
+    '<div class="cm-head" id="cardModalHead">' +
+      '<div class="cm-title"><b>' + title + '</b> · ' + rows.length + ' type approval(s) in ' + countries + ' countries</div>' +
+      '<button class="cm-close" onclick="closeCardModal()" title="Close">&times;</button>' +
+    '</div>' +
+    '<div class="cm-body"><table class="tbl"><thead><tr>' +
+      '<th>Country</th><th>Type Approval</th><th>Generation</th>' +
+      '<th>' + (kind === 'gen' ? 'Manufacturer' : 'Date / Status') + '</th>' +
+    '</tr></thead><tbody>' + (body || '<tr><td colspan="4">No entries.</td></tr>') + '</tbody></table></div>'
+  );
 }
 
 // ---------- Card info modal (draggable, resizable, scrollable) ----------

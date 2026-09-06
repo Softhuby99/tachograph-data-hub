@@ -20,6 +20,7 @@ import {
   resolveFromCardName,
   approvalAuthorityLabel,
 } from "./ta-country";
+import { flagEmoji, normalizeCountry } from "./country-flag";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
@@ -726,14 +727,24 @@ export async function approveProposal(id: string, country: string) {
   } else if (proposal.card_id) {
     const patch: Record<string, string> = {};
     for (const c of changes) patch[c.field] = c.new;
+    // A country coming from a JRC table cell can carry stray or non-breaking
+    // whitespace. Stored unnormalised it still *looks* right in the UI but
+    // misses the ISO lookup, and the card keeps the flag of its previous
+    // country. Normalise here, and keep country_flag in step so the stored
+    // emoji can never contradict the country field.
+    if (typeof patch["country"] === "string") {
+      patch["country"] = normalizeCountry(patch["country"]);
+      patch["country_flag"] = flagEmoji(patch["country"]);
+    }
     if (Object.keys(patch).length > 0) {
       await updateCardFields(proposal.card_id, patch);
     }
   } else {
-    const name = country.trim();
+    const name = normalizeCountry(country);
     if (!name) throw new Error("Country is required for a new entry");
     await insertCard({
       country: name,
+      country_flag: flagEmoji(name),
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
       current_manufacturer_normalized: proposal.jrc_manufacturer,

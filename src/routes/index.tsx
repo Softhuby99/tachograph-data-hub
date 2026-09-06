@@ -13,6 +13,7 @@ import {
 } from "@/lib/cards.functions";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
+import { flagUrl } from "@/lib/country-flag";
 import { formatQuantities } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UpdatesView } from "@/components/UpdatesView";
 import {
   Search,
@@ -139,67 +141,6 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
 
-const COUNTRY_ISO: Record<string, string> = {
-  Albania: "al",
-  Armenia: "am",
-  Austria: "at",
-  Azerbaijan: "az",
-  Belarus: "by",
-  Belgium: "be",
-  "Bosnia and Herzegovina": "ba",
-  Bulgaria: "bg",
-  Croatia: "hr",
-  Cyprus: "cy",
-  Czechia: "cz",
-  Denmark: "dk",
-  Estonia: "ee",
-  Finland: "fi",
-  France: "fr",
-  Georgia: "ge",
-  Germany: "de",
-  Greece: "gr",
-  Hungary: "hu",
-  Iceland: "is",
-  Ireland: "ie",
-  Israel: "il",
-  Italy: "it",
-  Kazakhstan: "kz",
-  Kyrgyzstan: "kg",
-  Latvia: "lv",
-  Liechtenstein: "li",
-  Lithuania: "lt",
-  Luxembourg: "lu",
-  Malta: "mt",
-  Moldova: "md",
-  Monaco: "mc",
-  Montenegro: "me",
-  Netherlands: "nl",
-  "North Macedonia": "mk",
-  Norway: "no",
-  Poland: "pl",
-  Portugal: "pt",
-  Romania: "ro",
-  Russia: "ru",
-  "San Marino": "sm",
-  Serbia: "rs",
-  Slovakia: "sk",
-  Slovenia: "si",
-  Spain: "es",
-  Sweden: "se",
-  Switzerland: "ch",
-  Tajikistan: "tj",
-  Turkmenistan: "tm",
-  Türkiye: "tr",
-  Ukraine: "ua",
-  "United Kingdom": "gb",
-  Uzbekistan: "uz",
-};
-
-function flagUrl(country: string, size: 40 | 80 = 40): string | null {
-  const code = COUNTRY_ISO[country];
-  return code ? `https://flagcdn.com/w${size}/${code}.png` : null;
-}
-
 const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["country", "Country"],
   ["generation", "Generation"],
@@ -240,10 +181,7 @@ function TachographTool() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
   const overridesQuery = useOverrides();
-  const overrides = useMemo(
-    () => overridesQuery.data ?? {},
-    [overridesQuery.data],
-  );
+  const overrides = useMemo(() => overridesQuery.data ?? {}, [overridesQuery.data]);
 
   const saveOverrideFn = useServerFn(saveCardOverride);
   const importCardsFn = useServerFn(importCards);
@@ -1064,18 +1002,27 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
   }, [cards, total]);
   const mfgMax = mfgList[0]?.approvals || 1;
 
-  const genDrillCountries = drillGen
-    ? cards
-        .filter((c) => c.generation === drillGen)
-        .map((c) => `${c.country_flag ?? ""} ${c.country}`)
-        .sort()
-    : [];
-  const manDrillCountries = drillMan
-    ? cards
-        .filter((c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drillMan)
-        .map((c) => `${c.country_flag ?? ""} ${c.country} (${c.generation})`)
-        .sort()
-    : [];
+  // Drill-down opens as a window in the same style as the map view, instead of
+  // pushing a list below the chart where it is easy to miss on a long page.
+  const drillTitle = drillGen ? `Generation ${drillGen}` : (drillMan ?? "");
+  const drillRows = useMemo(() => {
+    const source = drillGen
+      ? cards.filter((c) => c.generation === drillGen)
+      : drillMan
+        ? cards.filter(
+            (c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drillMan,
+          )
+        : [];
+    return [...source].sort(
+      (a, b) =>
+        a.country.localeCompare(b.country) ||
+        String(a.type_approval_number).localeCompare(String(b.type_approval_number)),
+    );
+  }, [cards, drillGen, drillMan]);
+  const closeDrill = () => {
+    setDrillGen(null);
+    setDrillMan(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -1095,7 +1042,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
             {gens.map((g) => (
               <button
                 key={g}
-                onClick={() => setDrillGen(drillGen === g ? null : g)}
+                onClick={() => {
+                  setDrillMan(null);
+                  setDrillGen(drillGen === g ? null : g);
+                }}
                 className="grid w-full grid-cols-[60px_1fr_90px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
               >
                 <span className="font-semibold">{g}</span>
@@ -1110,23 +1060,6 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                 </span>
               </button>
             ))}
-            {drillGen && (
-              <div className="mt-3 rounded-md border bg-muted/30 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide">
-                    Countries with {drillGen}
-                  </span>
-                  <Button size="sm" variant="ghost" onClick={() => setDrillGen(null)}>
-                    Close
-                  </Button>
-                </div>
-                <ul className="grid grid-cols-2 gap-x-4 text-sm md:grid-cols-3">
-                  {genDrillCountries.map((c) => (
-                    <li key={c}>{c}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -1140,7 +1073,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               return (
                 <button
                   key={g}
-                  onClick={() => setDrillGen(drillGen === g ? null : g)}
+                  onClick={() => {
+                    setDrillMan(null);
+                    setDrillGen(drillGen === g ? null : g);
+                  }}
                   className="grid w-full grid-cols-[60px_1fr_60px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
                 >
                   <span className="font-semibold">{g}</span>
@@ -1198,7 +1134,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setDrillMan(drillMan === m.name ? null : m.name)}
+                        onClick={() => {
+                          setDrillGen(null);
+                          setDrillMan(drillMan === m.name ? null : m.name);
+                        }}
                       >
                         {drillMan === m.name ? "Hide" : "Show countries"}
                       </Button>
@@ -1208,27 +1147,76 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               </tbody>
             </table>
           </div>
-          {drillMan && (
-            <div className="mt-4 rounded-md border bg-muted/30 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide">
-                  {drillMan} — countries
-                </span>
-                <Button size="sm" variant="ghost" onClick={() => setDrillMan(null)}>
-                  Close
-                </Button>
-              </div>
-              <ul className="grid grid-cols-2 gap-x-4 text-sm md:grid-cols-3">
-                {manDrillCountries.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </CardContent>
       </Card>
 
       <LabsCard cards={cards} />
+
+      {/* Drill-down window — same style as the country window in the map view */}
+      <Dialog open={!!(drillGen || drillMan)} onOpenChange={(o) => !o && closeDrill()}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {drillTitle} · {drillRows.length} type approval
+              {drillRows.length === 1 ? "" : "s"} in {new Set(drillRows.map((c) => c.country)).size}{" "}
+              countr
+              {new Set(drillRows.map((c) => c.country)).size === 1 ? "y" : "ies"}
+            </DialogTitle>
+          </DialogHeader>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Country</th>
+                <th className="py-2 pr-4 font-medium">Type Approval</th>
+                <th className="py-2 pr-4 font-medium">Generation</th>
+                <th className="py-2 pr-4 font-medium">
+                  {drillGen ? "Manufacturer" : "Date / Status"}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {drillRows.map((c) => {
+                const fUrl = flagUrl(c.country, 40);
+                return (
+                  <tr key={c.id} className="border-b align-top last:border-0">
+                    <td className="py-2 pr-4">
+                      <span className="flex items-center gap-2">
+                        {fUrl ? (
+                          <img
+                            src={fUrl}
+                            alt=""
+                            width={24}
+                            height={18}
+                            loading="lazy"
+                            className="h-[18px] w-6 shrink-0 rounded-sm border object-cover"
+                          />
+                        ) : (
+                          <span>{c.country_flag}</span>
+                        )}
+                        <span className="font-medium">{c.country}</span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4">{c.type_approval_number || "—"}</td>
+                    <td className="py-2 pr-4">{c.generation || "—"}</td>
+                    <td className="py-2 pr-4">
+                      {(drillGen
+                        ? c.current_manufacturer_normalized || c.current_manufacturer
+                        : c.date_status) || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {drillRows.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    No entries.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
