@@ -473,14 +473,17 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
         number = guess.number;
         source = guess.source;
       }
-      // Filename rules yield the number without the year suffix; the report
-      // head carries the full form.
-      if (source === "Certification report" && number.startsWith("BSI-DSZ-CC-")) {
-        const head = certText.slice(0, 600);
+      // BSI certificate numbers from filename or PDF text lack the year
+      // suffix (e.g. "BSI-DSZ-CC-1158-V4" instead of "...-V4-2025"). The full
+      // form sits in the certificate's own head or, failing that, the report
+      // head.  Apply regardless of the source so PDF-derived numbers also get
+      // their year.
+      if (number.startsWith("BSI-DSZ-CC-")) {
+        const head = (certOwnText || certText).slice(0, 600);
         const m = new RegExp(`${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-V\\d)?-(\\d{4})`, "i").exec(head);
         if (m) {
           number = `${number}${(m[1] ?? "").toUpperCase()}-${m[2]}`;
-          source = "Report header";
+          source = source === "Certificate PDF" ? "Certificate PDF (header)" : "Report header";
         }
       }
 
