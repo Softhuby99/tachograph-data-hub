@@ -229,7 +229,15 @@ function TachographTool() {
   const auth = useAuth();
   const authMode = useAuthMode();
   const authEnabled = authMode.data?.enabled ?? true;
-  const canEdit = !authEnabled || !!auth.session;
+  const adminRequired = authMode.data?.adminRequired ?? false;
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [adminInput, setAdminInput] = useState("");
+  // In local mode with ADMIN_TOKEN: can edit only after entering the token.
+  // In Supabase mode: can edit with a session.
+  // In local mode without ADMIN_TOKEN: always can edit.
+  const adminUnlocked = !adminRequired || !!adminToken;
+  const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
   const overridesQuery = useOverrides();
