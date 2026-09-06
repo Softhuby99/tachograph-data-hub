@@ -3,7 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 // Read-only proxy for the offline app's update check when it runs in a
 // browser (the Electron app fetches directly via its main process).
 // Strictly allowlisted to the JRC tachograph pages to prevent open-proxy abuse.
-const ALLOWED_HOSTS = new Set(["dtc.jrc.ec.europa.eu", "ted.europa.eu", "api.ted.europa.eu"]);
+const ALLOWED_HOSTS = new Set([
+  "dtc.jrc.ec.europa.eu",
+  "ted.europa.eu",
+  "api.ted.europa.eu",
+  "www.commoncriteriaportal.org",
+]);
 
 export const Route = createFileRoute("/api/public/fetch")({
   server: {

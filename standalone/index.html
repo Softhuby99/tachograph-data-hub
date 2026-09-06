@@ -627,6 +627,7 @@ const SOURCES = {
   key_management: { label: 'Key management status', url: 'https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html' },
   security_updates: { label: 'Mandatory security updates', url: 'https://dtc.jrc.ec.europa.eu/dtc_mandatory_security_software_updates.php.html' },
   manufacturer_codes: { label: 'Manufacturer codes', url: 'https://dtc.jrc.ec.europa.eu/dtc_manufacturer_code.php.html' },
+  cc_certificates: { label: 'Common Criteria certificates', url: 'https://www.commoncriteriaportal.org/products/index.cfm' },
 };
 const ANNEX_GEN = { '6f9ccc': 'G1', '2323dc': 'G2.1', 'ff9aff': 'G2.2' };
 
@@ -711,6 +712,9 @@ const FIELD_LABELS = {
   current_manufacturer: 'Current Manufacturer',
   type_approval_number: 'Type Approval Number',
   jrc_interoperability_status: 'JRC Interoperability Status',
+  certificate_issued_date: 'Date Certificate Issued',
+  certificate_expiry_date: 'Certificate Validity Expiration Date',
+  security_certificate: 'Security Certificate',
 };
 
 function jrcStatusText(r) {
@@ -805,6 +809,190 @@ async function checkInfoSource(key) {
   return { rows: rows.length, created, baseline: isFirst };
 }
 
+// ---------------- Common Criteria portal cross-check ----------------
+// Same approach as the web version, but without reading the certificate PDFs
+// (no PDF parser in the offline tool): numbers come from the product name and
+// the certification report file name, dates and PP links from the portal page.
+const CC_ARCHIVED_URL = 'https://www.commoncriteriaportal.org/products/index.cfm?archived=1';
+const CC_FILES = 'https://www.commoncriteriaportal.org/nfs/ccpfiles/files/epfiles/';
+
+const CC_FILENAME_RULES = [
+  { re: /ANSSI[-_]CC[-_](\d{4})[-_](\d{2,3}(?:v\d)?)(?:[-_]?([SMR]\d{2}))?/i, build: m => `ANSSI-CC-${m[1]}/${m[2]}${m[3] ? '-' + m[3].toUpperCase() : ''}` },
+  { re: /EUCC[-_]ANSSI[-_](\d{4})[-_](\d{2})[-_](\d{2})/i, build: m => `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}` },
+  { re: /NSCIB[-_ ]?CC[-_ ]?(\d{2})[-_](\d{5,7})/i, build: m => `NSCIB-CC-${m[1]}-${m[2]}` },
+  { re: /NSCIB[-_ ]?CC[-_ ]?(\d{6,8})(?:[-_](\d{2}))?/i, build: m => `NSCIB-CC-${m[1]}${m[2] ? '-' + m[2] : ''}` },
+  { re: /\bCC-(\d{2})-(\d{6})\b/i, build: m => `NSCIB-CC-${m[1]}-${m[2]}` },
+  { re: /^(\d{4})[_-](\d{2})(?:en|fr)?\.pdf$/i, build: m => `ANSSI-CC-${m[1]}/${m[2]}` },
+  { re: /^(\d{4})-(\d{2})-(?:CCRA|INF)/i, build: m => `OC-${m[1]}-${m[2]} (ES)` },
+  { re: /\bCRP[- ]?(\d{3})\b/i, build: m => `CRP${m[1]} (UK)` },
+  { re: /^(\d{4})(V\d)?[a-c](?:_pdf)?\.pdf$/i, build: m => `BSI-DSZ-CC-${m[1]}${m[2] ? '-' + m[2].toUpperCase() : ''}` },
+];
+const CERT_IN_TEXT = /((?:EUCC-ANSSI|ANSSI-CC|NSCIB-CC|BSI-DSZ-CC)-[0-9A-Za-z/_.-]{3,30})/;
+
+function normaliseCc(raw) {
+  let s = String(raw).toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
+  s = s.replace(/[.,;)]+$/, '');
+  s = s.replace(/([^-])([SMR]\d{2})$/, '$1-$2');
+  return s;
+}
+const normCert = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const baseCert = v => normCert(String(v).replace(/-(?:r|s|m|ma[-_]?)\d{1,2}$/i, ''));
+
+function ccCertNumber(product, fileUrl) {
+  const inName = CERT_IN_TEXT.exec(product);
+  if (inName) return { number: normaliseCc(inName[1]), source: 'Product name' };
+  let file = (fileUrl || '').split('/').pop() || '';
+  try { file = decodeURIComponent(file); } catch { /* keep raw */ }
+  for (const rule of CC_FILENAME_RULES) {
+    const m = rule.re.exec(file);
+    if (m) return { number: rule.build(m), source: 'Certification report' };
+  }
+  return { number: '', source: '' };
+}
+
+const CC_NAMED_ENTITIES = { amp: '&', nbsp: ' ', quot: '"', apos: "'", lt: '<', gt: '>', ndash: '–', mdash: '—', eacute: 'é', egrave: 'è', agrave: 'à', ccedil: 'ç', ouml: 'ö', auml: 'ä', uuml: 'ü', szlig: 'ß', oacute: 'ó', iacute: 'í', aacute: 'á' };
+function decodeEntities(v) {
+  return String(v || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z]+);/gi, (m, n) => CC_NAMED_ENTITIES[n.toLowerCase()] ?? m)
+    .trim();
+}
+
+/** Read `var <name> = [ ... ]` out of the portal HTML. */
+function extractJsonArray(html, variable) {
+  const marker = 'var ' + variable + ' = [';
+  const start = html.indexOf(marker);
+  if (start < 0) return [];
+  const from = start + marker.length - 1;
+  let depth = 0;
+  for (let i = from; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(html.slice(from, i + 1)); } catch { return []; }
+      }
+    }
+  }
+  return [];
+}
+
+function ppNumber(pp) {
+  const fromName = /PP-(\d{4})/i.exec(pp.Name || '');
+  if (fromName) return 'PP-' + fromName[1];
+  const fromFile = /pp(\d{4})/i.exec(pp.PDF_PP || '');
+  return fromFile ? 'PP-' + fromFile[1] : '';
+}
+
+const CC_CARD_PP = new Set(['PP-0070', 'PP-0091']);
+const CC_NON_CARD_PP = { 'PP-0093': 'Motion Sensor', 'PP-0094': 'Vehicle Unit', 'PP-0057': 'Vehicle Unit' };
+function ccDeviceFromPps(pps, product) {
+  if (pps.some(pp => CC_CARD_PP.has(pp))) return 'Card';
+  for (const pp of pps) if (CC_NON_CARD_PP[pp]) return CC_NON_CARD_PP[pp];
+  const hay = product.toLowerCase();
+  if (/motion sensor|kitas|\bsensor\b/.test(hay)) return 'Motion Sensor';
+  if (/vehicle unit|\bdtco\b|\bvu\b/.test(hay)) return 'Vehicle Unit';
+  return 'Card';
+}
+
+const CC_PP_GEN = { 'PP-0070': 'G1', 'PP-0091': 'G2.1' };
+function ccGenerationsOf(pps, product, issued) {
+  const gens = new Set();
+  for (const pp of pps) if (CC_PP_GEN[pp]) gens.add(CC_PP_GEN[pp]);
+  if (product.toUpperCase().replace(/\s+/g, '').includes('G2V2')) gens.add('G2.2');
+  if (gens.size === 0) {
+    const year = Number(String(issued || '').slice(0, 4));
+    return year && year < 2018 ? 'G1 (derived from date)' : '';
+  }
+  return Array.from(gens).sort().join(', ');
+}
+
+function ccIsoToDe(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '').trim());
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : String(v || '').trim();
+}
+
+async function scrapeCcPortal(pageUrl, status) {
+  const html = await fetchPage(pageUrl);
+  const products = extractJsonArray(html, 'productList');
+  const ppsList = extractJsonArray(html, 'ppsList');
+  const ppById = new Map(ppsList.map(p => [p.ID || '', ppNumber(p)]));
+  const ppNameById = new Map(ppsList.map(p => [p.ID || '', decodeEntities(p.Name || '')]));
+  const tacho = products.filter(p => {
+    const ppNames = String(p.pps || '').split(',').map(id => ppNameById.get(id.trim()) || '').join(' ');
+    return /tachograph/i.test(decodeEntities(p.name || '') + ' ' + ppNames + ' ' + (p.category_name || ''));
+  });
+  return tacho.map(item => {
+    const product = decodeEntities(item.name || '');
+    const certFile = String(item.cert1 || '').trim();
+    const reportFile = String(item.pdf_cert || '').trim();
+    const certUrl = certFile ? CC_FILES + encodeURIComponent(certFile) : '';
+    const reportUrl = reportFile ? CC_FILES + encodeURIComponent(reportFile) : '';
+    const { number, source } = ccCertNumber(product, certUrl || reportUrl);
+    const pps = String(item.pps || '').split(',').map(id => ppById.get(id.trim()) || '').filter(Boolean).sort();
+    const deviceType = ccDeviceFromPps(pps, product);
+    return {
+      certificate: number, certificateSource: source, deviceType, product,
+      vendor: decodeEntities(item.vendor_name || ''),
+      scheme: decodeEntities(item.scheme_name || ''),
+      assurance: String(item.eal_name || '').trim(),
+      protectionProfiles: pps.join(' + '),
+      generation: deviceType === 'Card' ? ccGenerationsOf(pps, product, item.certified) : '',
+      issued: ccIsoToDe(item.certified || ''),
+      expires: ccIsoToDe(item.archived || ''),
+      reportUrl: reportUrl || certUrl,
+      status,
+    };
+  });
+}
+
+async function checkCcSource() {
+  const [valid, archived] = await Promise.all([
+    scrapeCcPortal(SOURCES.cc_certificates.url, 'valid'),
+    scrapeCcPortal(CC_ARCHIVED_URL, 'archived'),
+  ]);
+  const seenEntry = new Map();
+  for (const e of [...valid, ...archived]) {
+    const k = e.deviceType + '|' + (e.certificate || e.product) + '|' + e.issued;
+    if (!seenEntry.has(k)) seenEntry.set(k, e);
+  }
+  const entries = [...seenEntry.values()];
+  const cards = DATA.map(merged);
+  let created = 0;
+  for (const e of entries) {
+    const matches = e.deviceType === 'Card' && e.certificate
+      ? cards.filter(c => {
+          const have = normCert(c.security_certificate || '');
+          return have && (have.includes(normCert(e.certificate)) || have.includes(baseCert(e.certificate)));
+        })
+      : [];
+    if (matches.length) {
+      for (const card of matches) {
+        const changes = [];
+        if (e.issued && String(card.certificate_issued_date || '').trim() !== e.issued)
+          changes.push({ field: 'certificate_issued_date', label: FIELD_LABELS.certificate_issued_date, old: card.certificate_issued_date || '', new: e.issued });
+        if (e.expires && String(card.certificate_expiry_date || '').trim() !== e.expires)
+          changes.push({ field: 'certificate_expiry_date', label: FIELD_LABELS.certificate_expiry_date, old: card.certificate_expiry_date || '', new: e.expires });
+        if (!changes.length) continue;
+        if (addProposal({ kind: 'change', source: 'cc_certificates', cardId: card.id, country: card.country,
+          row: { manufacturer: e.vendor, cardName: e.product, certificate: e.certificate, date: e.issued, eov: e.expires, typeApproval: card.type_approval_number || '', generation: card.generation || e.generation },
+          changes,
+          fingerprint: hashString('cc|card|' + card.id + '|' + normCert(e.certificate) + '|' + e.issued + '|' + e.expires) })) created++;
+      }
+      continue;
+    }
+    const info = [e.deviceType, e.certificate || 'no number published', e.product, e.vendor,
+      e.generation ? 'Generation ' + e.generation : '', e.protectionProfiles ? 'PP ' + e.protectionProfiles : '',
+      e.issued ? 'issued ' + e.issued : '', e.expires ? 'expires ' + e.expires : '', e.status]
+      .filter(Boolean).join(' · ');
+    if (addProposal({ kind: 'info', source: 'cc_certificates', cardId: null, country: '', row: null, changes: [], info,
+      fingerprint: hashString('cc|' + e.deviceType + '|' + (normCert(e.certificate) || e.product) + '|' + e.issued + '|' + e.expires) })) created++;
+  }
+  return { rows: entries.length, created };
+}
+
 async function runUpdateCheck() {
   if (checking) return;
   checking = true;
@@ -817,9 +1005,11 @@ async function runUpdateCheck() {
     renderUpdates();
     await new Promise(r => setTimeout(r, 30));
     try {
-      const res = (key === 'card_status' || key === 'other_certificates')
-        ? await checkCardSource(key)
-        : await checkInfoSource(key);
+      const res = key === 'cc_certificates'
+        ? await checkCcSource()
+        : (key === 'card_status' || key === 'other_certificates')
+          ? await checkCardSource(key)
+          : await checkInfoSource(key);
       totalRows += res.rows; totalNew += res.created;
       sourceState[key] = res.created > 0 ? 'updated' : 'clean';
       runs[key] = { message: res.baseline
