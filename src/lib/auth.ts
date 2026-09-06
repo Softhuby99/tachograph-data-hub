@@ -13,6 +13,7 @@
 // scope is safe: on the client bundle it is undefined -> requireSupabaseAuth,
 // on the Docker server it is "none" -> noneAuth.
 import { createMiddleware } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /** Timing-safe string comparison without importing node:crypto (client-safe). */
@@ -25,11 +26,12 @@ function safeEqualStr(a: string, b: string): boolean {
   return result === 0;
 }
 
-const noneAuth = createMiddleware({ type: "function" }).server(async ({ next, request }) => {
+const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) => {
   // In local mode, writes require ADMIN_TOKEN when it is configured.
   const adminToken = process.env["ADMIN_TOKEN"];
   if (adminToken && adminToken.length > 0) {
-    const provided = request.headers.get("x-admin-token") ?? "";
+    const request = getRequest();
+    const provided = request?.headers?.get("x-admin-token") ?? "";
     if (!safeEqualStr(provided, adminToken)) {
       throw new Response("Unauthorized", { status: 401 });
     }
