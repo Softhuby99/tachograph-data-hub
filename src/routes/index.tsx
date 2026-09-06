@@ -932,7 +932,9 @@ function DetailView({
                 </Button>
               )}
               {!editing && !canEdit && (
-                <span className="text-xs text-muted-foreground">Sign in to edit</span>
+                <span className="text-xs text-muted-foreground">
+                  {adminRequired ? "Admin login required to edit" : "Sign in to edit"}
+                </span>
               )}
               {editing && (
                 <>
