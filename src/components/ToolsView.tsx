@@ -362,7 +362,10 @@ export function ToolsView({
           )}
           {check.unknown.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              Not in reference list: {check.unknown.slice(0, 40).join(" · ")}
+              Country not documented (issuer prefix only):{" "}
+              {check.unknown.slice(0, 40).map((ta) =>
+                approvalAuthorityLabel(ta) ? `${ta} [${approvalAuthorityLabel(ta)}]` : ta,
+              ).join(" · ")}
               {check.unknown.length > 40 ? " …" : ""}
             </p>
           )}
