@@ -198,6 +198,43 @@ export function ToolsView({
 
   const lastUpdate = String(cards[0]?.["data_reference_date"] ?? "—");
 
+  const check = useMemo(() => {
+    const conflicts: {
+      ta: string;
+      stored: string;
+      resolved: string;
+      evidence: string;
+      authority: string;
+    }[] = [];
+    const unknown = new Set<string>();
+    let checked = 0;
+    for (const row of cards) {
+      const ta = String(row["type_approval_number"] ?? "").trim();
+      const stored = String(row["country"] ?? "").trim();
+      if (!ta || ta.toLowerCase().startsWith("not identified")) continue;
+      checked++;
+      if (!resolveTaCountry(ta)) {
+        unknown.add(ta);
+        continue;
+      }
+      const conflict = countryConflict(ta, stored);
+      if (
+        conflict &&
+        !conflicts.some((c) => c.ta === ta && c.stored === stored)
+      ) {
+        conflicts.push({
+          ta,
+          stored,
+          resolved: conflict.country,
+          evidence: conflict.evidence,
+          authority: conflict.authority,
+        });
+      }
+    }
+    return { conflicts, unknown: [...unknown], checked };
+  }, [cards]);
+
+
   return (
     <div className="space-y-6">
       <Card>
