@@ -5,7 +5,7 @@
 - [x] 1.3 cc.server.ts: früheste Textposition gewinnt; BSI-Jahressuffix — certificateFromText sammelt alle Treffer und nimmt die früheste Position; BSI-Jahressuffix greift jetzt unabhängig von der Quelle (auch bei Certificate PDF), sucht zuerst im Zertifikats-PDF-Text
 - [x] 1.4 Update-Quellen-Logging (jrc_check_runs pro Quelle) — bereits vollständig: Tabelle hat source_type, insertCheckRun pro Quelle, UI zeigt pro-Quelle-Status (8 Quellen inkl. cc_certificates + ted_procurement)
 - [x] 1.5 21 Länderfehler als Vorschläge in Freigabe-Ablauf; Prüfung als Bericht (JSON-Export) — buildProposals erzeugt country-Feldänderung bei Konflikt (bypasses date filter), approval flow wendet sie an; JSON-Export im Tools-Reiter (cards + cross-check report); check_dataset.py schreibt report.json; standalone gespiegelt
-- [ ] 1.6 Migration: Freitext aus type_approval_number → Notizspalte, rückrollbar
+- [x] 1.6 Migration: Freitext aus type_approval_number → verification_note (Marker [TA-ORIG:], rückrollbar, idempotent); EU-Stern-Format eNN* ausgenommen; 13 rows bereinigt
 - [ ] 2.1 jrc-check: Token vor DB, nur Header, nur POST, timing-sicher
 - [ ] 2.2 fetch-Proxy: Timeout, Größenlimit, Stream, Cache, redirect manual
 - [ ] 2.3 Lokal-Modus: Schreiben nur mit Admin-Token
