@@ -15,13 +15,22 @@ import type { Database } from "@/integrations/supabase/types";
 let _pool: Pool | undefined;
 
 function poolConfig() {
+  // No default password. An empty one still connects wherever PostgreSQL trusts
+  // local connections, so the instance would come up half-configured instead of
+  // saying what is missing. Fail loudly here.
+  const password = process.env["DB_PASSWORD"] ?? "";
+  if (password.length === 0) {
+    throw new Error(
+      "DB_PASSWORD is not set. The local PostgreSQL backend requires it explicitly " +
+        "(e.g. in /opt/TDH/.env) — there is no built-in default.",
+    );
+  }
   return {
     host: process.env["DB_HOST"] || "localhost",
     port: Number(process.env["DB_PORT"] || "5432"),
     database: process.env["DB_NAME"] || "tdh",
     user: process.env["DB_USER"] || "tdh",
-    // No default password — the deployment must set DB_PASSWORD explicitly.
-    password: process.env["DB_PASSWORD"] ?? "",
+    password,
     max: 8,
     idleTimeoutMillis: 30000,
   };

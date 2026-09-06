@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import subprocess
 import json
 import re
 import sys
@@ -176,8 +177,12 @@ function escapeRegExp(s: string): string {
 
 /**
  * Resolves a country from a JRC card name: company phrases are removed first,
- * then country names are matched on word boundaries. Returns a documented
- * entry only when exactly one distinct country is found.
+ * then country names are matched on word boundaries.
+ *
+ * A card name may legitimately name several countries ("PWPW Poland and
+ * Bulgaria Tacho G2v2 cards", "PWPW GE and AZ Tach G1 Cards"). Those are
+ * returned as a comma-separated list instead of being discarded — letting the
+ * user pick one at approval time beats offering no resolution at all.
  */
 export function resolveFromCardName(cardName: string): TaCountryEntry | null {
   let text = ` ${(cardName ?? "").toLowerCase()} `;
@@ -188,8 +193,8 @@ export function resolveFromCardName(cardName: string): TaCountryEntry | null {
   for (const [alias, country] of COUNTRY_ALIASES) {
     if (new RegExp(`\\b${escapeRegExp(alias)}\\b`, "i").test(text)) found.add(country);
   }
-  if (found.size !== 1) return null;
-  const country = [...found][0]!;
+  if (found.size === 0) return null;
+  const country = [...found].sort().join(", ");
   return {
     ta: "",
     country,
@@ -208,6 +213,7 @@ RESOLVER_FUNC = """
 export const TA_COUNTRY: Record<string, TaCountryEntry> = """
 
 RESOLVER_LOOKUP = """
+/** Resolves a type approval number (accepts "a / b" combinations). */
 export function resolveTaCountry(typeApproval: string): TaCountryEntry | null {
   for (const part of (typeApproval ?? "").split(/[/;]/)) {
     const hit = TA_COUNTRY[normTa(part)];
@@ -229,6 +235,20 @@ def confidence_map(raw: str) -> str:
 def esc(s: str) -> str:
     """JSON-style string escaping for TS."""
     return json.dumps(s or "", ensure_ascii=False)
+
+
+def run_prettier(path: Path) -> bool:
+    """Format the generated file like the rest of the repo. Returns False when
+    prettier is unavailable (the file is still valid, just differently spaced)."""
+    for cmd in (["npx", "--no-install", "prettier", "--write", str(path)],
+                ["node_modules/.bin/prettier", "--write", str(path)]):
+        try:
+            res = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=180)
+            if res.returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return False
 
 
 def main():
@@ -260,7 +280,9 @@ def main():
                 "evidence": (row.get("evidence") or "").strip(),
                 "generation": (row.get("generation") or "").strip(),
                 "authority": (row.get("issuer_authority") or "").strip(),
-                "authorityCountry": (row.get("issuer_country") or row.get("issuer_prefix") or "").strip(),
+                # issuer_prefix is the country derived from the number, not evidence
+                #  about the authority - never use it as a fallback here.
+                "authorityCountry": (row.get("issuer_country") or "").strip(),
                 "pdf": (row.get("ta_pdf") or "").strip(),
             }
             entries.append((key, entry))
@@ -287,14 +309,21 @@ def main():
         lines.append(f'  "pdf": {esc(e["pdf"])},')
         lines.append(f'  "ta": {esc(e["ta"])}')
         lines.append("},")
-    lines.append("};")
+    lines.append("} as Record<string, TaCountryEntry>;")
     lines.append("")
     lines.append(RESOLVER_LOOKUP)
     lines.append(FOOTER)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Generated {len(table)} entries -> {out_path}")
+
+    # The checked-in file is prettier-formatted. Without this step every run
+    # would produce a ~9000 line diff and nobody would dare execute it.
+    formatted = run_prettier(out_path)
+    print(
+        f"Generated {len(table)} entries -> {out_path}"
+        + ("" if formatted else "  (prettier not run - format the file before committing)")
+    )
 
 
 if __name__ == "__main__":

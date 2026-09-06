@@ -4618,8 +4618,12 @@ function escapeRegExp(s: string): string {
 
 /**
  * Resolves a country from a JRC card name: company phrases are removed first,
- * then country names are matched on word boundaries. Returns a documented
- * entry only when exactly one distinct country is found.
+ * then country names are matched on word boundaries.
+ *
+ * A card name may legitimately name several countries ("PWPW Poland and
+ * Bulgaria Tacho G2v2 cards", "PWPW GE and AZ Tach G1 Cards"). Those are
+ * returned as a comma-separated list instead of being discarded — letting the
+ * user pick one at approval time beats offering no resolution at all.
  */
 export function resolveFromCardName(cardName: string): TaCountryEntry | null {
   let text = ` ${(cardName ?? "").toLowerCase()} `;
@@ -4630,8 +4634,8 @@ export function resolveFromCardName(cardName: string): TaCountryEntry | null {
   for (const [alias, country] of COUNTRY_ALIASES) {
     if (new RegExp(`\\b${escapeRegExp(alias)}\\b`, "i").test(text)) found.add(country);
   }
-  if (found.size !== 1) return null;
-  const country = [...found][0]!;
+  if (found.size === 0) return null;
+  const country = [...found].sort().join(", ");
   return {
     ta: "",
     country,

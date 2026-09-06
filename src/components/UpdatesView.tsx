@@ -14,8 +14,7 @@ import {
   getCheckRuns,
 } from "@/lib/jrc.functions";
 import { getAuthMode } from "@/lib/auth-mode.functions";
-import { resolveTaCountry, taPrefix } from "@/lib/ta-country";
-
+import { documentedCountry, resolveTaCountry, taPrefix } from "@/lib/ta-country";
 
 import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -393,10 +392,13 @@ export function UpdatesView() {
                   <div className="flex flex-wrap items-center gap-2">
                     {(p.kind === "new" || (isInfo && !p.country)) &&
                       (() => {
-                        const guess = resolveTaCountry(p.jrc_type_approval ?? "");
-                        const prefill =
-                          newCountry[p.id] ?? p.country ?? (guess ? guess.country : "");
-                        const assumed = !p.country && !!guess && guess.confidence !== "documented";
+                        // Only a documented resolution may pre-fill the field. The issuer
+                        // prefix names the approval authority, not the card's country — in
+                        // roughly three of four documented cases the two differ, so offering
+                        // it as a default would write wrong data on a single click.
+                        const documented = documentedCountry(p.jrc_type_approval ?? "");
+                        const prefill = newCountry[p.id] ?? p.country ?? documented?.country ?? "";
+                        const issuer = prefill ? null : resolveTaCountry(p.jrc_type_approval ?? "");
                         return (
                           <div className="flex flex-col gap-1">
                             <Input
@@ -409,11 +411,23 @@ export function UpdatesView() {
                                 setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))
                               }
                             />
-                            {assumed && (
+                            {documented?.evidence && (
                               <span className="text-[11px] text-muted-foreground">
-                                Assumed from issuer prefix ({taPrefix(p.jrc_type_approval ?? "")}) —
-                                please confirm
+                                Documented: {documented.evidence.slice(0, 70)}
                               </span>
+                            )}
+                            {issuer?.country && (
+                              <button
+                                type="button"
+                                className="text-left text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                onClick={() =>
+                                  setNewCountry((s) => ({ ...s, [p.id]: issuer.country }))
+                                }
+                              >
+                                Issued by the authority of {issuer.country} (
+                                {taPrefix(p.jrc_type_approval ?? "")}) — not evidence for the
+                                card&apos;s country. Click to use anyway.
+                              </button>
                             )}
                           </div>
                         );
@@ -424,12 +438,14 @@ export function UpdatesView() {
                       onClick={() =>
                         approveMutation.mutate({
                           id: p.id,
+                          // No issuer-prefix fallback here either: an unedited field
+                          // must stay empty rather than silently store the authority's
+                          // country as the card's country.
                           country:
                             newCountry[p.id] ??
                             p.country ??
-                            resolveTaCountry(p.jrc_type_approval ?? "")?.country ??
+                            documentedCountry(p.jrc_type_approval ?? "")?.country ??
                             "",
-
                         })
                       }
                       disabled={approveMutation.isPending || !signedIn}

@@ -1,11 +1,11 @@
 // Optional-auth middleware. Branches on AUTH_MODE:
-//  - AUTH_MODE=none -> no login (local Docker). Passes a fixed local user id.
-//    When ADMIN_TOKEN is set, writes require it via the x-admin-token header.
+//  - AUTH_MODE=none -> no login (local Docker). Writes require ADMIN_TOKEN;
+//    without it the instance is read-only (an unset token must not mean "open").
 //  - otherwise     -> delegate to requireSupabaseAuth (Lovable preview/published).
 //
 // Auth is a UI/login gate only; data access lives in db.server.ts and does not
-// depend on a user session. When AUTH_MODE=none the app is fully usable without
-// any backend login, as requested for the self-contained Docker deployment.
+// depend on a user session. When AUTH_MODE=none the app is readable without
+// any backend login; writing needs the admin token (self-contained Docker deployment).
 //
 // This module is intentionally NOT *.server.* so it can be imported by
 // *.functions.ts files that ship a client stub. AUTH_MODE is a deployment-level
@@ -27,14 +27,21 @@ function safeEqualStr(a: string, b: string): boolean {
 }
 
 const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  // In local mode, writes require ADMIN_TOKEN when it is configured.
-  const adminToken = process.env["ADMIN_TOKEN"];
-  if (adminToken && adminToken.length > 0) {
-    const request = getRequest();
-    const provided = request?.headers?.get("x-admin-token") ?? "";
-    if (!safeEqualStr(provided, adminToken)) {
-      throw new Response("Unauthorized", { status: 401 });
-    }
+  // In local mode every write needs ADMIN_TOKEN. Without a configured token the
+  // instance stays read-only: an unset token must not mean "anyone may write",
+  // because the container is reachable from the whole network it is bound to.
+  const adminToken = process.env["ADMIN_TOKEN"] ?? "";
+  if (adminToken.length === 0) {
+    throw new Response(
+      "This instance is read-only: set ADMIN_TOKEN in the container environment " +
+        "(e.g. /opt/TDH/.env) and enter the same value under Tools to enable writing.",
+      { status: 403 },
+    );
+  }
+  const request = getRequest();
+  const provided = request?.headers?.get("x-admin-token") ?? "";
+  if (!safeEqualStr(provided, adminToken)) {
+    throw new Response("Unauthorized: missing or wrong admin token", { status: 401 });
   }
   return next({
     context: {

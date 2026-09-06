@@ -27,17 +27,23 @@ async function handle(request: Request) {
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
     "";
 
-  // Check env secret first (avoids DB hit when it matches).
+  // The environment secret decides on its own: when it is configured, a wrong
+  // token is rejected right here. Falling through to the database would let any
+  // unauthenticated caller force one query per request.
   const envSecret = process.env["CRON_SECRET"];
-  if (envSecret && envSecret.length > 0 && safeEqual(provided, envSecret)) {
-    return runCheck();
+  if (envSecret && envSecret.length > 0) {
+    if (safeEqual(provided, envSecret)) return runCheck();
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
   }
 
-  // Fall back to DB-stored token.
+  // No environment secret configured — fall back to the DB-stored token.
   const { getCronConfig } = await import("@/lib/db.server");
   const config = await getCronConfig();
   const dbToken = config?.token ?? "";
-  if (!envSecret && !dbToken) {
+  if (!dbToken) {
     return new Response(JSON.stringify({ error: "No cron secret configured" }), {
       status: 500,
       headers: { "content-type": "application/json" },

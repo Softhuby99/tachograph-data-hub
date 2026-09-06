@@ -15,9 +15,11 @@ const MAX_BYTES = 5 * 1024 * 1024; // 5 MB (default)
 const TIMEOUT_MS = 15_000;
 
 // The Common Criteria portal ships its whole product list inside one HTML page
-// (~20 MB, ~20 s), so it needs far higher limits than the small JRC tables.
+// (~20 MB, ~20 s), so it needs higher limits than the small JRC tables. 25 MB is
+// deliberate: the page is decoded into a JS string (UTF-16, so twice its byte
+// size) and then JSON-parsed, and a Worker only has 128 MB in total.
 const LARGE_HOSTS = new Set(["www.commoncriteriaportal.org"]);
-const LARGE_MAX_BYTES = 40 * 1024 * 1024; // 40 MB
+const LARGE_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const LARGE_TIMEOUT_MS = 90_000;
 const maxBytesFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_MAX_BYTES : MAX_BYTES);
 const timeoutFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_TIMEOUT_MS : TIMEOUT_MS);
@@ -148,32 +150,47 @@ export const Route = createFileRoute("/api/public/fetch")({
             return new Response(`Upstream request failed [${res.status}]`, { status: 502 });
           }
 
-          // Size-limited read (stream up to MAX_BYTES, reject if larger).
+          // Size-limited read (stream up to the host's limit, reject if larger).
           const reader = res.body?.getReader();
           if (!reader) return new Response("No body", { status: 502 });
-          const chunks: Uint8Array[] = [];
           const limit = maxBytesFor(target.hostname);
+          const compact =
+            target.hostname === "www.commoncriteriaportal.org" &&
+            target.pathname === "/products/index.cfm";
+
+          // For the huge portal page the bytes are decoded chunk by chunk and
+          // dropped right away: keeping them AND the concatenated copy AND the
+          // decoded string would put three copies of a ~20 MB page in a Worker
+          // that has 128 MB in total.
+          const chunks: Uint8Array[] = [];
+          const decoder = compact ? new TextDecoder() : null;
+          let text = "";
           let total = 0;
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
             total += value.byteLength;
             if (total > limit) {
+              await reader.cancel();
               return new Response("Response too large", { status: 502 });
             }
-            chunks.push(value);
+            if (decoder) text += decoder.decode(value, { stream: true });
+            else chunks.push(value);
           }
-          const body = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
-          let offset = 0;
-          for (const c of chunks) {
-            body.set(c, offset);
-            offset += c.length;
+          if (decoder) text += decoder.decode();
+
+          let responseBody: BodyInit;
+          if (decoder) {
+            responseBody = compactCommonCriteriaPage(text);
+          } else {
+            const body = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
+            let offset = 0;
+            for (const c of chunks) {
+              body.set(c, offset);
+              offset += c.length;
+            }
+            responseBody = body.buffer as ArrayBuffer;
           }
-          const responseBody =
-            target.hostname === "www.commoncriteriaportal.org" &&
-            target.pathname === "/products/index.cfm"
-              ? compactCommonCriteriaPage(new TextDecoder().decode(body))
-              : body;
           return new Response(responseBody, {
             headers: {
               "content-type": "text/plain; charset=utf-8",
