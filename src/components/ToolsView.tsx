@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export type ExportRow = Record<string, unknown>;
@@ -73,13 +73,109 @@ function download(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Splits one CSV text into rows, honouring quoted fields and ; , or tab. */
+export function parseCsv(text: string): string[][] {
+  const clean = text.replace(/^\uFEFF/, "");
+  const first = clean.split(/\r?\n/)[0] ?? "";
+  const counts: Array<[string, number]> = [
+    [";", (first.match(/;/g) ?? []).length],
+    [",", (first.match(/,/g) ?? []).length],
+    ["\t", (first.match(/\t/g) ?? []).length],
+  ];
+  const delimiter = counts.sort((a, b) => b[1] - a[1])[0]![0];
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i];
+    if (quoted) {
+      if (c === '"') {
+        if (clean[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+      } else field += c;
+      continue;
+    }
+    if (c === '"') { quoted = true; continue; }
+    if (c === delimiter) { row.push(field); field = ""; continue; }
+    if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+    if (c === "\r") continue;
+    field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((v) => v.trim() !== ""));
+}
+
+/** Maps a CSV header cell back to a database column name. */
+export function keyForHeader(header: string): string | null {
+  const h = header.trim();
+  if (!h) return null;
+  const byLabel = Object.entries(COLUMN_LABELS).find(
+    ([, label]) => label.toLowerCase() === h.toLowerCase(),
+  );
+  if (byLabel) return byLabel[0];
+  const snake = h.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  if (snake === "id") return "id";
+  if (Object.prototype.hasOwnProperty.call(COLUMN_LABELS, snake)) return snake;
+  return snake || null;
+}
+
+export function csvToObjects(text: string): Record<string, string>[] {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return [];
+  const keys = rows[0]!.map(keyForHeader);
+  return rows.slice(1).map((cells) => {
+    const obj: Record<string, string> = {};
+    keys.forEach((k, i) => {
+      if (k) obj[k] = (cells[i] ?? "").trim();
+    });
+    return obj;
+  });
+}
+
 export function ToolsView({
   cards,
   filteredCards,
+  onImport,
 }: {
   cards: ExportRow[];
   filteredCards?: ExportRow[];
+  onImport?: (
+    rows: Record<string, string>[],
+  ) => Promise<{ updated: number; created: number; unchanged: number; errors: string[] }>;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<
+    { updated: number; created: number; unchanged: number; errors: string[] } | null
+  >(null);
+
+  const handleFile = async (file: File) => {
+    setResult(null);
+    setImporting(true);
+    try {
+      const rows = csvToObjects(await file.text());
+      if (!rows.length) {
+        toast.error("No data rows found in the file.");
+        return;
+      }
+      if (!onImport) {
+        toast.error("Import is not available here.");
+        return;
+      }
+      const res = await onImport(rows);
+      setResult(res);
+      toast.success(
+        `Import finished: ${res.updated} updated, ${res.created} added, ${res.unchanged} unchanged.`,
+      );
+    } catch (e) {
+      toast.error(`Import failed: ${(e as Error).message}`);
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   const columns = useMemo(() => {
     const keys = new Set<string>();
     for (const row of cards) for (const k of Object.keys(row)) if (!SKIP_COLUMNS.has(k)) keys.add(k);
@@ -137,6 +233,59 @@ export function ToolsView({
           <p className="text-xs text-muted-foreground">
             Columns: {columns.map(labelFor).join(" · ")}
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Upload className="h-4 w-4 text-primary" /> Import data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Upload a CSV file (semicolon, comma or tab separated) using the same columns as the
+            export. Existing records are matched by their id — or by Country + Type Approval Number
+            + Generation — and only changed fields are updated. Rows without a match are added as
+            new records. Empty cells are ignored, never used to clear existing values.
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f);
+            }}
+          />
+          <Button
+            variant="outline"
+            disabled={importing}
+            onClick={() => fileRef.current?.click()}
+          >
+            {importing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            {importing ? "Importing…" : "Import CSV"}
+          </Button>
+          {result && (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+              <p>
+                {result.updated} record(s) updated · {result.created} added ·{" "}
+                {result.unchanged} unchanged
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
+                  {result.errors.slice(0, 20).map((err) => (
+                    <li key={err}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
