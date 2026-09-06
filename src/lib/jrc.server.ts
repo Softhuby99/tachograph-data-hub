@@ -14,6 +14,8 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
+import { countryConflict, resolveTaCountry } from "./ta-country";
+
 import {
   getCardsForJrc as dbGetCardsForJrc,
   getCardsForTed as dbGetCardsForTed,
@@ -292,11 +294,31 @@ export function buildProposals(
     const changes = card ? diffRow(row, card) : [];
     if (card && changes.length === 0) continue;
 
+    // Country resolution from the JRC type approval table (see ta-country.ts).
+    // Only used when the entry is unknown in the dataset, or to flag a conflict.
+    const resolved = resolveTaCountry(row.typeApproval);
+    const conflict = card ? countryConflict(row.typeApproval, card.country) : null;
+    const country = card?.country || resolved?.country || "";
+    const payload: Record<string, string> = {};
+    if (resolved) {
+      payload["Resolved country"] = resolved.country;
+      payload["Country confidence"] =
+        resolved.confidence === "documented" ? "documented" : "assumed (issuer prefix)";
+      if (resolved.basis) payload["Country source"] = resolved.basis;
+      if (resolved.evidence) payload["Country evidence"] = resolved.evidence;
+      if (resolved.authority) payload["Approval authority"] = resolved.authority;
+      if (resolved.pdf) payload["Type approval PDF"] = resolved.pdf;
+    }
+    if (conflict) {
+      payload["Country cross-check"] =
+        `stored "${card?.country}" differs from documented "${conflict.country}"`;
+    }
+
     out.push({
       fingerprint: `${source}:${fingerprintFor(row, card?.id ?? null)}`,
       kind: card ? "changed" : "new",
       card_id: card?.id ?? null,
-      country: card?.country ?? "",
+      country,
       generation: row.generation,
       jrc_manufacturer: row.manufacturer,
       jrc_card_name: row.cardName,
@@ -307,8 +329,11 @@ export function buildProposals(
       source_url: meta.url,
       source_type: source,
       source_label: meta.label,
-      title: card ? `${card.country} · ${row.typeApproval}` : `New entry · ${row.typeApproval}`,
-      payload: {},
+      title: card
+        ? `${card.country} · ${row.typeApproval}`
+        : `New entry · ${country ? `${country} · ` : ""}${row.typeApproval}`,
+      payload,
+
       changes: { fields: changes },
       status: "pending",
     });

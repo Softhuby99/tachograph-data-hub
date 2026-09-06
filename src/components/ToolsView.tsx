@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Loader2 } from "lucide-react";
+import { Download, Upload, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { resolveTaCountry, countryConflict } from "@/lib/ta-country";
+
 
 export type ExportRow = Record<string, unknown>;
 
@@ -196,6 +198,43 @@ export function ToolsView({
 
   const lastUpdate = String(cards[0]?.["data_reference_date"] ?? "—");
 
+  const check = useMemo(() => {
+    const conflicts: {
+      ta: string;
+      stored: string;
+      resolved: string;
+      evidence: string;
+      authority: string;
+    }[] = [];
+    const unknown = new Set<string>();
+    let checked = 0;
+    for (const row of cards) {
+      const ta = String(row["type_approval_number"] ?? "").trim();
+      const stored = String(row["country"] ?? "").trim();
+      if (!ta || ta.toLowerCase().startsWith("not identified")) continue;
+      checked++;
+      if (!resolveTaCountry(ta)) {
+        unknown.add(ta);
+        continue;
+      }
+      const conflict = countryConflict(ta, stored);
+      if (
+        conflict &&
+        !conflicts.some((c) => c.ta === ta && c.stored === stored)
+      ) {
+        conflicts.push({
+          ta,
+          stored,
+          resolved: conflict.country,
+          evidence: conflict.evidence,
+          authority: conflict.authority,
+        });
+      }
+    }
+    return { conflicts, unknown: [...unknown], checked };
+  }, [cards]);
+
+
   return (
     <div className="space-y-6">
       <Card>
@@ -288,6 +327,68 @@ export function ToolsView({
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="h-4 w-4 text-primary" /> Country cross-check
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Compares every type approval number in the database with the JRC country
+            resolution (type approval PDF, JRC card name, or issuing authority prefix).
+            {" "}
+            {check.checked} record(s) checked · {check.conflicts.length} conflict(s) ·{" "}
+            {check.unknown.length} type approval(s) not found in the reference list.
+          </p>
+          {check.conflicts.length > 0 && (
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="mb-2 text-sm font-medium">Conflicts with documented sources</p>
+              <ul className="space-y-1 text-xs">
+                {check.conflicts.map((c) => (
+                  <li key={`${c.ta}-${c.stored}`}>
+                    <span className="font-mono">{c.ta}</span> — stored{" "}
+                    <span className="font-medium">{c.stored}</span>, documented{" "}
+                    <span className="font-medium">{c.resolved}</span>
+                    {c.evidence ? ` · ${c.evidence}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {check.unknown.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Not in reference list: {check.unknown.slice(0, 40).join(" · ")}
+              {check.unknown.length > 40 ? " …" : ""}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!check.conflicts.length) {
+                toast.error("No conflicts to export.");
+                return;
+              }
+              const rows = check.conflicts.map((c) => ({
+                type_approval_number: c.ta,
+                stored_country: c.stored,
+                documented_country: c.resolved,
+                evidence: c.evidence,
+                authority: c.authority,
+              }));
+              const cols = Object.keys(rows[0]!);
+              download(
+                buildCsv(rows as ExportRow[], cols, ";"),
+                `country-crosscheck-${new Date().toISOString().slice(0, 10)}.csv`,
+              );
+            }}
+          >
+            <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length})
+          </Button>
+        </CardContent>
+      </Card>
     </div>
+
   );
 }
