@@ -14,7 +14,7 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
-import { countryConflict, resolveTaCountry } from "./ta-country";
+import { countryConflict, documentedCountry, resolveFromCardName, approvalAuthorityLabel } from "./ta-country";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
@@ -179,6 +179,7 @@ type CardRow = {
 export type FieldChange = { field: string; label: string; old: string; new: string };
 
 const FIELD_LABELS: Record<string, string> = {
+  country: "Country",
   generation: "Generation",
   current_manufacturer: "Current Manufacturer",
   tachograph_application_os: "Tachograph Application / OS",
@@ -286,28 +287,47 @@ export function buildProposals(
   const meta = JRC_SOURCES[source];
   for (const row of latestPerApproval(rows)) {
     const card = matchCard(row, cards);
-    // Rows already represented in the dataset are only re-checked when they
-    // were published after the data reference date. Entries with no matching
-    // card (typically older G1 approvals missing from the dataset) are always
-    // proposed, regardless of their publication date.
-    if (card && sinceMs && parseJrcDate(row.date) < sinceMs) continue;
-    const changes = card ? diffRow(row, card) : [];
-    if (card && changes.length === 0) continue;
 
     // Country resolution from the JRC type approval table (see ta-country.ts).
-    // Only used when the entry is unknown in the dataset, or to flag a conflict.
-    const resolved = resolveTaCountry(row.typeApproval);
+    // Computed early because a country conflict must bypass the date filter —
+    // it flags stored data as wrong, independent of when the JRC row was
+    // published.
+    const documented = documentedCountry(row.typeApproval);
+    const fromName = !documented ? resolveFromCardName(row.cardName) : null;
+    const resolved = documented || fromName;
+    const authorityLabel = approvalAuthorityLabel(row.typeApproval);
     const conflict = card ? countryConflict(row.typeApproval, card.country) : null;
+
+    // Rows already represented in the dataset are only re-checked when they
+    // were published after the data reference date — UNLESS there is a
+    // country conflict, which must always surface as a proposal.
+    if (card && sinceMs && parseJrcDate(row.date) < sinceMs && !conflict) continue;
+
+    const changes = card ? diffRow(row, card) : [];
+    // Country conflicts become an actionable field change so the user can
+    // approve correcting the stored country to the documented one.
+    if (conflict) {
+      changes.push({
+        field: "country",
+        label: FIELD_LABELS["country"] ?? "Country",
+        old: card?.country ?? "",
+        new: conflict.country,
+      });
+    }
+    if (card && changes.length === 0) continue;
+
     const country = card?.country || resolved?.country || "";
     const payload: Record<string, string> = {};
     if (resolved) {
       payload["Resolved country"] = resolved.country;
-      payload["Country confidence"] =
-        resolved.confidence === "documented" ? "documented" : "assumed (issuer prefix)";
+      payload["Country confidence"] = "documented";
       if (resolved.basis) payload["Country source"] = resolved.basis;
       if (resolved.evidence) payload["Country evidence"] = resolved.evidence;
       if (resolved.authority) payload["Approval authority"] = resolved.authority;
       if (resolved.pdf) payload["Type approval PDF"] = resolved.pdf;
+    }
+    if (authorityLabel) {
+      payload["Approval issued by"] = authorityLabel;
     }
     if (conflict) {
       payload["Country cross-check"] =
@@ -330,7 +350,9 @@ export function buildProposals(
       source_type: source,
       source_label: meta.label,
       title: card
-        ? `${card.country} · ${row.typeApproval}`
+        ? conflict
+          ? `${card.country} → ${conflict.country} · ${row.typeApproval}`
+          : `${card.country} · ${row.typeApproval}`
         : `New entry · ${country ? `${country} · ` : ""}${row.typeApproval}`,
       payload,
 

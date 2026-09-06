@@ -869,6 +869,7 @@ function parseOtherCertificateCards(html) {
 
 
 const FIELD_LABELS = {
+  country: 'Country',
   generation: 'Generation',
   current_manufacturer: 'Current Manufacturer',
   type_approval_number: 'Type Approval Number',
@@ -939,12 +940,30 @@ async function checkCardSource(key) {
     });
     if (card) {
       const changes = diffAgainstCard(row, card);
+      // Country conflicts become an actionable field change so the user can
+      // approve correcting the stored country to the documented one.
+      const conflict = countryConflict(row.typeApproval, card.country);
+      if (conflict) {
+        changes.push({ field: 'country', label: FIELD_LABELS['country'] || 'Country',
+          old: card.country || '', new: conflict.country });
+      }
       if (!changes.length) continue;
-      if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes,
+      const title = conflict
+        ? card.country + ' \u2192 ' + conflict.country + ' \u00b7 ' + row.typeApproval
+        : card.country + ' \u00b7 ' + row.typeApproval;
+      if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes, title,
         fingerprint: hashString(key + '|' + card.id + '|' + changes.map(c => c.field + c.new).join('|')) })) created++;
     } else {
       // No counterpart in the local data — propose it regardless of age (incl. old G1 approvals).
-      if (addProposal({ kind: 'new', source: key, cardId: null, country: '', row, changes: [],
+      // Country is filled only from documented sources (TA PDF, JRC card name),
+      // never from the eNN issuer prefix — the prefix names the authority, not the card's country.
+      const documented = documentedCountry(row.typeApproval);
+      const fromName = !documented ? resolveFromCardName(row.cardName) : null;
+      const resolved = documented || fromName;
+      const authorityLabel = approvalAuthorityLabel(row.typeApproval);
+      const country = resolved ? resolved[0] : '';
+      if (addProposal({ kind: 'new', source: key, cardId: null, country, row, changes: [],
+        info: authorityLabel ? 'Approval issued by: ' + authorityLabel : '',
         fingerprint: hashString(key + '|new|' + k + '|' + (row.generation || '') + '|' + row.certificate + row.date) })) created++;
     }
   }
@@ -1286,17 +1305,18 @@ function renderUpdates() {
     const title = p.kind === 'info'
       ? SOURCES[p.source].label + ' — new/changed entry'
       : p.kind === 'new'
-        ? 'New JRC entry · ' + esc(p.row.typeApproval || '—')
+        ? 'New JRC entry · ' + (p.country ? esc(p.country) + ' · ' : '') + esc(p.row.typeApproval || '—')
         : esc(p.country) + ' · ' + esc(p.row.typeApproval || '—');
     const body = p.kind === 'info'
       ? '<div style="font-size:12px;color:#cbd5e1;">' + esc(p.info) + '</div>'
       : '<div style="font-size:12px;color:#cbd5e1;margin-bottom:8px;">' +
           esc(p.row.manufacturer) + ' · ' + esc(p.row.cardName) + ' · ' + esc(jrcStatusText(p.row)) + '</div>' +
+        (p.info ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">' + esc(p.info) + '</div>' : '') +
         (p.changes.length ? '<div>' + p.changes.map(c =>
           '<div class="chg"><span>' + esc(c.label) + '</span><span class="old">' + esc(c.old || '—') + '</span><span class="new">' + esc(c.new) + '</span></div>').join('') + '</div>' : '');
     const actions = p.status === 'pending'
       ? '<div class="actions">' +
-          (p.kind === 'new' ? '<input class="country" id="c_' + p.id + '" placeholder="Country for new entry" />' : '') +
+          (p.kind === 'new' ? '<input class="country" id="c_' + p.id + '" value="' + esc(p.country||'') + '" placeholder="Country for new entry" />' : '') +
           (p.kind === 'info' ? '' : '<button class="btn" onclick="applyProposal(\'' + p.id + '\')">Approve &amp; apply</button>') +
           '<button class="btn secondary" onclick="dismissProposal(\'' + p.id + '\')">Dismiss</button></div>'
       : '';
@@ -1537,6 +1557,46 @@ function resolveTaCountry(ta){
   for (const part of String(ta||'').split(/[/;]/)) { const hit = TA_COUNTRY[normTa(part)]; if (hit) return hit; }
   return null;
 }
+function documentedCountry(ta){
+  const hit = resolveTaCountry(ta);
+  return hit && hit[1] ? hit : null;
+}
+function countryConflict(ta, storedCountry){
+  const documented = documentedCountry(ta);
+  if (!documented) return null;
+  const stored = String(storedCountry || '').trim();
+  if (!stored) return null;
+  const listed = documented[0].toLowerCase().split(',').map(s => s.trim());
+  if (listed.includes(stored.toLowerCase())) return null;
+  return { country: documented[0], evidence: documented[2] || '', authority: documented[3] || '' };
+}
+function taPrefix(ta){
+  const m = /^(e\d{1,2})/i.exec(String(ta||'').trim());
+  return m ? m[1].toLowerCase() : '';
+}
+const UNSAFE_PREFIXES = new Set(['e31','e42','e51','e54','e55','e56','e58']);
+function prefixUnsafe(ta){ return UNSAFE_PREFIXES.has(taPrefix(ta)); }
+function approvalAuthorityLabel(ta){
+  const hit = resolveTaCountry(ta);
+  const prefix = taPrefix(ta);
+  const auth = (hit && hit[3] && hit[3].trim()) || (hit && hit[0] ? 'Authority of ' + hit[0] : '');
+  const suffix = prefix ? ' (' + prefix + (prefixUnsafe(ta) ? ', mapping uncertain' : '') + ')' : '';
+  if (auth) return auth + suffix;
+  return prefix || '';
+}
+const COMPANY_NOISE = ['austria card','idemia','thales','imprimerie nationale','bundesdruckerei','trüb ag','trueb ag','trüb','polska wytwórnia','pwpw','certsign','gemalto','oberthur','morpho','sagemcom','giesecke','g&d','national bank of','the netherlands','netherlands bv','b.v.'];
+const COUNTRY_ALIASES = [['germany','Germany'],['deutschland','Germany'],['france','France'],['frankreich','France'],['poland','Poland'],['polen','Poland'],['netherlands','Netherlands'],['niederlande','Netherlands'],['italy','Italy'],['italien','Italy'],['spain','Spain'],['spanien','Spain'],['austria','Austria'],['österreich','Austria'],['oesterreich','Austria'],['belgium','Belgium'],['belgien','Belgium'],['bulgaria','Bulgaria'],['bulgarien','Bulgaria'],['croatia','Croatia'],['kroatien','Croatia'],['cyprus','Cyprus'],['zypern','Cyprus'],['czechia','Czechia'],['czech republic','Czechia'],['tschechien','Czechia'],['denmark','Denmark'],['dänemark','Denmark'],['daenemark','Denmark'],['estonia','Estonia'],['estland','Estonia'],['finland','Finland'],['finnland','Finland'],['greece','Greece'],['griechenland','Greece'],['hungary','Hungary'],['ungarn','Hungary'],['iceland','Iceland'],['island','Iceland'],['ireland','Ireland'],['irland','Ireland'],['latvia','Latvia'],['lettland','Latvia'],['liechtenstein','Liechtenstein'],['lithuania','Lithuania'],['litauen','Lithuania'],['luxembourg','Luxembourg'],['luxemburg','Luxembourg'],['malta','Malta'],['norway','Norway'],['norwegen','Norway'],['portugal','Portugal'],['romania','Romania'],['rumänien','Romania'],['rumaenien','Romania'],['slovakia','Slovakia'],['slowakei','Slovakia'],['slovenia','Slovenia'],['slowenien','Slovenia'],['sweden','Sweden'],['schweden','Sweden'],['switzerland','Switzerland'],['schweiz','Switzerland'],['united kingdom','United Kingdom'],['great britain','United Kingdom'],['turkey','Türkiye'],['türkiye','Türkiye'],['turkiye','Türkiye'],['serbia','Serbia'],['serbien','Serbia'],['ukraine','Ukraine'],['moldova','Moldova'],['moldau','Moldova'],['georgia','Georgia'],['georgien','Georgia'],['armenia','Armenia'],['armenien','Armenia'],['azerbaijan','Azerbaijan'],['aserbaidschan','Azerbaijan'],['kazakhstan','Kazakhstan'],['kasachstan','Kazakhstan'],['russia','Russia'],['russland','Russia'],['belarus','Belarus'],['weißrussland','Belarus'],['kyrgyzstan','Kyrgyzstan'],['kirgisistan','Kyrgyzstan'],['israel','Israel'],['bosnia','Bosnia and Herzegovina'],['bosnien','Bosnia and Herzegovina'],['albania','Albania'],['albanien','Albania'],['north macedonia','North Macedonia'],['macedonia','North Macedonia'],['mazedonien','North Macedonia'],['andorra','Andorra'],['san marino','San Marino'],['monaco','Monaco'],['montenegro','Montenegro'],['kosovo','Kosovo'],['uzbekistan','Uzbekistan'],['usbekistan','Uzbekistan'],['turkmenistan','Turkmenistan']];
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function resolveFromCardName(cardName){
+  let text = ' ' + String(cardName||'').toLowerCase() + ' ';
+  for (const noise of COMPANY_NOISE) { text = text.split(noise).join(' '); }
+  const found = new Set();
+  for (const [alias, country] of COUNTRY_ALIASES) {
+    if (new RegExp('\\b' + escapeRegExp(alias) + '\\b','i').test(text)) found.add(country);
+  }
+  if (found.size !== 1) return null;
+  return [Array.from(found)[0], 1, String(cardName||'').slice(0,160), ''];
+}
 function renderCrossCheck(){
   const el = document.getElementById('crossCheckResult');
   if (!el) return;
@@ -1547,14 +1607,14 @@ function renderCrossCheck(){
     const stored = String(r.country||'').trim();
     if (!ta || /^not identified/i.test(ta)) continue;
     checked++;
-    const hit = resolveTaCountry(ta);
-    if (!hit) { unknown.add(ta); continue; }
-    if (!hit[1] || !stored) continue;
-    const listed = hit[0].toLowerCase().split(',').map(s=>s.trim());
+    const documented = documentedCountry(ta);
+    if (!documented) { unknown.add(ta); continue; }
+    if (!stored) continue;
+    const listed = documented[0].toLowerCase().split(',').map(s=>s.trim());
     if (listed.includes(stored.toLowerCase())) continue;
     const key = ta + '|' + stored;
     if (seen.has(key)) continue; seen.add(key);
-    conflicts.push({ta, stored, resolved: hit[0], evidence: hit[2]});
+    conflicts.push({ta, stored, resolved: documented[0], evidence: documented[2]});
   }
   const list = conflicts.map(c =>
     '<li><code>' + c.ta + '</code> &mdash; stored <b>' + c.stored + '</b>, documented <b>' +
@@ -1562,10 +1622,11 @@ function renderCrossCheck(){
   const un = [...unknown];
   el.innerHTML =
     '<p>' + checked + ' record(s) checked &middot; ' + conflicts.length + ' conflict(s) &middot; ' +
-    un.length + ' type approval(s) not in the reference list.</p>' +
+    un.length + ' type approval(s) without documented country.</p>' +
     (list ? '<ul style="margin:8px 0 0 18px;font-size:12px;">' + list + '</ul>' : '') +
-    (un.length ? '<p style="margin-top:8px;font-size:12px;color:#94a3b8;">Not in reference list: ' +
-      un.slice(0,40).join(' &middot; ') + (un.length>40?' &hellip;':'') + '</p>' : '');
+    (un.length ? '<p style="margin-top:8px;font-size:12px;color:#94a3b8;">Country not documented (issuer prefix only): ' +
+      un.slice(0,40).map(ta => { const a = approvalAuthorityLabel(ta); return ta + (a ? ' [' + a + ']' : ''); }).join(' &middot; ') +
+      (un.length>40?' &hellip;':'') + '</p>' : '');
 }
 </script>
 </body>

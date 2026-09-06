@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { resolveTaCountry, countryConflict } from "@/lib/ta-country";
+import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
 
 
 export type ExportRow = Record<string, unknown>;
@@ -63,8 +63,8 @@ function buildCsv(rows: ExportRow[], columns: string[], delimiter: string) {
   return "\uFEFF" + lines.join("\r\n");
 }
 
-function download(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+function download(content: string, filename: string, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -213,7 +213,9 @@ export function ToolsView({
       const stored = String(row["country"] ?? "").trim();
       if (!ta || ta.toLowerCase().startsWith("not identified")) continue;
       checked++;
-      if (!resolveTaCountry(ta)) {
+      const documented = documentedCountry(ta);
+      if (!documented) {
+        // No documented source (only prefix-based or nothing) → "Land nicht belegt"
         unknown.add(ta);
         continue;
       }
@@ -268,6 +270,24 @@ export function ToolsView({
                 {filteredCards.length})
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!cards.length) {
+                  toast.error("Nothing to export.");
+                  return;
+                }
+                const stamp = new Date().toISOString().slice(0, 10);
+                download(
+                  JSON.stringify(cards, null, 2),
+                  `tachograph-cards-${stamp}.json`,
+                  "application/json;charset=utf-8",
+                );
+                toast.success(`${cards.length} row(s) exported as JSON.`);
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export all · JSON
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             Columns: {columns.map(labelFor).join(" · ")}
@@ -336,11 +356,12 @@ export function ToolsView({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Compares every type approval number in the database with the JRC country
-            resolution (type approval PDF, JRC card name, or issuing authority prefix).
+            Compares every type approval number in the database with the documented
+            country sources (type approval PDF, JRC card name). Entries resolved only
+            from the eNN issuer prefix appear as "country not documented".
             {" "}
             {check.checked} record(s) checked · {check.conflicts.length} conflict(s) ·{" "}
-            {check.unknown.length} type approval(s) not found in the reference list.
+            {check.unknown.length} type approval(s) without documented country.
           </p>
           {check.conflicts.length > 0 && (
             <div className="rounded-md border bg-muted/40 p-3">
@@ -359,33 +380,62 @@ export function ToolsView({
           )}
           {check.unknown.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              Not in reference list: {check.unknown.slice(0, 40).join(" · ")}
+              Country not documented (issuer prefix only):{" "}
+              {check.unknown.slice(0, 40).map((ta) =>
+                approvalAuthorityLabel(ta) ? `${ta} [${approvalAuthorityLabel(ta)}]` : ta,
+              ).join(" · ")}
               {check.unknown.length > 40 ? " …" : ""}
             </p>
           )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (!check.conflicts.length) {
-                toast.error("No conflicts to export.");
-                return;
-              }
-              const rows = check.conflicts.map((c) => ({
-                type_approval_number: c.ta,
-                stored_country: c.stored,
-                documented_country: c.resolved,
-                evidence: c.evidence,
-                authority: c.authority,
-              }));
-              const cols = Object.keys(rows[0]!);
-              download(
-                buildCsv(rows as ExportRow[], cols, ";"),
-                `country-crosscheck-${new Date().toISOString().slice(0, 10)}.csv`,
-              );
-            }}
-          >
-            <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length})
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!check.conflicts.length) {
+                  toast.error("No conflicts to export.");
+                  return;
+                }
+                const rows = check.conflicts.map((c) => ({
+                  type_approval_number: c.ta,
+                  stored_country: c.stored,
+                  documented_country: c.resolved,
+                  evidence: c.evidence,
+                  authority: c.authority,
+                }));
+                const cols = Object.keys(rows[0]!);
+                download(
+                  buildCsv(rows as ExportRow[], cols, ";"),
+                  `country-crosscheck-${new Date().toISOString().slice(0, 10)}.csv`,
+                );
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length}) · CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const report = {
+                  checked: check.checked,
+                  conflicts: check.conflicts.map((c) => ({
+                    ta: c.ta,
+                    stored: c.stored,
+                    documented: c.resolved,
+                    evidence: c.evidence,
+                    authority: c.authority,
+                  })),
+                  not_documented: check.unknown,
+                };
+                download(
+                  JSON.stringify(report, null, 2),
+                  `country-crosscheck-${new Date().toISOString().slice(0, 10)}.json`,
+                  "application/json;charset=utf-8",
+                );
+                toast.success("Cross-check report exported as JSON.");
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export cross-check · JSON
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
