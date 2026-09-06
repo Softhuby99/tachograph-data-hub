@@ -389,14 +389,34 @@ export function UpdatesView() {
 
                 {p.status === "pending" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {(p.kind === "new" || (isInfo && !p.country)) && (
-                      <Input
-                        className="h-9 w-56"
-                        placeholder={isInfo ? "Country to note this on" : "Country for new entry"}
-                        value={newCountry[p.id] ?? p.country ?? ""}
-                        onChange={(e) => setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))}
-                      />
-                    )}
+                    {(p.kind === "new" || (isInfo && !p.country)) &&
+                      (() => {
+                        const guess = resolveTaCountry(p.jrc_type_approval ?? "");
+                        const prefill =
+                          newCountry[p.id] ?? p.country ?? (guess ? guess.country : "");
+                        const assumed = !p.country && !!guess && guess.confidence !== "documented";
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <Input
+                              className="h-9 w-56"
+                              placeholder={
+                                isInfo ? "Country to note this on" : "Country for new entry"
+                              }
+                              value={prefill}
+                              onChange={(e) =>
+                                setNewCountry((s) => ({ ...s, [p.id]: e.target.value }))
+                              }
+                            />
+                            {assumed && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Assumed from issuer prefix ({taPrefix(p.jrc_type_approval ?? "")}) —
+                                please confirm
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                     <Button
                       size="sm"
                       onClick={() =>
