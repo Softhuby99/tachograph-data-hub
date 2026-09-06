@@ -83,7 +83,16 @@ function compactCommonCriteriaPage(html: string): string {
       .join(" ");
     return /tachograph/i.test(`${product.name ?? ""} ${profiles} ${product.category_name ?? ""}`);
   });
-  return `var productList = ${JSON.stringify(tachographProducts)};\nvar ppsList = ${JSON.stringify(pps)};`;
+  const usedPpIds = new Set(
+    tachographProducts.flatMap((product) =>
+      String(product.pps ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  );
+  const tachographPps = pps.filter((pp) => usedPpIds.has(String(pp.ID ?? "")));
+  return `var productList = ${JSON.stringify(tachographProducts)};\nvar ppsList = ${JSON.stringify(tachographPps)};`;
 }
 
 /** Fetch with manual redirect following — each hop must stay in the allowlist. */
