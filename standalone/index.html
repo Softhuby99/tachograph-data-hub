@@ -1144,12 +1144,15 @@ async function checkCcSource() {
       }
       continue;
     }
-    const info = [e.deviceType, e.certificate || 'no number published', e.product, e.vendor,
+    const certCountry = ccCertificationCountry(e);
+    const info = [e.deviceType, certCountry ? 'certified in ' + certCountry : '',
+      e.certificate || 'no number published', e.product, e.vendor,
       e.generation ? 'Generation ' + e.generation : '', e.protectionProfiles ? 'PP ' + e.protectionProfiles : '',
       e.issued ? 'issued ' + e.issued : '', e.expires ? 'expires ' + e.expires : '', e.status]
       .filter(Boolean).join(' · ');
-    if (addProposal({ kind: 'info', source: 'cc_certificates', cardId: null, country: '', row: null, changes: [], info,
+    if (addProposal({ kind: 'info', source: 'cc_certificates', cardId: null, country: certCountry, row: null, changes: [], info,
       fingerprint: hashString('cc|' + e.deviceType + '|' + (normCert(e.certificate) || e.product) + '|' + e.issued + '|' + e.expires) })) created++;
+
   }
   return { rows: entries.length, created };
 }
