@@ -685,6 +685,7 @@ function DataView({
               card={selected}
               edited={!!overrides[selected.id]}
               canEdit={canEdit}
+              editHint={editHint}
               onSave={(patch) => onSave(selected.id, patch)}
               onReset={() => onReset(selected.id)}
             />
