@@ -23,6 +23,7 @@ Jeder Update-Lauf protokolliert pro Quelle (JRC-Seiten, Common-Criteria-Portal) 
 **1.5 Die 21 belegten Länderfehler im Bestand**
 Kein automatisches Überschreiben: die widersprüchlichen Datensätze (z. B. e69-AETR-0001-01 → Israel, e1-242-00 → Kasachstan, e4-0009-02 → Dänemark, e1-00021-00 → Griechenland) werden als Vorschläge mit Belegtext in den bestehenden Freigeben/Verwerfen-Ablauf eingespeist und einzeln bestätigt.
 Die Prüfung läuft zunächst gegen die Datenbank (nicht gegen die Offline-Daten) und nur als Bericht; erst wenn die Korrekturen bestätigt und die Offline-Daten daraus neu erzeugt sind, wird sie im Build blockierend geschaltet. Der Prüflauf braucht Python und poppler-utils; ohne Netzzugang arbeitet der Generator aus der mitgelieferten CSV-Datei.
+Das Prüfskript liest Dateien, keine laufende Datenbank. Daher: Die Kartentabelle wird vor dem Prüflauf als JSON exportiert und dem Skript übergeben (ein Befehl, ohne Skriptänderung). Erweiterung um einen direkten Datenbank-Lesepfad bleibt als spätere Option offen, falls der Prüflauf ohne Export-Schritt laufen soll.
 
 **1.6 Freitext im Schlüsselfeld**
 9 Datensätze tragen Fließtext („Not published", „Not identified", ein deutscher Kommentar) im Feld für die Typgenehmigungsnummer. Die Migration kopiert den Originalwert zuerst unverändert in die Notizspalte und leert erst danach das Schlüsselfeld — inklusive Rückroll-Schritt, der den Text zurückschreibt. Fachliche Notizen wie „Zuordnung zu Luxemburg in the approval verifizieren" bleiben so erhalten.
