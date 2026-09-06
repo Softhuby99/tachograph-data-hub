@@ -940,8 +940,18 @@ async function checkCardSource(key) {
     });
     if (card) {
       const changes = diffAgainstCard(row, card);
+      // Country conflicts become an actionable field change so the user can
+      // approve correcting the stored country to the documented one.
+      const conflict = countryConflict(row.typeApproval, card.country);
+      if (conflict) {
+        changes.push({ field: 'country', label: FIELD_LABELS['country'] || 'Country',
+          old: card.country || '', new: conflict.country });
+      }
       if (!changes.length) continue;
-      if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes,
+      const title = conflict
+        ? card.country + ' \u2192 ' + conflict.country + ' \u00b7 ' + row.typeApproval
+        : card.country + ' \u00b7 ' + row.typeApproval;
+      if (addProposal({ kind: 'change', source: key, cardId: card.id, country: card.country, row, changes, title,
         fingerprint: hashString(key + '|' + card.id + '|' + changes.map(c => c.field + c.new).join('|')) })) created++;
     } else {
       // No counterpart in the local data — propose it regardless of age (incl. old G1 approvals).
