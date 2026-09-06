@@ -125,35 +125,48 @@ export function normaliseCc(raw: string): string {
 
 /**
  * cert_number() from cc_tachograph.py: pull the official certificate number
- * out of the report PDF text; returns "" when nothing is found.
+ * out of the report PDF text.  The certificate's OWN number sits on the title
+ * page; foreign certificates (e.g. the chip's) appear later in the body.  So
+ * we collect every match across all patterns and keep the one at the earliest
+ * text position — "früheste Textposition gewinnt".
  */
 export function certificateFromText(text: string): string {
   const flat = text.replace(/\s+/g, " ");
+  type Hit = { index: number; value: string };
+  const hits: Hit[] = [];
   for (const re of CC_TEXT_PATTERNS) {
     re.lastIndex = 0;
-    const m = re.exec(flat);
-    if (!m) continue;
-    if (/EUCC/i.test(m[0])) {
-      return `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}`;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(flat)) !== null) {
+      let value = "";
+      if (/EUCC/i.test(m[0])) {
+        value = `EUCC-ANSSI-${m[1]}-${m[2]}-${m[3]}`;
+      } else if (/ANSSI/i.test(m[0])) {
+        const num = (m[2] ?? "").replace(/\s+/g, "");
+        const rev = (m[3] ?? "").replace(/\s+/g, "");
+        value = normaliseCc(`ANSSI-CC-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
+      } else if (/NSCIB/i.test(m[0])) {
+        // long form (7 digits + optional suffix) keeps its digits untouched;
+        // the split form needs a real hyphen between the groups.
+        if (m[1].length === 7) value = `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`;
+        else value = `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
+      } else if (/^OC/i.test(m[0])) {
+        value = `OC-${m[2]}-${m[3]} (ES)`;
+      } else if (/^CRP/i.test(m[0])) {
+        value = `CRP${m[2]} (UK)`;
+      } else {
+        value = `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
+      }
+      if (value) hits.push({ index: m.index, value });
+      if (m.index === re.lastIndex) re.lastIndex++; // avoid zero-length loop
     }
-    if (/ANSSI/i.test(m[0])) {
-      const num = (m[2] ?? "").replace(/\s+/g, "");
-      const rev = (m[3] ?? "").replace(/\s+/g, "");
-      return normaliseCc(`ANSSI-CC-${m[1]}/${num}${rev ? `-${rev}` : ""}`);
-    }
-    if (/NSCIB/i.test(m[0])) {
-      // long form (7 digits + optional suffix) keeps its digits untouched;
-      // the split form needs a real hyphen between the groups.
-      if (m[1].length === 7) return `NSCIB-CC-${m[1]}${m[2] ? `-${m[2]}` : ""}`;
-      return `NSCIB-CC-${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ""}`;
-    }
-    if (/^OC/i.test(m[0])) return `OC-${m[2]}-${m[3]} (ES)`;
-    if (/^CRP/i.test(m[0])) return `CRP${m[2]} (UK)`;
-    return `BSI-DSZ-CC-${m[1]}${m[2] ? `-${m[2].toUpperCase()}` : ""}`;
-
   }
-  const loose = CERT_IN_TEXT.exec(flat);
-  return loose ? normaliseCc(loose[1]) : "";
+  if (hits.length === 0) {
+    const loose = CERT_IN_TEXT.exec(flat);
+    return loose ? normaliseCc(loose[1]) : "";
+  }
+  hits.sort((a, b) => a.index - b.index);
+  return hits[0].value;
 }
 
 export function certificateNumber(
