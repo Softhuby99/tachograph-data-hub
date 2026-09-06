@@ -1,6 +1,6 @@
 # Roadmap — Umsetzung Plan „Kritikpunkte"
 
-- [ ] 1.1 Länderauflösung: Präfix füllt Land nicht; Firmenfilter; Behörde separat; E31 fix, E68/E69 neu, unsichere markiert (web + offline)
+- [~] 1.1 Länderauflösung: Helfer in ta-country.ts fertig (documentedCountry, approvalAuthorityLabel, resolveFromCardName mit Firmenfilter, unsichere Präfixe); E31 in Daten bereits korrekt. OFFEN: Verbraucher umstellen (jrc.server.ts, jrc.functions.ts, ToolsView „Land nicht belegt"), Offline-Spiegelung in standalone/index.html
 - [ ] 1.2 tools/ (resolver, generator, check, cc_tachograph, ocr_run, CSV) + npm-Skripte
 - [ ] 1.3 cc.server.ts: früheste Textposition gewinnt; BSI-Jahressuffix
 - [ ] 1.4 Update-Quellen-Logging (jrc_check_runs pro Quelle)
