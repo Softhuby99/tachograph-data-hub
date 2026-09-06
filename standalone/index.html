@@ -1109,7 +1109,25 @@ async function scrapeCcPortal(pageUrl, status) {
   });
 }
 
+const CC_SCHEME_COUNTRY = { de:'Germany', deu:'Germany', germany:'Germany', fr:'France', fra:'France', france:'France',
+  nl:'Netherlands', nld:'Netherlands', netherlands:'Netherlands', es:'Spain', esp:'Spain', spain:'Spain',
+  it:'Italy', ita:'Italy', italy:'Italy', se:'Sweden', swe:'Sweden', sweden:'Sweden', no:'Norway', nor:'Norway', norway:'Norway',
+  uk:'United Kingdom', gb:'United Kingdom', 'united kingdom':'United Kingdom', tr:'Turkey', tur:'Turkey', turkey:'Turkey',
+  pl:'Poland', pol:'Poland', poland:'Poland', eu:'European Union (EUCC)' };
+function ccCertificationCountry(e) {
+  const s = (e.scheme || '').trim().toLowerCase();
+  if (s && CC_SCHEME_COUNTRY[s]) return CC_SCHEME_COUNTRY[s];
+  const c = (e.certificate || '').toUpperCase();
+  if (c.indexOf('BSI-') === 0) return 'Germany';
+  if (c.indexOf('EUCC-ANSSI') === 0 || c.indexOf('ANSSI-') === 0) return 'France';
+  if (c.indexOf('NSCIB-') === 0) return 'Netherlands';
+  if (c.indexOf('CRP') === 0) return 'United Kingdom';
+  if (c.indexOf('OC-') === 0 || c.indexOf('(ES)') >= 0) return 'Spain';
+  if (c.indexOf('EUCC-') === 0) return 'European Union (EUCC)';
+  return '';
+}
 async function checkCcSource() {
+
   const [valid, archived] = await Promise.all([
     scrapeCcPortal(SOURCES.cc_certificates.url, 'valid'),
     scrapeCcPortal(CC_ARCHIVED_URL, 'archived'),
