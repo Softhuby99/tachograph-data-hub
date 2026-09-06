@@ -1,20 +1,24 @@
 import { createMiddleware } from "@tanstack/react-start";
 
 /**
- * Attaches the Supabase bearer token to server-fn RPCs when Supabase auth is
- * configured. When AUTH_MODE=none (local Docker deployment without a backend),
- * Supabase env vars are absent, so this middleware is a no-op — the
- * `optionalAuth` server middleware accepts the anonymous local identity.
+ * Attaches auth tokens to server-fn RPCs.
+ * - Supabase mode: attaches the Supabase bearer token.
+ * - Local Docker mode (no VITE_SUPABASE_URL): attaches the admin token from
+ *   localStorage when present, so writes pass the ADMIN_TOKEN check in noneAuth.
  */
 export const attachBearer = createMiddleware({ type: "function" }).client(
   async ({ next }) => {
     const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
     if (!url) {
-      // No Supabase backend configured — nothing to attach.
-      return next();
+      // Local Docker mode — attach admin token from localStorage if the user
+      // entered one. Without it, writes will be rejected with 401.
+      const adminToken =
+        typeof localStorage !== "undefined" ? localStorage.getItem("admin-token") : null;
+      return next({
+        headers: adminToken ? { "x-admin-token": adminToken } : {},
+      });
     }
-    // Lazy-load the Supabase client only when configured, so a build without
-    // Supabase env never touches the (throwing) generated client.
+    // Supabase mode — attach the session bearer.
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
