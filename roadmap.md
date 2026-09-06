@@ -13,3 +13,4 @@
 - [x] 3.1 standalone main.cjs: Allowlist + userData-Temp — ALLOWED_FETCH_HOSTS + app.getPath('userData') statt os.tmpdir()
 - [x] 3.2 eslint --fix — index.tsx overrides in useMemo gewrappt; restliche warnings in auto-gen shadcn/previewAuthStorage
 - [x] Version 2.13
+- [x] Persistenten Common-Criteria-502 behoben: große Portal-Antwort serverseitig auf Tachograph-Produkte und benötigte Schutzprofile reduziert
