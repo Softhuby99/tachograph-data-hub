@@ -22,7 +22,8 @@ su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" -l /tmp/pg.log start -w"
 
 DB_NAME="${DB_NAME:-tdh}"
 DB_USER="${DB_USER:-tdh}"
-DB_PASSWORD="${DB_PASSWORD:-tdh}"
+# No default password — the deployment must set DB_PASSWORD explicitly.
+DB_PASSWORD="${DB_PASSWORD:?DB_PASSWORD must be set (e.g. in /opt/TDH/.env)}"
 
 if ! su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'\"" | grep -q 1; then
   echo "[entrypoint] Creating role $DB_USER…"
