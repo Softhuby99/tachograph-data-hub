@@ -1551,6 +1551,15 @@ function documentedCountry(ta){
   const hit = resolveTaCountry(ta);
   return hit && hit[1] ? hit : null;
 }
+function countryConflict(ta, storedCountry){
+  const documented = documentedCountry(ta);
+  if (!documented) return null;
+  const stored = String(storedCountry || '').trim();
+  if (!stored) return null;
+  const listed = documented[0].toLowerCase().split(',').map(s => s.trim());
+  if (listed.includes(stored.toLowerCase())) return null;
+  return { country: documented[0], evidence: documented[2] || '', authority: documented[3] || '' };
+}
 function taPrefix(ta){
   const m = /^(e\d{1,2})/i.exec(String(ta||'').trim());
   return m ? m[1].toLowerCase() : '';
