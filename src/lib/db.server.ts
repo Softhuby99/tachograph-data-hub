@@ -20,7 +20,8 @@ function poolConfig() {
     port: Number(process.env["DB_PORT"] || "5432"),
     database: process.env["DB_NAME"] || "tdh",
     user: process.env["DB_USER"] || "tdh",
-    password: process.env["DB_PASSWORD"] || "tdh",
+    // No default password — the deployment must set DB_PASSWORD explicitly.
+    password: process.env["DB_PASSWORD"] ?? "",
     max: 8,
     idleTimeoutMillis: 30000,
   };
