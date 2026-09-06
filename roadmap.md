@@ -2,7 +2,7 @@
 
 - [x] 1.1 Länderauflösung: Helfer in ta-country.ts + Verbraucher umgestellt (jrc.server.ts, jrc.functions.ts, ToolsView, standalone/index.html) — Präfix füllt kein Land mehr, nur dokumentierte Quellen; Authority-Label separat
 - [x] 1.2 tools/ (resolver, generator, check, cc_tachograph, ocr_run, CSV) + npm-Skripte — gen_ta_country.py erzeugt 397 Einträge identisch zur bestehenden ta-country.ts; check_dataset.py prüft JSON-Export gegen CSV; npm-Skripte gen:ta-country + check:dataset
-- [ ] 1.3 cc.server.ts: früheste Textposition gewinnt; BSI-Jahressuffix
+- [x] 1.3 cc.server.ts: früheste Textposition gewinnt; BSI-Jahressuffix — certificateFromText sammelt alle Treffer und nimmt die früheste Position; BSI-Jahressuffix greift jetzt unabhängig von der Quelle (auch bei Certificate PDF), sucht zuerst im Zertifikats-PDF-Text
 - [ ] 1.4 Update-Quellen-Logging (jrc_check_runs pro Quelle)
 - [ ] 1.5 21 Länderfehler als Vorschläge in Freigabe-Ablauf; Prüfung als Bericht (JSON-Export)
 - [ ] 1.6 Migration: Freitext aus type_approval_number → Notizspalte, rückrollbar
