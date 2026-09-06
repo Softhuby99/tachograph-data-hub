@@ -387,29 +387,55 @@ export function ToolsView({
               {check.unknown.length > 40 ? " …" : ""}
             </p>
           )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (!check.conflicts.length) {
-                toast.error("No conflicts to export.");
-                return;
-              }
-              const rows = check.conflicts.map((c) => ({
-                type_approval_number: c.ta,
-                stored_country: c.stored,
-                documented_country: c.resolved,
-                evidence: c.evidence,
-                authority: c.authority,
-              }));
-              const cols = Object.keys(rows[0]!);
-              download(
-                buildCsv(rows as ExportRow[], cols, ";"),
-                `country-crosscheck-${new Date().toISOString().slice(0, 10)}.csv`,
-              );
-            }}
-          >
-            <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length})
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!check.conflicts.length) {
+                  toast.error("No conflicts to export.");
+                  return;
+                }
+                const rows = check.conflicts.map((c) => ({
+                  type_approval_number: c.ta,
+                  stored_country: c.stored,
+                  documented_country: c.resolved,
+                  evidence: c.evidence,
+                  authority: c.authority,
+                }));
+                const cols = Object.keys(rows[0]!);
+                download(
+                  buildCsv(rows as ExportRow[], cols, ";"),
+                  `country-crosscheck-${new Date().toISOString().slice(0, 10)}.csv`,
+                );
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export cross-check ({check.conflicts.length}) · CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const report = {
+                  checked: check.checked,
+                  conflicts: check.conflicts.map((c) => ({
+                    ta: c.ta,
+                    stored: c.stored,
+                    documented: c.resolved,
+                    evidence: c.evidence,
+                    authority: c.authority,
+                  })),
+                  not_documented: check.unknown,
+                };
+                download(
+                  JSON.stringify(report, null, 2),
+                  `country-crosscheck-${new Date().toISOString().slice(0, 10)}.json`,
+                  "application/json;charset=utf-8",
+                );
+                toast.success("Cross-check report exported as JSON.");
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Export cross-check · JSON
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
