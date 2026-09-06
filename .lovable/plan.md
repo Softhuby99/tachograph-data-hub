@@ -21,10 +21,12 @@ Unsichere Präfixe (E31, E42, E51, E54–E56, E58) bleiben als „unsicher" geke
 Jeder Update-Lauf protokolliert pro Quelle (JRC-Seiten, Common-Criteria-Portal) Erfolg oder Fehlschlag — sichtbar im Update-Verlauf und im Container-Log.
 
 **1.5 Die 21 belegten Länderfehler im Bestand**
-Kein automatisches Überschreiben: die widersprüchlichen Datensätze (z. B. e69-AETR-0001-01 → Israel, e1-242-00 → Kasachstan, e4-0009-02 → Dänemark, e1-00021-00 → Griechenland) werden als Vorschläge mit Belegtext in den bestehenden Freigeben/Verwerfen-Ablauf eingespeist und einzeln bestätigt. `check:dataset --strict` verhindert im Build, dass neue dazukommen.
+Kein automatisches Überschreiben: die widersprüchlichen Datensätze (z. B. e69-AETR-0001-01 → Israel, e1-242-00 → Kasachstan, e4-0009-02 → Dänemark, e1-00021-00 → Griechenland) werden als Vorschläge mit Belegtext in den bestehenden Freigeben/Verwerfen-Ablauf eingespeist und einzeln bestätigt.
+Die Prüfung läuft zunächst gegen die Datenbank (nicht gegen die Offline-Daten) und nur als Bericht; erst wenn die Korrekturen bestätigt und die Offline-Daten daraus neu erzeugt sind, wird sie im Build blockierend geschaltet. Der Prüflauf braucht Python und poppler-utils; ohne Netzzugang arbeitet der Generator aus der mitgelieferten CSV-Datei.
 
 **1.6 Freitext im Schlüsselfeld**
-9 Datensätze tragen Fließtext („Not published", „Not identified", ein deutscher Kommentar) im Feld für die Typgenehmigungsnummer. Der Text wandert in eine Notizspalte, das Schlüsselfeld bleibt leer.
+9 Datensätze tragen Fließtext („Not published", „Not identified", ein deutscher Kommentar) im Feld für die Typgenehmigungsnummer. Die Migration kopiert den Originalwert zuerst unverändert in die Notizspalte und leert erst danach das Schlüsselfeld — inklusive Rückroll-Schritt, der den Text zurückschreibt. Fachliche Notizen wie „Zuordnung zu Luxemburg in the approval verifizieren" bleiben so erhalten.
+
 
 ## Paket 2 — Sicherheit
 
@@ -44,7 +46,7 @@ Ohne Admin-Token läuft die lokale Anwendung nur lesend; Schreibversuche bekomme
 **2.4 Kein Standard-Datenbankpasswort**
 Der eingebaute Ersatzwert `tdh` entfällt an **beiden** Stellen: `docker/entrypoint.sh` und `src/lib/db.server.ts`. Fehlt das Passwort, startet die Anwendung nicht und sagt im Log, was fehlt.
 
-*Gestrichen:* der ursprüngliche Punkt „Rate-Limit-Log" — im Code existiert kein Rate-Limit, das Warnen könnte. Falls gewünscht, baue ich eines als eigenen Punkt; bitte kurz sagen.
+*Gestrichen:* der ursprüngliche Punkt „Rate-Limit-Log" — im Code existiert kein Rate-Limit, das Warnen könnte, und nach 2.1/2.2 wird auch keines gebaut. Sollte später eines nötig werden, gehört es nicht in die Anwendung, sondern in die Plattform-Schutzregel (Online) bzw. in nginx (Docker).
 
 ## Paket 3 — Kleinigkeiten
 
