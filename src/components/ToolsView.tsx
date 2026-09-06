@@ -213,7 +213,9 @@ export function ToolsView({
       const stored = String(row["country"] ?? "").trim();
       if (!ta || ta.toLowerCase().startsWith("not identified")) continue;
       checked++;
-      if (!resolveTaCountry(ta)) {
+      const documented = documentedCountry(ta);
+      if (!documented) {
+        // No documented source (only prefix-based or nothing) → "Land nicht belegt"
         unknown.add(ta);
         continue;
       }

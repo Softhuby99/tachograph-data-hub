@@ -296,18 +296,26 @@ export function buildProposals(
 
     // Country resolution from the JRC type approval table (see ta-country.ts).
     // Only used when the entry is unknown in the dataset, or to flag a conflict.
-    const resolved = resolveTaCountry(row.typeApproval);
+    // Only documented sources (JRC card name, type approval PDF) may fill the
+    // country. The eNN prefix names the issuing authority, not the card's
+    // country, and is tracked separately.
+    const documented = documentedCountry(row.typeApproval);
+    const fromName = !documented ? resolveFromCardName(row.cardName) : null;
+    const resolved = documented || fromName;
+    const authorityLabel = approvalAuthorityLabel(row.typeApproval);
     const conflict = card ? countryConflict(row.typeApproval, card.country) : null;
     const country = card?.country || resolved?.country || "";
     const payload: Record<string, string> = {};
     if (resolved) {
       payload["Resolved country"] = resolved.country;
-      payload["Country confidence"] =
-        resolved.confidence === "documented" ? "documented" : "assumed (issuer prefix)";
+      payload["Country confidence"] = "documented";
       if (resolved.basis) payload["Country source"] = resolved.basis;
       if (resolved.evidence) payload["Country evidence"] = resolved.evidence;
       if (resolved.authority) payload["Approval authority"] = resolved.authority;
       if (resolved.pdf) payload["Type approval PDF"] = resolved.pdf;
+    }
+    if (authorityLabel) {
+      payload["Approval issued by"] = authorityLabel;
     }
     if (conflict) {
       payload["Country cross-check"] =
