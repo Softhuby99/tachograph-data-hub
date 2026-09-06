@@ -14,7 +14,7 @@ import {
   parseSecurityUpdates,
   type SourceKey,
 } from "./jrc-sources.server";
-import { countryConflict, resolveTaCountry } from "./ta-country";
+import { countryConflict, documentedCountry, resolveFromCardName, approvalAuthorityLabel } from "./ta-country";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
