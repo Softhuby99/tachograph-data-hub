@@ -46,6 +46,7 @@ import {
   History,
   CalendarClock,
   AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
@@ -1153,6 +1154,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
   // One selection for every drill-down, so the same window serves generations,
   // manufacturers, security certificates and the validity buckets.
   const [drill, setDrill] = useState<Drill | null>(null);
+  const [drillCard, setDrillCard] = useState<TachoCard | null>(null);
   const total = cards.length;
 
   const genCounts = useMemo(() => {
@@ -1253,7 +1255,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
         String(a.type_approval_number).localeCompare(String(b.type_approval_number)),
     );
   }, [cards, drill]);
-  const closeDrill = () => setDrill(null);
+  const closeDrill = () => {
+    setDrill(null);
+    setDrillCard(null);
+  };
   const toggleDrill = (next: Drill) =>
     setDrill((cur) => (cur && cur.kind === next.kind && cur.value === next.value ? null : next));
 
@@ -1508,7 +1513,12 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               {drillRows.map((c) => {
                 const fUrl = flagUrl(c.country, 40);
                 return (
-                  <tr key={c.id} className="border-b align-top last:border-0">
+                  <tr
+                    key={c.id}
+                    onClick={() => setDrillCard(c)}
+                    className="cursor-pointer border-b align-top last:border-0 hover:bg-accent/60"
+                    title="Click for full details"
+                  >
                     <td className="py-2 pr-4">
                       <span className="flex items-center gap-2">
                         {fUrl ? (
@@ -1526,7 +1536,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                         <span className="font-medium">{c.country}</span>
                       </span>
                     </td>
-                    <td className="py-2 pr-4">{c.type_approval_number || "—"}</td>
+                    <td className="py-2 pr-4 font-medium text-primary underline-offset-2 hover:underline">
+                      {c.type_approval_number || "—"}
+                    </td>
                     <td className="py-2 pr-4">{c.generation || "—"}</td>
                     <td className="py-2 pr-4">
                       {(drill?.kind === "generation"
@@ -1545,6 +1557,59 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               )}
             </tbody>
           </table>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record window, opened from a drill-down row. It stacks on top of the
+          list, so "Back" simply closes it and the list is still there. */}
+      <Dialog open={!!drillCard} onOpenChange={(o) => !o && setDrillCard(null)}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => setDrillCard(null)}
+              >
+                <ArrowLeft className="mr-1 h-4 w-4" /> Back
+              </Button>
+              {drillCard && flagUrl(drillCard.country, 40) && (
+                <img
+                  src={flagUrl(drillCard.country, 40)!}
+                  alt=""
+                  className="h-6 w-9 rounded border object-cover"
+                />
+              )}
+              <span>
+                {drillCard?.country} · {drillCard?.type_approval_number || "—"}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {drillCard && (
+            <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+              {GROUP1_FIELDS.map(([k, label]) => {
+                const key = k as string;
+                let value = String((drillCard as Record<string, unknown>)[key] ?? "");
+                if (key === "card_quantities") value = formatQuantities(value);
+                if (key === "certificate_expiry_date") {
+                  return (
+                    <Field key={key} label={label} value={value}>
+                      <ExpiryBadge expiry={expiryOf(value)} />
+                    </Field>
+                  );
+                }
+                return <Field key={key} label={label} value={value} />;
+              })}
+              {drillCard.verification_note && (
+                <Field
+                  label="Verification Note"
+                  value={drillCard.verification_note}
+                  className="md:col-span-2"
+                />
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
