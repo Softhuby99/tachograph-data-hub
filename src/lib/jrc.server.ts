@@ -704,8 +704,18 @@ export async function approveProposal(id: string, country: string) {
   if (proposal.status !== "pending") throw new Error("Proposal already handled");
 
   const changes = proposal.changes?.fields ?? [];
+  const deviceType = DEVICE_TYPES.has(proposal.payload?.["Device type"] ?? "")
+    ? (proposal.payload?.["Device type"] as string)
+    : "Card";
 
-  if (proposal.kind === "info") {
+  // A vehicle unit or motion sensor becomes a record of its own, even when the
+  // proposal was filed as informational. Proposals created before the device
+  // type existed are still marked "info", and they are never re-proposed —
+  // their fingerprint is remembered — so approving one has to do the right
+  // thing rather than fall into the note path, where it wrote nothing at all.
+  const createsRecord = !proposal.card_id && (proposal.kind !== "info" || deviceType !== "Card");
+
+  if (proposal.kind === "info" && !createsRecord) {
     // Informational sources have no direct card column. Applying them records
     // the finding on the verification note of the matching country's cards.
     const payload = proposal.payload ?? {};
@@ -719,14 +729,24 @@ export async function approveProposal(id: string, country: string) {
       .filter(Boolean)
       .join(" — ");
 
+    // Without a country there is nothing to attach the note to. Saying so is
+    // the point: silently marking the proposal approved while writing nothing
+    // is how a finding disappears without anyone noticing.
     const target = (proposal.country || country).trim();
-    if (target) {
-      const affected = await getCardVerificationNotes(target);
-      for (const card of affected) {
-        const existingNote = (card.verification_note ?? "").trim();
-        if (existingNote.includes(note)) continue;
-        await updateCardVerificationNote(card.id, existingNote ? `${existingNote}\n${note}` : note);
-      }
+    if (!target) {
+      throw new Error(
+        "This finding has no country, so there is nothing to note it on. " +
+          "Enter the country it belongs to, or dismiss the proposal.",
+      );
+    }
+    const affected = await getCardVerificationNotes(target);
+    if (affected.length === 0) {
+      throw new Error(`No records for "${target}" — the note would have nowhere to go.`);
+    }
+    for (const card of affected) {
+      const existingNote = (card.verification_note ?? "").trim();
+      if (existingNote.includes(note)) continue;
+      await updateCardVerificationNote(card.id, existingNote ? `${existingNote}\n${note}` : note);
     }
   } else if (proposal.card_id) {
     const patch: Record<string, string> = {};
@@ -759,16 +779,20 @@ export async function approveProposal(id: string, country: string) {
       );
     }
   } else {
-    const name = normalizeCountry(country);
-    if (!name) throw new Error("Country is required for a new entry");
+    const name = normalizeCountry(country || proposal.country);
+    // A card belongs to a country — that is what the record is about. A vehicle
+    // unit or motion sensor is a product of a vendor; the certification scheme
+    // is not the country it is used in (the same trap as reading the country
+    // off an eNN prefix), so an empty country is the honest answer there.
+    if (!name && deviceType === "Card") {
+      throw new Error("Country is required for a new card entry");
+    }
     await insertCard({
       country: name,
       country_flag: flagEmoji(name),
       // Cards, vehicle units and motion sensors share the table; the source
       // reports which one this is. Anything else stays a card.
-      device_type: DEVICE_TYPES.has(proposal.payload?.["Device type"] ?? "")
-        ? (proposal.payload?.["Device type"] as string)
-        : "Card",
+      device_type: deviceType,
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
       current_manufacturer_normalized: proposal.jrc_manufacturer,

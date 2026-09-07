@@ -223,10 +223,18 @@ export function UpdatesView() {
   const countryFor = (p: Proposal) =>
     newCountry[p.id] ?? p.country ?? documentedCountry(p.jrc_type_approval ?? "")?.country ?? "";
 
+  /** Device type the source reported for a proposal; cards are the default. */
+  const deviceOf = (p: Proposal) => {
+    const d = (p.payload ?? {})["Device type"] ?? "";
+    return d === "Vehicle Unit" || d === "Motion Sensor" ? d : "Card";
+  };
+
   const isChangeProposal = (p: Proposal) =>
     !!p.card_id && (p.changes?.fields?.length ?? 0) > 0 && p.kind !== "info";
 
-  const bulkEligible = pending.filter((p) => isChangeProposal(p) || countryFor(p).trim() !== "");
+  const bulkEligible = pending.filter(
+    (p) => isChangeProposal(p) || countryFor(p).trim() !== "" || deviceOf(p) !== "Card",
+  );
   const selectedProposals = bulkEligible.filter((p) => selected.has(p.id));
   const toggleSelected = (id: string) =>
     setSelected((s) => {
@@ -588,7 +596,11 @@ export function UpdatesView() {
                             <Input
                               className="h-9 w-56"
                               placeholder={
-                                isInfo ? "Country to note this on" : "Country for new entry"
+                                deviceOf(p) !== "Card"
+                                  ? `Country (optional for a ${deviceOf(p).toLowerCase()})`
+                                  : isInfo
+                                    ? "Country to note this on"
+                                    : "Country for new entry"
                               }
                               value={prefill}
                               onChange={(e) =>
