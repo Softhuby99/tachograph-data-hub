@@ -119,6 +119,7 @@ export function UpdatesView() {
     qc.invalidateQueries({ queryKey: ["jrc_proposals"] });
     qc.invalidateQueries({ queryKey: ["jrc_last_run"] });
     qc.invalidateQueries({ queryKey: ["tachograph_cards"] });
+    qc.invalidateQueries({ queryKey: ["card_field_history"] });
   };
 
   const runCheck = async () => {

@@ -7,6 +7,9 @@ import {
   saveOverride,
   deleteOverride,
   insertCard,
+  getCardById,
+  getCardHistory,
+  insertFieldHistory,
 } from "@/lib/db.server";
 import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
 
@@ -25,6 +28,14 @@ export const getCards = createServerFn({ method: "GET" }).handler(async () => {
 export const getOverrides = createServerFn({ method: "GET" }).handler(async () => {
   return (await getAllOverrides()) as OverrideData[];
 });
+
+/** Change history of one card, newest first. Readable without auth, like the data. */
+export const getCardChangeHistory = createServerFn({ method: "GET" })
+  .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
+  .handler(async ({ data }) => {
+    if (!data.cardId) return [];
+    return await getCardHistory(data.cardId);
+  });
 
 // ---- writes (optional auth) ---------------------------------------------
 
@@ -49,19 +60,53 @@ export const saveCardOverride = createServerFn({ method: "POST" })
       merged["country_flag"] = flagEmoji(merged["country"]);
     }
 
+    // Record what actually changed, before the write. The value a reader saw
+    // before is base row + previous override, so that is what "old" means.
+    const base = await getCardById(data.cardId);
+    const before = { ...(base ?? {}), ...(existing ?? {}) } as Record<string, unknown>;
+    const history = Object.keys(merged)
+      .filter((field) => String(before[field] ?? "") !== String(merged[field] ?? ""))
+      .map((field) => ({
+        card_id: data.cardId,
+        field,
+        old_value: String(before[field] ?? ""),
+        new_value: String(merged[field] ?? ""),
+        origin: "manual",
+        changed_by: context?.userId ?? null,
+      }));
+
     if (Object.keys(merged).length === 0) {
       await deleteOverride(data.cardId);
       return { ok: true, cleared: true };
     }
     await saveOverride(data.cardId, merged, context?.userId ?? null);
+    await insertFieldHistory(history);
     return { ok: true, cleared: false };
   });
 
 export const resetCardOverride = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    // Removing the manual edits is itself a change worth recording: the fields
+    // fall back to the base row, and without an entry the history would show
+    // an edit that silently disappeared again.
+    const existing = await getOverridePatch(data.cardId);
+    const base = await getCardById(data.cardId);
+    const history = Object.entries(existing ?? {})
+      .filter(([field, value]) => String(value ?? "") !== String(base?.[field] ?? ""))
+      .map(([field, value]) => ({
+        card_id: data.cardId,
+        field,
+        old_value: String(value ?? ""),
+        new_value: String(base?.[field] ?? ""),
+        origin: "reset",
+        source_label: "Manual edits removed",
+        changed_by: context?.userId ?? null,
+      }));
+
     await deleteOverride(data.cardId);
+    await insertFieldHistory(history);
     return { ok: true };
   });
 
@@ -162,6 +207,17 @@ export const importCards = createServerFn({ method: "POST" })
           }
           const merged = { ...(patchById.get(id) ?? {}), ...patch };
           await saveOverride(id, merged, context?.userId ?? null);
+          await insertFieldHistory(
+            Object.entries(patch).map(([field, value]) => ({
+              card_id: id,
+              field,
+              old_value: String(current[field] ?? ""),
+              new_value: value,
+              origin: "csv_import",
+              source_label: `CSV row ${index + 1}`,
+              changed_by: context?.userId ?? null,
+            })),
+          );
           patchById.set(id, merged);
           updated++;
         } else {

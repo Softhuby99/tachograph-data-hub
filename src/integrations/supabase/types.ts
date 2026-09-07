@@ -8,6 +8,56 @@ export type Database = {
   };
   public: {
     Tables: {
+      card_field_history: {
+        Row: {
+          card_id: string;
+          changed_by: string | null;
+          created_at: string;
+          field: string;
+          id: string;
+          new_value: string;
+          old_value: string;
+          origin: string;
+          proposal_id: string | null;
+          source_label: string;
+          source_url: string;
+        };
+        Insert: {
+          card_id: string;
+          changed_by?: string | null;
+          created_at?: string;
+          field: string;
+          id?: string;
+          new_value?: string;
+          old_value?: string;
+          origin?: string;
+          proposal_id?: string | null;
+          source_label?: string;
+          source_url?: string;
+        };
+        Update: {
+          card_id?: string;
+          changed_by?: string | null;
+          created_at?: string;
+          field?: string;
+          id?: string;
+          new_value?: string;
+          old_value?: string;
+          origin?: string;
+          proposal_id?: string | null;
+          source_label?: string;
+          source_url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "card_field_history_card_id_fkey";
+            columns: ["card_id"];
+            isOneToOne: false;
+            referencedRelation: "tachograph_cards";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       cron_config: {
         Row: {
           created_at: string;

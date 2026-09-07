@@ -35,6 +35,7 @@ import {
   updateCardVerificationNote,
   updateCardFields,
   insertCard,
+  insertFieldHistory,
   updateProposalStatus,
   type ProposalRow,
 } from "./db.server";
@@ -737,7 +738,22 @@ export async function approveProposal(id: string, country: string) {
       patch["country_flag"] = flagEmoji(patch["country"]);
     }
     if (Object.keys(patch).length > 0) {
+      // The old values come from the proposal itself: buildProposals recorded
+      // what the card held when the difference was detected.
+      const oldByField = new Map(changes.map((c) => [c.field, c.old ?? ""]));
       await updateCardFields(proposal.card_id, patch);
+      await insertFieldHistory(
+        Object.entries(patch).map(([field, value]) => ({
+          card_id: proposal.card_id as string,
+          field,
+          old_value: String(oldByField.get(field) ?? ""),
+          new_value: value,
+          origin: "jrc_proposal",
+          source_label: proposal.source_label ?? "",
+          source_url: proposal.source_url ?? "",
+          proposal_id: id,
+        })),
+      );
     }
   } else {
     const name = normalizeCountry(country);

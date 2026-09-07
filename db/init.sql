@@ -105,6 +105,27 @@ CREATE TABLE IF NOT EXISTS public.tachograph_card_overrides (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Per-field change history. One row per changed field; origin is one of
+-- manual | jrc_proposal | csv_import | reset. See db/migrations/0003.
+CREATE TABLE IF NOT EXISTS public.card_field_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_id uuid NOT NULL REFERENCES public.tachograph_cards(id) ON DELETE CASCADE,
+  field text NOT NULL,
+  old_value text NOT NULL DEFAULT '',
+  new_value text NOT NULL DEFAULT '',
+  origin text NOT NULL DEFAULT 'manual',
+  source_label text NOT NULL DEFAULT '',
+  source_url text NOT NULL DEFAULT '',
+  proposal_id uuid,
+  changed_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS card_field_history_card_idx
+  ON public.card_field_history (card_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS card_field_history_field_idx
+  ON public.card_field_history (field);
+
 CREATE TABLE IF NOT EXISTS public.cron_config (
   id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
   token text NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),

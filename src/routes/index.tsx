@@ -10,6 +10,7 @@ import {
   resetCardOverride,
   getCards,
   getOverrides,
+  getCardChangeHistory,
 } from "@/lib/cards.functions";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
@@ -41,6 +42,7 @@ import {
   RefreshCw,
   Globe2,
   Wrench,
+  History,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
@@ -205,6 +207,7 @@ function TachographTool() {
     onSuccess: () => {
       toast.success("Changes saved for everyone.");
       void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+      void qc.invalidateQueries({ queryKey: ["card_field_history"] });
     },
     onError: (e: Error) => toast.error(`Save failed: ${e.message}`),
   });
@@ -214,6 +217,7 @@ function TachographTool() {
     onSuccess: () => {
       toast.success("Manual edits removed.");
       void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+      void qc.invalidateQueries({ queryKey: ["card_field_history"] });
     },
     onError: (e: Error) => toast.error(`Reset failed: ${e.message}`),
   });
@@ -964,7 +968,108 @@ function DetailView({
           </CardContent>
         </Card>
       )}
+
+      <HistoryCard cardId={card.id} />
     </div>
+  );
+}
+
+const HISTORY_ORIGINS: Record<string, string> = {
+  manual: "Manual edit",
+  jrc_proposal: "Approved JRC proposal",
+  csv_import: "CSV import",
+  reset: "Manual edits removed",
+};
+
+/** Field labels are defined for group 1; fall back to the raw column name. */
+const FIELD_LABELS: Record<string, string> = Object.fromEntries(
+  GROUP1_FIELDS.map(([k, label]) => [String(k), label]),
+);
+
+type HistoryRow = {
+  id: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  origin: string;
+  source_label: string;
+  source_url: string;
+  created_at: string;
+};
+
+/**
+ * Change history of one card. Answers "why does this record say that?" —
+ * until now the override table only kept the current values, so a corrected
+ * field left no trace of what it held before or where the change came from.
+ */
+function HistoryCard({ cardId }: { cardId: string }) {
+  const fetchHistory = useServerFn(getCardChangeHistory);
+  const history = useQuery({
+    queryKey: ["card_field_history", cardId],
+    queryFn: async (): Promise<HistoryRow[]> =>
+      (await fetchHistory({ data: { cardId } })) as HistoryRow[],
+  });
+
+  const rows = history.data ?? [];
+  if (history.isLoading || rows.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-4 w-4 text-muted-foreground" />
+          Change History
+          <Badge variant="outline" className="ml-1 text-xs font-normal">
+            {rows.length}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">When</th>
+                <th className="py-2 pr-4 font-medium">Field</th>
+                <th className="py-2 pr-4 font-medium">Change</th>
+                <th className="py-2 pr-4 font-medium">Origin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b align-top last:border-0">
+                  <td className="whitespace-nowrap py-2 pr-4 text-muted-foreground tabular-nums">
+                    {new Date(r.created_at).toLocaleString()}
+                  </td>
+                  <td className="py-2 pr-4 font-medium">{FIELD_LABELS[r.field] ?? r.field}</td>
+                  <td className="py-2 pr-4">
+                    <span className="text-muted-foreground line-through">{r.old_value || "—"}</span>{" "}
+                    <span aria-hidden>→</span> <span>{r.new_value || "—"}</span>
+                  </td>
+                  <td className="py-2 pr-4 text-muted-foreground">
+                    {HISTORY_ORIGINS[r.origin] ?? r.origin}
+                    {r.source_label && ` · ${r.source_label}`}
+                    {r.source_url && (
+                      <>
+                        {" "}
+                        <a
+                          href={r.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline-offset-2 hover:underline"
+                        >
+                          source
+                        </a>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

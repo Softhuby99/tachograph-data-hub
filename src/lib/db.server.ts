@@ -188,6 +188,123 @@ export async function getCardsForTed(): Promise<Record<string, unknown>[]> {
   return (data ?? []) as Record<string, unknown>[];
 }
 
+// ----------------------------------------------------------- field history
+
+export type FieldHistoryEntry = {
+  card_id: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  origin: string;
+  source_label?: string;
+  source_url?: string;
+  proposal_id?: string | null;
+  changed_by?: string | null;
+};
+
+export type FieldHistoryRow = FieldHistoryEntry & { id: string; created_at: string };
+
+/** The card row as stored, without any override applied. */
+export async function getCardById(id: string): Promise<Record<string, unknown> | null> {
+  if (isLocalDb()) {
+    const { rows } = await pool().query(
+      `SELECT ${CARD_COLUMNS} FROM public.tachograph_cards WHERE id = $1`,
+      [id],
+    );
+    return (rows[0] as Record<string, unknown>) ?? null;
+  }
+  const admin = await supabaseAdmin();
+  const { data, error } = await admin
+    .from("tachograph_cards")
+    .select(CARD_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as Record<string, unknown>) ?? null;
+}
+
+/**
+ * Appends change-history rows. History is documentation, not part of the
+ * transaction that changed the data: a failure here is logged and swallowed so
+ * a broken history table can never block an edit.
+ */
+export async function insertFieldHistory(entries: FieldHistoryEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  const rows = entries.map((e) => ({
+    card_id: e.card_id,
+    field: e.field,
+    old_value: e.old_value ?? "",
+    new_value: e.new_value ?? "",
+    origin: e.origin,
+    source_label: e.source_label ?? "",
+    source_url: e.source_url ?? "",
+    proposal_id: e.proposal_id ?? null,
+    changed_by: e.changed_by ?? null,
+  }));
+  try {
+    if (isLocalDb()) {
+      const values: unknown[] = [];
+      const tuples = rows.map((r, i) => {
+        const b = i * 9;
+        values.push(
+          r.card_id,
+          r.field,
+          r.old_value,
+          r.new_value,
+          r.origin,
+          r.source_label,
+          r.source_url,
+          r.proposal_id,
+          r.changed_by,
+        );
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`;
+      });
+      await pool().query(
+        `INSERT INTO public.card_field_history
+           (card_id, field, old_value, new_value, origin, source_label, source_url, proposal_id, changed_by)
+         VALUES ${tuples.join(",")}`,
+        values,
+      );
+      return;
+    }
+    const admin = await supabaseAdmin();
+    const { error } = await admin.from("card_field_history").insert(rows as never);
+    if (error) throw new Error(error.message);
+  } catch (e) {
+    console.error("[history] could not record field change:", e);
+  }
+}
+
+export async function getCardHistory(cardId: string, limit = 200): Promise<FieldHistoryRow[]> {
+  if (isLocalDb()) {
+    const { rows } = await pool().query(
+      `SELECT id, card_id, field, old_value, new_value, origin, source_label, source_url,
+              proposal_id, changed_by, created_at
+         FROM public.card_field_history
+        WHERE card_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [cardId, limit],
+    );
+    return rows.map((row) => ({
+      ...(row as FieldHistoryRow),
+      created_at:
+        row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    }));
+  }
+  const admin = await supabaseAdmin();
+  const { data, error } = await admin
+    .from("card_field_history")
+    .select(
+      "id, card_id, field, old_value, new_value, origin, source_label, source_url, proposal_id, changed_by, created_at",
+    )
+    .eq("card_id", cardId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as FieldHistoryRow[];
+}
+
 // --------------------------------------------------------------- overrides
 
 export async function getAllOverrides(): Promise<OverrideRow[]> {
