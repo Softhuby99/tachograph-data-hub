@@ -51,7 +51,15 @@ DOMAIN=tdh.example.com
 > `DB_HOST` non-empty = local PostgreSQL mode. Leave `DB_HOST` unset to fall
 > back to the Lovable/Supabase backend (used by the preview).
 > Do not append comments after values in this file: Docker treats the comment
-> text as part of the environment-variable value.
+> text as part of the environment-variable value. `AUTH_MODE=none  # no login`
+> arrives in the container as the literal string `none  # no login`, which is
+> not `none` — the app then takes the Supabase path and fails with "Missing
+> Supabase environment variable(s)". Since 2.21 the app tolerates this for
+> AUTH_MODE and logs a warning, but the line is still wrong. Check with:
+>
+> ```bash
+> docker exec tacho printenv AUTH_MODE   # must print exactly: none
+> ```
 
 ## 3. TLS certificates
 

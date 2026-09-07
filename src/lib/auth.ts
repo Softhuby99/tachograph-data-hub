@@ -15,6 +15,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { envFlag } from "@/lib/env-flag";
 
 /** Timing-safe string comparison without importing node:crypto (client-safe). */
 function safeEqualStr(a: string, b: string): boolean {
@@ -51,4 +52,4 @@ const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) 
   });
 });
 
-export const optionalAuth = process.env["AUTH_MODE"] === "none" ? noneAuth : requireSupabaseAuth;
+export const optionalAuth = envFlag("AUTH_MODE") === "none" ? noneAuth : requireSupabaseAuth;
