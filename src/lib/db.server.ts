@@ -188,6 +188,22 @@ export async function getCardsForTed(): Promise<Record<string, unknown>[]> {
   return (data ?? []) as Record<string, unknown>[];
 }
 
+/**
+ * edited_by / changed_by are uuid columns, but the local deployment has no real
+ * user: AUTH_MODE=none hands out the marker id "local-user". Writing it straight
+ * through made PostgreSQL reject the row with
+ * `invalid input syntax for type uuid: "local-user"` — which is what broke the
+ * CSV import for every row that matched an existing card, and silently kept the
+ * change history empty. Anything that is not a uuid is stored as NULL: an
+ * unknown editor is exactly what it is.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function uuidOrNull(value: unknown): string | null {
+  const s = String(value ?? "").trim();
+  return UUID_RE.test(s) ? s : null;
+}
+
 // ----------------------------------------------------------- field history
 
 export type FieldHistoryEntry = {
@@ -239,7 +255,7 @@ export async function insertFieldHistory(entries: FieldHistoryEntry[]): Promise<
     source_label: e.source_label ?? "",
     source_url: e.source_url ?? "",
     proposal_id: e.proposal_id ?? null,
-    changed_by: e.changed_by ?? null,
+    changed_by: uuidOrNull(e.changed_by),
   }));
   try {
     if (isLocalDb()) {
@@ -348,14 +364,14 @@ export async function saveOverride(
       `INSERT INTO public.tachograph_card_overrides (card_id, patch, edited_by)
        VALUES ($1, $2, $3)
        ON CONFLICT (card_id) DO UPDATE SET patch = $2, edited_by = $3, updated_at = now()`,
-      [cardId, JSON.stringify(patch), editedBy],
+      [cardId, JSON.stringify(patch), uuidOrNull(editedBy)],
     );
     return;
   }
   const admin = await supabaseAdmin();
   const { error } = await admin
     .from("tachograph_card_overrides")
-    .upsert({ card_id: cardId, patch, edited_by: editedBy }, { onConflict: "card_id" });
+    .upsert({ card_id: cardId, patch, edited_by: uuidOrNull(editedBy) }, { onConflict: "card_id" });
   if (error) throw new Error(error.message);
 }
 

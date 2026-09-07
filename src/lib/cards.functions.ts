@@ -10,6 +10,7 @@ import {
   getCardById,
   getCardHistory,
   insertFieldHistory,
+  uuidOrNull,
 } from "@/lib/db.server";
 import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
 
@@ -233,6 +234,13 @@ export const importCards = createServerFn({ method: "POST" })
             errors.push(`Row ${index + 2}: no country — skipped.`);
             continue;
           }
+          // Keep the id the file carries. Exports from another instance of this
+          // app bring their own ids; dropping them meant a re-import could only
+          // match on country + type approval + generation, so the two databases
+          // drifted apart with every round trip. We only get here when no card
+          // with that id exists, so it cannot collide.
+          const csvId = uuidOrNull(raw["id"]);
+          if (csvId) insert["id"] = csvId;
           await insertCard(insert);
           created++;
         }
