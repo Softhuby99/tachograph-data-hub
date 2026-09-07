@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS public.tachograph_cards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   country text NOT NULL,
   country_flag text NOT NULL DEFAULT '',
+  -- Card | Vehicle Unit | Motion Sensor. Separate from generation: a vehicle
+  -- unit has a generation too. See db/migrations/0004.
+  device_type text NOT NULL DEFAULT 'Card',
   generation text NOT NULL DEFAULT '',
   application text NOT NULL DEFAULT '',
   current_manufacturer text NOT NULL DEFAULT '',
@@ -44,7 +47,8 @@ CREATE TABLE IF NOT EXISTS public.tachograph_cards (
 -- Idempotent column upgrades for existing installations (init.sql only runs on first init)
 ALTER TABLE public.tachograph_cards
   ADD COLUMN IF NOT EXISTS certificate_issued_date text NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS certificate_expiry_date text NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS certificate_expiry_date text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS device_type text NOT NULL DEFAULT 'Card';
 
 CREATE TABLE IF NOT EXISTS public.jrc_update_proposals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -93,6 +97,7 @@ CREATE TABLE IF NOT EXISTS public.jrc_source_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_tachograph_country ON public.tachograph_cards (country);
 CREATE INDEX IF NOT EXISTS idx_tachograph_generation ON public.tachograph_cards (generation);
+CREATE INDEX IF NOT EXISTS idx_tachograph_device_type ON public.tachograph_cards (device_type);
 CREATE INDEX IF NOT EXISTS idx_tachograph_mfr_norm ON public.tachograph_cards (current_manufacturer_normalized);
 CREATE INDEX IF NOT EXISTS jrc_update_proposals_source_type_idx ON public.jrc_update_proposals (source_type);
 

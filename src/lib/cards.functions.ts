@@ -116,6 +116,7 @@ export const resetCardOverride = createServerFn({ method: "POST" })
 const DB_COLUMNS = [
   "country",
   "country_flag",
+  "device_type",
   "generation",
   "application",
   "current_manufacturer",
@@ -152,7 +153,9 @@ const DATE_COLUMNS = new Set([
 ]);
 
 const matchKey = (r: Record<string, unknown>) =>
-  [r["country"], r["type_approval_number"], r["generation"]]
+  // The device type belongs in the key: a vehicle unit and a card can carry the
+  // same country, approval number and generation without being the same record.
+  [r["country"], r["type_approval_number"], r["generation"], r["device_type"] || "Card"]
     .map((v) =>
       String(v ?? "")
         .trim()
@@ -162,7 +165,7 @@ const matchKey = (r: Record<string, unknown>) =>
 
 /**
  * Imports rows coming from a CSV file. Existing rows (matched by id, or by
- * country + type approval number + generation) are updated through the shared
+ * country + type approval number + generation + device type) are updated through the shared
  * override table; unknown rows are inserted as new cards.
  */
 export const importCards = createServerFn({ method: "POST" })

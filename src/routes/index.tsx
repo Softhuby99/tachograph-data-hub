@@ -47,6 +47,7 @@ import {
   CalendarClock,
   AlertTriangle,
   ArrowLeft,
+  Cpu,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
@@ -75,6 +76,7 @@ type TachoCard = {
   id: string;
   country: string;
   country_flag: string;
+  device_type: string;
   generation: string;
   application: string;
   current_manufacturer: string;
@@ -189,6 +191,7 @@ function ExpiryBadge({ expiry, compact = false }: { expiry: Expiry; compact?: bo
 
 const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["country", "Country"],
+  ["device_type", "Device Type"],
   ["generation", "Generation"],
   ["application", "Application"],
   ["tachograph_application_os", "Tachograph Application / OS"],
@@ -508,12 +511,16 @@ function DataView({
 }) {
   const [country, setCountry] = useState("all");
   const [generation, setGeneration] = useState("all");
+  const [deviceType, setDeviceType] = useState("all");
   const [manufacturer, setManufacturer] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const countries = useMemo(() => uniq(cards.map((c) => c.country)), [cards]);
   const generations = useMemo(() => uniq(cards.map((c) => c.generation)), [cards]);
+  // Empty on older records: everything stored before the device type existed is
+  // a card, so it is treated as one rather than shown as a blank option.
+  const deviceTypes = useMemo(() => uniq(cards.map((c) => c.device_type || "Card")), [cards]);
   const manufacturers = useMemo(
     () => uniq(cards.map((c) => c.current_manufacturer_normalized)),
     [cards],
@@ -524,6 +531,7 @@ function DataView({
     return cards.filter((c) => {
       if (country !== "all" && c.country !== country) return false;
       if (generation !== "all" && c.generation !== generation) return false;
+      if (deviceType !== "all" && (c.device_type || "Card") !== deviceType) return false;
       if (manufacturer !== "all" && c.current_manufacturer_normalized !== manufacturer)
         return false;
       if (!q) return true;
@@ -533,7 +541,7 @@ function DataView({
           .includes(q),
       );
     });
-  }, [cards, country, generation, manufacturer, search]);
+  }, [cards, country, generation, deviceType, manufacturer, search]);
 
   useEffect(() => {
     onFilteredChange?.(filtered.map((c) => c.id));
@@ -588,6 +596,24 @@ function DataView({
                 {generations.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Device Type
+            </label>
+            <Select value={deviceType} onValueChange={setDeviceType}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All device types</SelectItem>
+                {deviceTypes.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1148,6 +1174,7 @@ type Drill =
   | { kind: "generation"; value: string }
   | { kind: "manufacturer"; value: string }
   | { kind: "certificate"; value: string }
+  | { kind: "device"; value: string }
   | { kind: "expiry"; value: ExpiryState };
 
 function AnalyticsView({ cards }: { cards: TachoCard[] }) {
@@ -1185,6 +1212,18 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
       .sort((a, b) => b.approvals - a.approvals || b.countries - a.countries);
   }, [cards, total]);
   const mfgMax = mfgList[0]?.approvals || 1;
+
+  // Device types. Cards, vehicle units and motion sensors all appear in the JRC
+  // and Common Criteria sources; keeping them apart from the generation means a
+  // vehicle unit can still carry its own generation.
+  const deviceCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const c of cards) {
+      const d = c.device_type || "Card";
+      m[d] = (m[d] ?? 0) + 1;
+    }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [cards]);
 
   // Security certificates, from the other direction: which type approvals rest
   // on a given certificate. The data carried the link all along, but only ever
@@ -1248,7 +1287,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
             )
           : drill.kind === "certificate"
             ? cards.filter((c) => String(c.security_certificate ?? "").trim() === drill.value)
-            : cards.filter((c) => expiryOf(c.certificate_expiry_date).state === drill.value);
+            : drill.kind === "device"
+              ? cards.filter((c) => (c.device_type || "Card") === drill.value)
+              : cards.filter((c) => expiryOf(c.certificate_expiry_date).state === drill.value);
     return [...source].sort(
       (a, b) =>
         a.country.localeCompare(b.country) ||
@@ -1392,6 +1433,37 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cpu className="h-4 w-4 text-muted-foreground" />
+            Device types
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Cards, vehicle units and motion sensors are counted separately from the generation — a
+            vehicle unit has a generation of its own.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {deviceCounts.map(([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => toggleDrill({ kind: "device", value: name })}
+                className={
+                  "rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent" +
+                  (drill?.kind === "device" && drill.value === name ? " bg-accent" : "")
+                }
+              >
+                <div className="text-sm font-medium">{name}</div>
+                <div className="text-lg font-semibold tabular-nums">{count}</div>
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>

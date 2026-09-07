@@ -23,6 +23,7 @@ const SEED_COLUMNS = [
   "id",
   "country",
   "country_flag",
+  "device_type",
   "generation",
   "application",
   "current_manufacturer",
@@ -103,6 +104,7 @@ function buildSeedSql(cards: ExportRow[]): string {
 const COLUMN_LABELS: Record<string, string> = {
   country: "Country",
   country_flag: "Country Flag",
+  device_type: "Device Type",
   generation: "Generation",
   application: "Application",
   current_manufacturer: "Current Manufacturer",

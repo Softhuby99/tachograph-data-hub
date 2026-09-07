@@ -720,9 +720,14 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
     if (seen.has(fp)) continue;
     seen.add(fp);
     const certCountry = certificationCountry(e);
+    // A vehicle unit or motion sensor has no card to attach a note to. Since
+    // the dataset carries a device type of its own, these become records in
+    // their own right instead of an informational note on someone's cards.
+    // Certificates for cards that match nothing stay informational: they would
+    // otherwise create card entries with no approval number behind them.
     out.push({
       fingerprint: fp,
-      kind: "info",
+      kind: e.deviceType === "Card" ? "info" : "new",
       card_id: null,
       country: certCountry,
       generation: e.generation,

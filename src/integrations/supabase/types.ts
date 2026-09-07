@@ -271,6 +271,7 @@ export type Database = {
           chip_platform_vendor: string;
           country: string;
           country_flag: string;
+          device_type: string;
           created_at: string;
           current_manufacturer: string;
           current_manufacturer_normalized: string;
@@ -306,6 +307,7 @@ export type Database = {
           chip_platform_vendor?: string;
           country: string;
           country_flag?: string;
+          device_type?: string;
           created_at?: string;
           current_manufacturer?: string;
           current_manufacturer_normalized?: string;
@@ -341,6 +343,7 @@ export type Database = {
           chip_platform_vendor?: string;
           country?: string;
           country_flag?: string;
+          device_type?: string;
           created_at?: string;
           current_manufacturer?: string;
           current_manufacturer_normalized?: string;

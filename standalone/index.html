@@ -176,6 +176,8 @@
         <select id="fCountry"><option value="">All</option></select>
         <label>Generation</label>
         <select id="fGen"><option value="">All</option><option>G1</option><option>G2.1</option><option>G2.2</option></select>
+        <label>Device Type</label>
+        <select id="fDev"><option value="">All</option></select>
         <label>Current Manufacturer</label>
         <select id="fMan"><option value="">All</option></select>
       </div>
@@ -274,7 +276,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.28";
+const APP_VERSION = "2.29";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -300,6 +302,7 @@ function rebuildData() {
   DATA = BASE_DATA.concat(extraRows);
   fill($('fCountry'), uniq(DATA.map(r=>r.country)));
   fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
+  fill($('fDev'), uniq(DATA.map(r=>r.device_type || 'Card')));
   renderList(); renderDetail();
 }
 
@@ -336,6 +339,7 @@ const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
 
 const fields1 = [
   ['country','Country'],
+  ['device_type','Device Type'],
   ['generation','Generation'],
   ['application','Application'],
   ['tachograph_application_os','Tachograph Application OS'],
@@ -372,6 +376,7 @@ function fill(sel, values) {
 }
 fill($('fCountry'), uniq(DATA.map(r=>r.country)));
 fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
+fill($('fDev'), uniq(DATA.map(r=>r.device_type || 'Card')));
 
 let selectedId = null;
 let editing = false;
@@ -414,10 +419,12 @@ function flagUrl(iso, big) {
 
 function filter() {
   const q = $('q').value.toLowerCase().trim();
-  const c = $('fCountry').value, g = $('fGen').value, m = $('fMan').value;
+  const c = $('fCountry').value, g = $('fGen').value, m = $('fMan').value, d = $('fDev').value;
   return DATA.map(merged).filter(r => {
     if (c && r.country !== c) return false;
     if (g && r.generation !== g) return false;
+    // Records written before the device type existed are cards.
+    if (d && (r.device_type || 'Card') !== d) return false;
     if (m && (r.current_manufacturer_normalized||r.current_manufacturer) !== m) return false;
     if (q) return Object.values(r).some(v => v && String(v).toLowerCase().includes(q));
     return true;
@@ -592,12 +599,12 @@ function resetEdits() {
   renderList(); renderDetail();
 }
 
-['q','fCountry','fGen','fMan'].forEach(id => $(id).addEventListener('input', () => { renderList(); renderDetail(); }));
+['q','fCountry','fGen','fMan','fDev'].forEach(id => $(id).addEventListener('input', () => { renderList(); renderDetail(); }));
 
 // ---------- Analytics ----------
 // ------------------------------------------------------------ Tools: CSV export / import
 const CSV_LABELS = {
-  country: 'Country', country_flag: 'Country Flag', generation: 'Generation',
+  country: 'Country', country_flag: 'Country Flag', device_type: 'Device Type', generation: 'Generation',
   application: 'Application', current_manufacturer: 'Current Manufacturer',
   current_manufacturer_normalized: 'Current Manufacturer (normalized)',
   chip_platform_vendor: 'Chip / Platform Vendor', security_certificate: 'Security Certificate',
@@ -897,6 +904,7 @@ function parseOtherCertificateCards(html) {
 
 const FIELD_LABELS = {
   country: 'Country',
+  device_type: 'Device Type',
   generation: 'Generation',
   current_manufacturer: 'Current Manufacturer',
   type_approval_number: 'Type Approval Number',

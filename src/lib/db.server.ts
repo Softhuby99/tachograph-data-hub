@@ -111,7 +111,7 @@ async function supabaseAdmin(): Promise<SupabaseAdmin> {
 // ------------------------------------------------------------------ raw cards
 
 const CARD_COLUMNS =
-  "id,country,country_flag,generation,application,current_manufacturer,current_manufacturer_normalized,chip_platform_vendor,security_certificate,chip_certificate,certificate_issued_date,certificate_expiry_date,type_approval_number,certified_security_platform,certificate_holder,date_status,issued_by_authority,jrc_interoperability_status,functional_certificate_lab,security_certificate_lab,tachograph_application_os,distinction_from_manufacturer,jrc_certificate_source,primary_source,latest_tender,winner_contractor,procurement_status,procurement_scope,tender_source,verification_note,data_reference_date,created_at,updated_at";
+  "id,country,country_flag,device_type,generation,application,current_manufacturer,current_manufacturer_normalized,chip_platform_vendor,security_certificate,chip_certificate,certificate_issued_date,certificate_expiry_date,type_approval_number,certified_security_platform,certificate_holder,date_status,issued_by_authority,jrc_interoperability_status,functional_certificate_lab,security_certificate_lab,tachograph_application_os,distinction_from_manufacturer,jrc_certificate_source,primary_source,latest_tender,winner_contractor,procurement_status,procurement_scope,tender_source,verification_note,data_reference_date,created_at,updated_at";
 
 export async function getAllCards(): Promise<Record<string, unknown>[]> {
   if (isLocalDb()) {

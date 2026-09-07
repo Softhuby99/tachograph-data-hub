@@ -43,6 +43,9 @@ import {
 export { JRC_SOURCES } from "./jrc-sources.server";
 export type { SourceKey } from "./jrc-sources.server";
 
+/** Device types the sources can report; anything else is treated as a card. */
+const DEVICE_TYPES = new Set(["Card", "Vehicle Unit", "Motion Sensor"]);
+
 export const JRC_CARD_STATUS_URL = JRC_SOURCES.card_status.url;
 
 export type JrcRow = {
@@ -761,6 +764,11 @@ export async function approveProposal(id: string, country: string) {
     await insertCard({
       country: name,
       country_flag: flagEmoji(name),
+      // Cards, vehicle units and motion sensors share the table; the source
+      // reports which one this is. Anything else stays a card.
+      device_type: DEVICE_TYPES.has(proposal.payload?.["Device type"] ?? "")
+        ? (proposal.payload?.["Device type"] as string)
+        : "Card",
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
       current_manufacturer_normalized: proposal.jrc_manufacturer,
