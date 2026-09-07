@@ -274,7 +274,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.16";
+const APP_VERSION = "2.17";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -396,9 +396,15 @@ function normalizeCountry(country) {
   return cleaned;
 }
 
-/** ISO code for a record — falls back to the country name when iso is missing. */
+/**
+ * ISO code for a record. The country field wins over the exported `iso`
+ * field: `iso` is frozen into data.json at export time, so a record whose
+ * country was corrected afterwards (by an edit or an approved proposal)
+ * still carries the old code and would keep showing the old country's flag.
+ * `iso` remains the fallback for countries missing from COUNTRY_ISO.
+ */
 function isoOf(r) {
-  return (r && r.iso) || (r && COUNTRY_ISO[normalizeCountry(r.country)]) || '';
+  return (r && COUNTRY_ISO[normalizeCountry(r.country)]) || (r && r.iso) || '';
 }
 
 function flagUrl(iso, big) {
