@@ -412,41 +412,41 @@ export async function insertProposals(items: ProposalRow[], known: Set<string>):
   for (const f of fresh) known.add(f.fingerprint);
   if (fresh.length === 0) return 0;
   if (isLocalDb()) {
-    const cols =
-      "fingerprint,kind,card_id,country,generation,jrc_manufacturer,jrc_card_name,jrc_certificate,jrc_date,jrc_eov,jrc_type_approval,source_url,source_type,source_label,title,payload,changes,status";
-    const idx = Array.from({ length: 19 }, (_, i) => `$${i + 1}`).join(",");
-    let idx2 = 19;
+    // Columns and values come from one list on purpose. They used to be two
+    // separate hand-written sequences, and they had drifted apart: 18 columns
+    // against 19 placeholders, numbered from $20 instead of $1. Every check run
+    // that actually found something failed with "INSERT has more expressions
+    // than target columns" — the sources with nothing new looked healthy, which
+    // is why it stayed hidden.
+    const columns: Array<[string, (p: ProposalRow) => unknown]> = [
+      ["fingerprint", (p) => p.fingerprint],
+      ["kind", (p) => p.kind],
+      ["card_id", (p) => p.card_id],
+      ["country", (p) => p.country],
+      ["generation", (p) => p.generation],
+      ["jrc_manufacturer", (p) => p.jrc_manufacturer],
+      ["jrc_card_name", (p) => p.jrc_card_name],
+      ["jrc_certificate", (p) => p.jrc_certificate],
+      ["jrc_date", (p) => p.jrc_date],
+      ["jrc_eov", (p) => p.jrc_eov],
+      ["jrc_type_approval", (p) => p.jrc_type_approval],
+      ["source_url", (p) => p.source_url],
+      ["source_type", (p) => p.source_type],
+      ["source_label", (p) => p.source_label],
+      ["title", (p) => p.title],
+      ["payload", (p) => JSON.stringify(p.payload ?? {})],
+      ["changes", (p) => JSON.stringify(p.changes ?? { fields: [] })],
+      ["status", (p) => p.status],
+    ];
+    const width = columns.length;
     const rowsSql = fresh
-      .map(() => {
-        const placeholders = Array.from({ length: 19 }, () => `$${++idx2}`).join(",");
-        return `(${placeholders})`;
-      })
+      .map((_, row) => `(${columns.map((_, i) => `$${row * width + i + 1}`).join(",")})`)
       .join(",");
-    const values: unknown[] = [];
-    for (const f of fresh) {
-      values.push(
-        f.fingerprint,
-        f.kind,
-        f.card_id,
-        f.country,
-        f.generation,
-        f.jrc_manufacturer,
-        f.jrc_card_name,
-        f.jrc_certificate,
-        f.jrc_date,
-        f.jrc_eov,
-        f.jrc_type_approval,
-        f.source_url,
-        f.source_type,
-        f.source_label,
-        f.title,
-        JSON.stringify(f.payload ?? {}),
-        JSON.stringify(f.changes ?? { fields: [] }),
-        f.status,
-      );
-    }
+    const values = fresh.flatMap((f) => columns.map(([, read]) => read(f)));
     await pool().query(
-      `INSERT INTO public.jrc_update_proposals (${cols}) VALUES ${rowsSql}`,
+      `INSERT INTO public.jrc_update_proposals (${columns.map(([c]) => `"${c}"`).join(",")})
+       VALUES ${rowsSql}
+       ON CONFLICT (fingerprint) DO NOTHING`,
       values,
     );
     return fresh.length;
