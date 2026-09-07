@@ -6,6 +6,11 @@ on:
     paths:
       - "src/**"
       - "db/**"
+      # The offline app is bundled into the image (routes/offline.ts imports it
+      # with ?raw), so a change there must trigger a build too. Without this a
+      # standalone-only fix silently never reached a deployment.
+      - "standalone/**"
+      - ".github/workflows/build-web.yml"
       - "Dockerfile.web"
       - "docker/**"
       - "package.json"

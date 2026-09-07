@@ -149,6 +149,13 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
 
+/**
+ * The device types the sources publish. Offered everywhere as a fixed list, not
+ * derived from the data: a type that does not occur yet must still be
+ * selectable, otherwise a record can never be set to it in the first place.
+ */
+const DEVICE_TYPES = ["Card", "Vehicle Unit", "Motion Sensor"] as const;
+
 const EXPIRY_LABELS: Record<ExpiryState, string> = {
   expired: "Expired",
   critical: "Expires within 3 months",
@@ -520,7 +527,10 @@ function DataView({
   const generations = useMemo(() => uniq(cards.map((c) => c.generation)), [cards]);
   // Empty on older records: everything stored before the device type existed is
   // a card, so it is treated as one rather than shown as a blank option.
-  const deviceTypes = useMemo(() => uniq(cards.map((c) => c.device_type || "Card")), [cards]);
+  const deviceTypes = useMemo(
+    () => uniq([...DEVICE_TYPES, ...cards.map((c) => c.device_type || "Card")]),
+    [cards],
+  );
   const manufacturers = useMemo(
     () => uniq(cards.map((c) => c.current_manufacturer_normalized)),
     [cards],
@@ -993,11 +1003,31 @@ function DetailView({
                   <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {label}
                   </div>
-                  <Textarea
-                    className="mt-1 min-h-[40px] text-sm"
-                    value={draft[key] ?? ""}
-                    onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                  />
+                  {key === "device_type" ? (
+                    // A fixed set of values: typed by hand, "vehicle unit" and
+                    // "VU" would end up as separate categories.
+                    <Select
+                      value={draft[key] || "Card"}
+                      onValueChange={(v) => setDraft({ ...draft, [key]: v })}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEVICE_TYPES.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Textarea
+                      className="mt-1 min-h-[40px] text-sm"
+                      value={draft[key] ?? ""}
+                      onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+                    />
+                  )}
                 </div>
               );
             }
@@ -1217,7 +1247,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
   // and Common Criteria sources; keeping them apart from the generation means a
   // vehicle unit can still carry its own generation.
   const deviceCounts = useMemo(() => {
-    const m: Record<string, number> = {};
+    const m: Record<string, number> = Object.fromEntries(DEVICE_TYPES.map((d) => [d, 0]));
     for (const c of cards) {
       const d = c.device_type || "Card";
       m[d] = (m[d] ?? 0) + 1;
@@ -1454,9 +1484,11 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               <button
                 key={name}
                 type="button"
+                disabled={count === 0}
                 onClick={() => toggleDrill({ kind: "device", value: name })}
                 className={
-                  "rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent" +
+                  "rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-default disabled:opacity-50 " +
+                  (count > 0 ? "hover:bg-accent" : "") +
                   (drill?.kind === "device" && drill.value === name ? " bg-accent" : "")
                 }
               >

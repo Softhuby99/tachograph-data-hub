@@ -177,7 +177,7 @@
         <label>Generation</label>
         <select id="fGen"><option value="">All</option><option>G1</option><option>G2.1</option><option>G2.2</option></select>
         <label>Device Type</label>
-        <select id="fDev"><option value="">All</option></select>
+        <select id="fDev"><option value="">All</option><option>Card</option><option>Vehicle Unit</option><option>Motion Sensor</option></select>
         <label>Current Manufacturer</label>
         <select id="fMan"><option value="">All</option></select>
       </div>
@@ -276,7 +276,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.29";
+const APP_VERSION = "2.30";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -302,7 +302,6 @@ function rebuildData() {
   DATA = BASE_DATA.concat(extraRows);
   fill($('fCountry'), uniq(DATA.map(r=>r.country)));
   fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
-  fill($('fDev'), uniq(DATA.map(r=>r.device_type || 'Card')));
   renderList(); renderDetail();
 }
 
@@ -376,7 +375,6 @@ function fill(sel, values) {
 }
 fill($('fCountry'), uniq(DATA.map(r=>r.country)));
 fill($('fMan'), uniq(DATA.map(r=>r.current_manufacturer_normalized || r.current_manufacturer)));
-fill($('fDev'), uniq(DATA.map(r=>r.device_type || 'Card')));
 
 let selectedId = null;
 let editing = false;
