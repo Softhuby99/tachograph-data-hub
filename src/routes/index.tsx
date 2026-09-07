@@ -691,7 +691,12 @@ function DataView({
                     <div className="min-w-0 flex-1">
                       <div className="flex w-full items-center justify-between gap-2">
                         <span className="truncate font-medium">
-                          {c.country}
+                          {/* A vehicle unit or motion sensor has no country —
+                              without a fallback the row would be blank. */}
+                          {c.country ||
+                            c.tachograph_application_os ||
+                            c.current_manufacturer ||
+                            "—"}
                           {edited && (
                             <Badge variant="outline" className="ml-2 text-[10px]">
                               edited
@@ -941,7 +946,7 @@ function DetailView({
         )}
         <div>
           <h2 className="text-2xl font-semibold">
-            {card.country}
+            {card.country || card.tachograph_application_os || card.current_manufacturer || "—"}
             {edited && (
               <Badge variant="outline" className="ml-2 align-middle text-xs">
                 edited

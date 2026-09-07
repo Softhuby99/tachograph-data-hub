@@ -647,7 +647,11 @@ export function UpdatesView() {
                       disabled={approveMutation.isPending || !signedIn}
                     >
                       <Check className="mr-2 h-4 w-4" />{" "}
-                      {isInfo ? "Acknowledge & note" : "Approve & apply"}
+                      {deviceOf(p) !== "Card"
+                        ? `Approve & add ${deviceOf(p).toLowerCase()}`
+                        : isInfo
+                          ? "Acknowledge & note"
+                          : "Approve & apply"}
                     </Button>
 
                     <Button

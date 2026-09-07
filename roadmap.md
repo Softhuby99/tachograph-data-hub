@@ -58,3 +58,6 @@
 - [x] Version 2.32
 - [x] Freigabe eines Info-Vorschlags konnte stillschweigend nichts tun — ohne Land gab es keine Karte, an die der Hinweis hätte geschrieben werden können; der Vorschlag wurde trotzdem als „approved" markiert. Genau so verschwindet ein Fund, ohne dass es jemand merkt. Jetzt bricht die Freigabe mit klarer Meldung ab, wenn kein Land angegeben ist oder es zu diesem Land keine Datensätze gibt.
 - [x] Vehicle Unit und Motion Sensor werden bei der Freigabe als eigener Datensatz angelegt, auch wenn der Vorschlag noch als „Info" geführt wird. Vorschläge aus der Zeit vor 2.29 tragen diese Einstufung dauerhaft, weil sie wegen ihres gemerkten Fingerabdrucks nie neu erzeugt werden. Ein Land ist dabei nur für Karten erforderlich: ein Bewegungssensor ist ein Herstellerprodukt, und das Zertifizierungsschema ist nicht das Land, in dem er eingesetzt wird — derselbe Fehlschluss wie beim eNN-Präfix.
+- [x] Version 2.33
+- [x] Der Freigabeknopf sagt jetzt, was er tut: bei Vehicle Unit und Motion Sensor „Approve & add …", nicht mehr „Acknowledge & note" — seit 2.32 wird dort ein Datensatz angelegt und kein Vermerk geschrieben.
+- [x] Datensätze ohne Land (Geräte) erscheinen in Liste und Detailkopf mit Produkt- bzw. Herstellername statt als leere Zeile.
