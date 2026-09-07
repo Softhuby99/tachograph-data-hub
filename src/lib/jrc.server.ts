@@ -793,3 +793,22 @@ export async function rejectProposal(id: string) {
   await updateProposalStatus(id, "rejected");
   return { ok: true };
 }
+
+/**
+ * Puts a handled proposal back on the pending list.
+ *
+ * Dismissing was a one-way door: a proposal waved away in a hurry, or approved
+ * against the wrong card, could only be looked at afterwards, never acted on
+ * again. Re-running the check does not bring it back either — the fingerprint
+ * is remembered precisely so that findings are not proposed twice.
+ *
+ * Reopening an approved proposal does not undo what it wrote; it only offers
+ * the decision again. The change history records what the earlier approval did.
+ */
+export async function reopenProposal(id: string) {
+  const proposal = await getProposal(id);
+  if (!proposal) throw new Error("Proposal not found");
+  if (proposal.status === "pending") return { ok: true, alreadyPending: true };
+  await updateProposalStatus(id, "pending");
+  return { ok: true, alreadyPending: false };
+}

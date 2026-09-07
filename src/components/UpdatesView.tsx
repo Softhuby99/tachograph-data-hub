@@ -10,6 +10,7 @@ import {
   checkUpdateSource,
   approveJrcProposal,
   rejectJrcProposal,
+  reopenJrcProposal,
   getProposals,
   getCheckRuns,
 } from "@/lib/jrc.functions";
@@ -116,6 +117,7 @@ export function UpdatesView() {
   const check = useServerFn(checkUpdates);
   const checkOne = useServerFn(checkUpdateSource);
   const approve = useServerFn(approveJrcProposal);
+  const reopen = useServerFn(reopenJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
 
   const [running, setRunning] = useState(false);
@@ -180,6 +182,19 @@ export function UpdatesView() {
       invalidate();
     },
     onError: (e: Error) => toast.error(`Apply failed: ${e.message}`),
+  });
+
+  // A handled proposal used to be a dead end: dismissed by accident, or applied
+  // against the wrong card, and there was no way back — re-running the check
+  // does not resurface it, because its fingerprint is remembered on purpose.
+  const reopenMutation = useMutation({
+    mutationFn: (id: string) => reopen({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Proposal moved back to pending.");
+      setShowHandled(false);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(`Reopen failed: ${e.message}`),
   });
 
   const rejectMutation = useMutation({
@@ -533,6 +548,27 @@ export function UpdatesView() {
                         <span className="text-foreground">{f.new}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {p.status !== "pending" && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge variant={p.status === "approved" ? "secondary" : "outline"}>
+                      {p.status === "approved" ? "Applied" : "Dismissed"}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reopenMutation.mutate(p.id)}
+                      disabled={reopenMutation.isPending || !signedIn}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" /> Review again
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {p.status === "approved"
+                        ? "Reviewing again does not undo what was written — it offers the decision once more."
+                        : "Moves this proposal back to the pending list."}
+                    </span>
                   </div>
                 )}
 

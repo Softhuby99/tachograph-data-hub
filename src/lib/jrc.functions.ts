@@ -5,6 +5,7 @@ import {
   runUpdateCheckForSource,
   approveProposal,
   rejectProposal,
+  reopenProposal,
 } from "@/lib/jrc.server";
 import { getAllProposals, getRecentCheckRuns } from "@/lib/db.server";
 
@@ -63,3 +64,9 @@ export const rejectJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
   .handler(async ({ data }) => rejectProposal(data.id));
+
+/** Puts a handled proposal back on the pending list so it can be decided again. */
+export const reopenJrcProposal = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
+  .handler(async ({ data }) => reopenProposal(data.id));
