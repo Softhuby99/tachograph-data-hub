@@ -145,8 +145,26 @@ docker run -d --name tacho \
 The PostgreSQL volume (`/opt/TDH/pgdata`) persists across rebuilds, so manual
 edits, update proposals and check-run history are retained.
 
-First boot initialises PostgreSQL, applies `db/init.sql` (schema + seed data),
-and starts the Nitro server with HTTPS on port 443.
+First boot initialises PostgreSQL, applies `db/init.sql` (schema, plus the card
+seed pulled in from `db/seed_cards.sql`), and starts the Nitro server with
+HTTPS on port 443.
+
+### Keeping the shipped data current
+
+`docker pull` never touches an existing database — the volume stays, and the
+seed is skipped whenever the schema is already there ("Existing database
+detected"). What does age are the two files a *fresh* deployment starts from:
+
+| File | Used by |
+|---|---|
+| `db/seed_cards.sql` | a new database on first boot |
+| `standalone/data.json` | the offline app, baked in at build time |
+
+Both are regenerated from a running instance under **Tools → Deployment
+snapshot**: download the two files, replace them in the repository and commit.
+The next image build then ships the current data. Flag and ISO code are derived
+from the country field during export, so a corrected record cannot carry its old
+country's flag into the next build.
 
 ## 5. Build the image locally (without GitHub)
 

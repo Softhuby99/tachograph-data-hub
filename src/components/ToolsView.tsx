@@ -1,11 +1,103 @@
 import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Loader2, ShieldCheck } from "lucide-react";
+import { Download, Upload, Loader2, ShieldCheck, Package } from "lucide-react";
 import { toast } from "sonner";
 import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
+import { flagEmoji, isoForCountry, normalizeCountry } from "@/lib/country-flag";
 
 export type ExportRow = Record<string, unknown>;
+
+// ---- deployment snapshot -------------------------------------------------
+//
+// The files a fresh deployment starts from are checked into the repository:
+// db/seed_cards.sql seeds an empty database, standalone/data.json is baked
+// into the offline app at build time. Both were written once and then aged —
+// the offline app shipped 216 records while the live database held 295, and
+// its frozen `iso` field still pointed at a country that had since been
+// corrected. These two exports regenerate both files from the live data, so
+// updating them is a commit rather than hand work.
+
+/** Columns of public.tachograph_cards, in the order used by db/seed_cards.sql. */
+const SEED_COLUMNS = [
+  "id",
+  "country",
+  "country_flag",
+  "generation",
+  "application",
+  "current_manufacturer",
+  "current_manufacturer_normalized",
+  "chip_platform_vendor",
+  "security_certificate",
+  "chip_certificate",
+  "certificate_issued_date",
+  "certificate_expiry_date",
+  "type_approval_number",
+  "certified_security_platform",
+  "certificate_holder",
+  "date_status",
+  "issued_by_authority",
+  "jrc_interoperability_status",
+  "functional_certificate_lab",
+  "security_certificate_lab",
+  "tachograph_application_os",
+  "distinction_from_manufacturer",
+  "jrc_certificate_source",
+  "primary_source",
+  "latest_tender",
+  "winner_contractor",
+  "procurement_status",
+  "procurement_scope",
+  "tender_source",
+  "verification_note",
+  "data_reference_date",
+] as const;
+
+const sqlText = (v: unknown) => `'${String(v ?? "").replace(/'/g, "''")}'`;
+
+/**
+ * Dataset for the offline app. country_flag and iso are derived from the
+ * country here rather than copied through: a value frozen at export time is
+ * exactly what made a corrected record keep its old flag.
+ */
+function buildOfflineData(cards: ExportRow[]): string {
+  const rows = cards.map((c) => {
+    const country = normalizeCountry(String(c["country"] ?? ""));
+    const row: Record<string, unknown> = { ...c, country };
+    row["iso"] = isoForCountry(country);
+    row["country_flag"] = flagEmoji(country);
+    delete row["created_at"];
+    delete row["updated_at"];
+    return row;
+  });
+  return JSON.stringify(rows, null, 1);
+}
+
+/** Replacement for db/seed_cards.sql: the current cards as INSERT statements. */
+function buildSeedSql(cards: ExportRow[]): string {
+  const header = [
+    "-- Seed data for public.tachograph_cards.",
+    "--",
+    "-- Generated from a running instance via Tools -> Deployment snapshot.",
+    "-- Only loaded into a fresh database; init.sql skips the seed when the",
+    "-- schema already exists, so an existing deployment is never overwritten.",
+    `-- Generated: ${new Date().toISOString().slice(0, 10)} · ${cards.length} records`,
+    "",
+  ].join("\n");
+  const columns = SEED_COLUMNS.join(", ");
+  const statements = cards.map((c) => {
+    const country = normalizeCountry(String(c["country"] ?? ""));
+    const values = SEED_COLUMNS.map((col) => {
+      if (col === "country") return sqlText(country);
+      if (col === "country_flag") return sqlText(flagEmoji(country));
+      // A date column cannot take an empty string; fall back to the default.
+      if (col === "data_reference_date" && !c[col]) return "DEFAULT";
+      return sqlText(c[col]);
+    });
+    return `INSERT INTO public.tachograph_cards (${columns}) VALUES (${values.join(", ")}) ON CONFLICT (id) DO NOTHING;`;
+  });
+  return `${header}${statements.join("\n")}\n`;
+}
 
 /** Human-readable column titles; anything else falls back to a prettified key. */
 const COLUMN_LABELS: Record<string, string> = {
@@ -311,6 +403,55 @@ export function ToolsView({
           </div>
           <p className="text-xs text-muted-foreground">
             Columns: {columns.map(labelFor).join(" · ")}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Package className="h-4 w-4 text-primary" /> Deployment snapshot
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Regenerates the two files a fresh deployment starts from. Download both, replace them in
+            the repository and commit — the next image build ships the current data instead of the
+            original snapshot. Neither file affects a running instance: its database keeps its own
+            data.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!cards.length) {
+                  toast.error("Nothing to export.");
+                  return;
+                }
+                download(buildOfflineData(cards), "data.json", "application/json;charset=utf-8");
+                toast.success(`data.json written with ${cards.length} record(s).`);
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> standalone/data.json ({cards.length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!cards.length) {
+                  toast.error("Nothing to export.");
+                  return;
+                }
+                download(buildSeedSql(cards), "seed_cards.sql", "application/sql;charset=utf-8");
+                toast.success(`seed_cards.sql written with ${cards.length} record(s).`);
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> db/seed_cards.sql ({cards.length})
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Both exports include the manual edits, and derive flag and ISO code from the country
+            field so a corrected record cannot carry its old country&apos;s flag into the next
+            build.
           </p>
         </CardContent>
       </Card>

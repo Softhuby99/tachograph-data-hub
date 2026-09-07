@@ -54,6 +54,8 @@ COPY --from=build /app/package.json ./
 # it from /app/node_modules at runtime.
 RUN npm install --omit=dev pg@^8.23.0
 COPY db/init.sql /app/db/init.sql
+# init.sql pulls the card seed in with \ir, so it has to sit next to it.
+COPY db/seed_cards.sql /app/db/seed_cards.sql
 COPY db/migrations /app/db/migrations
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
