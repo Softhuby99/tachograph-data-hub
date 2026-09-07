@@ -1330,6 +1330,9 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Click a row to list its type approvals.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1338,18 +1341,27 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                   <th className="py-2 pr-3 text-right font-medium">Type Approvals</th>
                   <th className="py-2 pr-3 text-right font-medium">Countries</th>
                   <th className="py-2 pr-3 text-right font-medium">Market Share</th>
-                  <th className="py-2 pr-3 font-medium w-56"></th>
+                  <th className="hidden py-2 pr-3 font-medium w-56 lg:table-cell"></th>
                   <th className="py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {mfgList.map((m) => (
-                  <tr key={m.name} className="border-b last:border-0">
+                  // The whole row opens the drill-down. The button alone sat in
+                  // the last column of a six-column table and was scrolled out
+                  // of sight on narrower screens — easy to conclude it is
+                  // missing entirely.
+                  <tr
+                    key={m.name}
+                    onClick={() => toggleDrill({ kind: "manufacturer", value: m.name })}
+                    className="cursor-pointer border-b last:border-0 hover:bg-accent/60"
+                    title="Click to list the type approvals"
+                  >
                     <td className="py-2 pr-3 font-medium">{m.name}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.approvals}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
-                    <td className="py-2 pr-3">
+                    <td className="hidden py-2 pr-3 lg:table-cell">
                       <div className="h-3 overflow-hidden rounded bg-muted">
                         <div
                           className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
@@ -1361,7 +1373,10 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => toggleDrill({ kind: "manufacturer", value: m.name })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDrill({ kind: "manufacturer", value: m.name });
+                        }}
                       >
                         {drill?.kind === "manufacturer" && drill.value === m.name
                           ? "Hide"
