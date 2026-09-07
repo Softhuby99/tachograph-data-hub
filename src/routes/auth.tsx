@@ -7,6 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getAuthMode } from "@/lib/auth-mode.functions";
+import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -32,6 +36,14 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const { session, loading } = useAuth();
+  // A self-hosted container has no Supabase backend. Reaching this page there —
+  // by a bookmark, or because the deployment was misconfigured — used to end in
+  // a raw "Missing Supabase environment variable(s)" error as soon as the form
+  // was submitted, and an account that could never exist.
+  const fetchAuthMode = useServerFn(getAuthMode);
+  const authMode = useQuery({ queryKey: ["auth_mode"], queryFn: async () => fetchAuthMode() });
+  const localMode = authMode.data?.enabled === false;
+  const adminRequired = authMode.data?.adminRequired ?? false;
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,6 +76,32 @@ function AuthPage() {
       setBusy(false);
     }
   };
+
+  if (localMode) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle>No login on this deployment</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              This instance runs standalone, without a Supabase backend. There is no account to sign
+              in with, and creating one here is not possible.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {adminRequired
+                ? "The data is readable for everyone. To edit, enter the admin token from the deployment environment under Tools."
+                : "The data is readable and editable without a login."}
+            </p>
+            <Button asChild className="w-full">
+              <Link to="/">Back to the data</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
