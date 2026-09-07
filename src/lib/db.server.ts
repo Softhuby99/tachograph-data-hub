@@ -88,6 +88,11 @@ export type ProposalRow = {
   changes: { fields: { field: string; label: string; old: string; new: string }[] };
   status: string;
   created_at: string;
+  /** Last real change (status, country, payload) — not the review marker. */
+  updated_at: string;
+  /** Set when someone explicitly marked the proposal as read. */
+  reviewed_at: string | null;
+  reviewed_by: string | null;
 };
 
 export type CheckRunRow = {
@@ -490,17 +495,74 @@ export async function getProposal(id: string): Promise<ProposalRow | null> {
   return (data as unknown as ProposalRow) ?? null;
 }
 
-export async function updateProposalStatus(id: string, status: string): Promise<void> {
+/**
+ * Sets the status of a proposal.
+ *
+ * Deciding a proposal is also the strongest possible evidence that somebody
+ * looked at it, so approve and dismiss set the review marker in the same
+ * statement. Reopening deliberately does not touch it: the entry goes back to
+ * pending precisely because the earlier decision is in doubt, and the marker
+ * still records that it was read.
+ */
+export async function updateProposalStatus(
+  id: string,
+  status: string,
+  userId?: string | null,
+): Promise<void> {
+  const marksReviewed = status === "approved" || status === "rejected";
   if (isLocalDb()) {
-    await pool().query("UPDATE public.jrc_update_proposals SET status = $1 WHERE id = $2", [
-      status,
-      id,
-    ]);
+    await pool().query(
+      marksReviewed
+        ? `UPDATE public.jrc_update_proposals
+             SET status = $1, reviewed_at = now(), reviewed_by = $3
+           WHERE id = $2`
+        : "UPDATE public.jrc_update_proposals SET status = $1 WHERE id = $2",
+      marksReviewed ? [status, id, uuidOrNull(userId)] : [status, id],
+    );
     return;
   }
   const admin = await supabaseAdmin();
-  const { error } = await admin.from("jrc_update_proposals").update({ status }).eq("id", id);
+  const patch = marksReviewed
+    ? { status, reviewed_at: new Date().toISOString(), reviewed_by: uuidOrNull(userId) }
+    : { status };
+  const { error } = await admin.from("jrc_update_proposals").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Marks proposals as read, or clears the marker again.
+ *
+ * The handled list had no notion of progress: with dozens of entries there was
+ * no way to tell which ones had already been gone through, so every pass
+ * started at the top. This is that marker, and nothing else — it never changes
+ * the status and never writes to a card.
+ */
+export async function setProposalsReviewed(
+  ids: string[],
+  reviewed: boolean,
+  userId?: string | null,
+): Promise<number> {
+  const clean = ids.map((id) => String(id ?? "").trim()).filter((id) => UUID_RE.test(id));
+  if (clean.length === 0) return 0;
+  if (isLocalDb()) {
+    const { rowCount } = await pool().query(
+      `UPDATE public.jrc_update_proposals
+          SET reviewed_at = $2, reviewed_by = $3
+        WHERE id = ANY($1::uuid[])`,
+      [clean, reviewed ? new Date().toISOString() : null, reviewed ? uuidOrNull(userId) : null],
+    );
+    return rowCount ?? 0;
+  }
+  const admin = await supabaseAdmin();
+  const { error } = await admin
+    .from("jrc_update_proposals")
+    .update({
+      reviewed_at: reviewed ? new Date().toISOString() : null,
+      reviewed_by: reviewed ? uuidOrNull(userId) : null,
+    })
+    .in("id", clean);
+  if (error) throw new Error(error.message);
+  return clean.length;
 }
 
 // ----------------------------------------------------------- snapshots

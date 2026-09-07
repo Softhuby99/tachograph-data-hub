@@ -71,7 +71,12 @@ CREATE TABLE IF NOT EXISTS public.jrc_update_proposals (
   source_type text NOT NULL DEFAULT 'card_status',
   source_label text NOT NULL DEFAULT 'Card status',
   title text NOT NULL DEFAULT '',
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- Explicit "someone has read this one" marker, independent of the status:
+  -- a dismissed proposal may be unreviewed and an approved one reviewed.
+  -- See db/migrations/0005.
+  reviewed_at timestamptz,
+  reviewed_by uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.jrc_check_runs (
@@ -100,6 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_tachograph_generation ON public.tachograph_cards 
 CREATE INDEX IF NOT EXISTS idx_tachograph_device_type ON public.tachograph_cards (device_type);
 CREATE INDEX IF NOT EXISTS idx_tachograph_mfr_norm ON public.tachograph_cards (current_manufacturer_normalized);
 CREATE INDEX IF NOT EXISTS jrc_update_proposals_source_type_idx ON public.jrc_update_proposals (source_type);
+CREATE INDEX IF NOT EXISTS jrc_update_proposals_reviewed_at_idx ON public.jrc_update_proposals (reviewed_at);
 
 CREATE TABLE IF NOT EXISTS public.tachograph_card_overrides (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -150,9 +156,19 @@ RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
+-- updated_at is what the update list shows as "last change". Firing on every
+-- UPDATE would make ticking the review marker look like the proposal itself
+-- had changed, so the trigger is limited to the columns that carry a decision.
 CREATE TRIGGER update_jrc_update_proposals_updated_at
 BEFORE UPDATE ON public.jrc_update_proposals
-FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+FOR EACH ROW
+WHEN (
+  OLD.status IS DISTINCT FROM NEW.status
+  OR OLD.country IS DISTINCT FROM NEW.country
+  OR OLD.payload IS DISTINCT FROM NEW.payload
+  OR OLD.changes IS DISTINCT FROM NEW.changes
+)
+EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_tachograph_card_overrides_updated_at
 BEFORE UPDATE ON public.tachograph_card_overrides

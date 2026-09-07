@@ -168,6 +168,8 @@ export type Database = {
           status: string;
           title: string;
           updated_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
         };
         Insert: {
           card_id?: string | null;
@@ -191,6 +193,8 @@ export type Database = {
           status?: string;
           title?: string;
           updated_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
         };
         Update: {
           card_id?: string | null;
@@ -214,6 +218,8 @@ export type Database = {
           status?: string;
           title?: string;
           updated_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
         };
         Relationships: [
           {

@@ -267,16 +267,18 @@
       <div class="src-row src-head"><span>Source</span><span>Result</span><span></span></div>
       <div id="sourceList"></div>
     </div>
-    <div style="display:flex;gap:8px;margin:20px 0 12px;">
+    <div style="display:flex;gap:8px;margin:20px 0 12px;flex-wrap:wrap;align-items:center;">
       <button class="btn secondary" id="btnPending" onclick="setProposalTab('pending')">Pending</button>
       <button class="btn secondary" id="btnHandled" onclick="setProposalTab('handled')">Handled</button>
+      <button class="btn secondary" id="btnUnreviewed" onclick="toggleUnreviewedOnly()" style="display:none;">Not checked yet</button>
     </div>
+    <div id="proposalBulk" class="card" style="display:none;padding:10px 14px;margin-bottom:12px;font-size:12px;gap:8px;flex-wrap:wrap;align-items:center;"></div>
     <div id="proposalList"></div>
   </div>
 </div>
 
 <script>
-const APP_VERSION = "2.33";
+const APP_VERSION = "2.34";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -835,6 +837,10 @@ let runs = readJson(RUNS_KEY, {});
 let snapshots = readJson(SNAP_KEY, {});
 let sourceState = {};
 let proposalTab = 'pending';
+// Working through the handled list needs a progress marker and a way to hide
+// what has already been read; otherwise every pass starts at the top again.
+let proposalOnlyUnreviewed = false;
+let proposalSel = new Set();
 let checking = false;
 
 async function fetchPage(url) {
@@ -1266,22 +1272,104 @@ async function runUpdateCheck() {
   renderUpdates();
 }
 
-function setProposalTab(t) { proposalTab = t; renderUpdates(); }
+function setProposalTab(t) {
+  // A selection made in one list must not carry over into the other — the
+  // bulk action there means something different.
+  proposalSel = new Set();
+  proposalTab = t;
+  renderUpdates();
+}
 
-function applyProposal(id) {
+function toggleUnreviewedOnly() {
+  proposalOnlyUnreviewed = !proposalOnlyUnreviewed;
+  proposalSel = new Set();
+  renderUpdates();
+}
+
+function toggleProposalSel(id) {
+  if (proposalSel.has(id)) proposalSel.delete(id); else proposalSel.add(id);
+  renderUpdates();
+}
+
+function selectAllProposals() {
+  proposalSel = new Set(visibleProposals().map(p => p.id));
+  renderUpdates();
+}
+
+function clearProposalSel() { proposalSel = new Set(); renderUpdates(); }
+
+/** Sets or clears the "someone has read this" marker on the selected entries. */
+function markProposalsReviewed(reviewed) {
+  const now = new Date().toISOString();
+  proposals.forEach(p => {
+    if (!proposalSel.has(p.id)) return;
+    p.reviewedAt = reviewed ? now : null;
+  });
+  writeJson(PROPOSALS_KEY, proposals);
+  proposalSel = new Set();
+  renderUpdates();
+}
+
+function markOneReviewed(id, reviewed) {
   const p = proposals.find(x => x.id === id);
   if (!p) return;
+  p.reviewedAt = reviewed ? new Date().toISOString() : null;
+  writeJson(PROPOSALS_KEY, proposals);
+  renderUpdates();
+}
+
+/** Puts a handled entry back on the pending list so it can be decided again. */
+function reopenProposal(id) {
+  const p = proposals.find(x => x.id === id);
+  if (!p) return;
+  p.status = 'pending';
+  p.updatedAt = new Date().toISOString();
+  writeJson(PROPOSALS_KEY, proposals);
+  proposalSel.delete(id);
+  proposalTab = 'pending';
+  renderUpdates();
+}
+
+/** Applies everything ticked, then reports what went through and what did not. */
+function bulkApplySelected() {
+  const chosen = visibleProposals().filter(p => proposalSel.has(p.id));
+  if (!chosen.length) return;
+  const again = chosen.filter(p => p.status === 'applied').length;
+  if (!confirm('Apply ' + chosen.length + ' entr' + (chosen.length === 1 ? 'y' : 'ies') + '?' +
+      (again ? '\n\n' + again + ' of them were applied once already — applying again writes the same values a second time.' : ''))) return;
+  let done = 0; const failed = [];
+  chosen.forEach(p => {
+    const res = applyProposal(p.id, { silent: true });
+    if (res === true) done++; else failed.push((p.row && p.row.typeApproval) || p.id);
+  });
+  proposalSel = new Set();
+  renderUpdates();
+  alert(failed.length
+    ? done + ' applied, ' + failed.length + ' skipped (no country): ' + failed.slice(0, 5).join(', ')
+    : done + ' applied.');
+}
+
+function applyProposal(id, opts) {
+  const silent = !!(opts && opts.silent);
+  const p = proposals.find(x => x.id === id);
+  if (!p) return false;
   if (p.kind === 'change') {
     const patch = {};
     p.changes.forEach(c => { patch[c.field] = c.new; });
     overrides[p.cardId] = { ...(overrides[p.cardId] || {}), ...patch };
     saveOverrides(overrides);
   } else if (p.kind === 'new') {
-    const country = (document.getElementById('c_' + id) || {}).value || '';
-    if (!country.trim()) { alert('Please enter the country for this new entry.'); return; }
+    // In the bulk run the input is only on screen for entries still pending,
+    // so fall back to the country stored on the proposal itself.
+    const field = document.getElementById('c_' + id);
+    const country = ((field && field.value) || p.country || '').trim();
+    if (!country) {
+      if (!silent) alert('Please enter the country for this new entry.');
+      return false;
+    }
     extraRows.push({
       id: 'jrc-' + p.id,
-      country: country.trim(),
+      country: country,
       country_flag: '',
       generation: p.row.generation || '',
       application: p.row.cardName || '',
@@ -1295,21 +1383,42 @@ function applyProposal(id) {
     });
     saveExtra(extraRows);
   }
+  // Deciding an entry is the strongest evidence that it was read, so the
+  // review marker is set here too — only an untouched entry stays unchecked.
   p.status = 'applied';
+  p.updatedAt = new Date().toISOString();
+  p.reviewedAt = p.updatedAt;
   writeJson(PROPOSALS_KEY, proposals);
   rebuildData();
-  renderUpdates();
+  if (!silent) renderUpdates();
+  return true;
 }
 
 function dismissProposal(id) {
   const p = proposals.find(x => x.id === id);
   if (!p) return;
   p.status = 'dismissed';
+  p.updatedAt = new Date().toISOString();
+  p.reviewedAt = p.updatedAt;
   writeJson(PROPOSALS_KEY, proposals);
   renderUpdates();
 }
 
 function esc(v) { return String(v ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+/** Short local date+time; a missing or unparseable stamp shows as a dash. */
+function fmtStamp(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined,
+    { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+/** The entries the current tab and filter show — the basis for select-all. */
+function visibleProposals() {
+  if (proposalTab === 'pending') return proposals.filter(p => p.status === 'pending');
+  return proposals.filter(p => p.status !== 'pending' && (!proposalOnlyUnreviewed || !p.reviewedAt));
+}
 
 function renderUpdates() {
   const online = navigator.onLine;
@@ -1328,11 +1437,41 @@ function renderUpdates() {
   }).join('');
 
   $('btnPending').classList.toggle('active', proposalTab === 'pending');
+  $('btnHandled').classList.toggle('active', proposalTab === 'handled');
   const pending = proposals.filter(p => p.status === 'pending');
-  const handled = proposals.filter(p => p.status !== 'pending');
+  const handledAll = proposals.filter(p => p.status !== 'pending');
+  const unreviewed = handledAll.filter(p => !p.reviewedAt);
   $('btnPending').textContent = 'Pending (' + pending.length + ')';
-  $('btnHandled').textContent = 'Handled (' + handled.length + ')';
-  const list = proposalTab === 'pending' ? pending : handled;
+  $('btnHandled').textContent = 'Handled (' + handledAll.length + ')';
+  const btnUn = $('btnUnreviewed');
+  btnUn.style.display = proposalTab === 'handled' ? '' : 'none';
+  btnUn.textContent = 'Not checked yet (' + unreviewed.length + ')';
+  btnUn.classList.toggle('active', proposalOnlyUnreviewed);
+  const list = visibleProposals();
+
+  // Bulk bar: tick entries while going through them, decide at the end.
+  const bulk = $('proposalBulk');
+  if (list.length) {
+    bulk.style.display = 'flex';
+    bulk.innerHTML =
+      '<span>' + (proposalSel.size
+        ? proposalSel.size + ' of ' + list.length + ' selected'
+        : proposalTab === 'handled'
+          ? list.length + ' handled entr' + (list.length === 1 ? 'y' : 'ies') + ' — tick what you go through, decide at the end'
+          : list.length + ' pending entr' + (list.length === 1 ? 'y' : 'ies')) + '</span>' +
+      '<button class="btn secondary" onclick="selectAllProposals()">Select all</button>' +
+      (proposalSel.size
+        ? '<button class="btn secondary" onclick="clearProposalSel()">Clear</button>' +
+          (proposalTab === 'handled'
+            ? '<button class="btn secondary" onclick="markProposalsReviewed(true)">Mark checked (' + proposalSel.size + ')</button>' +
+              '<button class="btn secondary" onclick="markProposalsReviewed(false)">Unmark</button>'
+            : '') +
+          '<button class="btn" onclick="bulkApplySelected()">Apply (' + proposalSel.size + ')</button>'
+        : '');
+  } else {
+    bulk.style.display = 'none';
+    bulk.innerHTML = '';
+  }
 
   $('proposalList').innerHTML = list.length ? list.map(p => {
     const title = p.kind === 'info'
@@ -1340,6 +1479,9 @@ function renderUpdates() {
       : p.kind === 'new'
         ? 'New JRC entry · ' + (p.country ? esc(p.country) + ' · ' : '') + esc(p.row.typeApproval || '—')
         : esc(p.country) + ' · ' + esc(p.row.typeApproval || '—');
+    const box = '<input type="checkbox" style="margin-right:8px;vertical-align:middle;"' +
+      (proposalSel.has(p.id) ? ' checked' : '') +
+      ' onclick="toggleProposalSel(\'' + p.id + '\')" />';
     const body = p.kind === 'info'
       ? '<div style="font-size:12px;color:#cbd5e1;">' + esc(p.info) + '</div>'
       : '<div style="font-size:12px;color:#cbd5e1;margin-bottom:8px;">' +
@@ -1347,20 +1489,35 @@ function renderUpdates() {
         (p.info ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">' + esc(p.info) + '</div>' : '') +
         (p.changes.length ? '<div>' + p.changes.map(c =>
           '<div class="chg"><span>' + esc(c.label) + '</span><span class="old">' + esc(c.old || '—') + '</span><span class="new">' + esc(c.new) + '</span></div>').join('') + '</div>' : '');
+    // Dates make the handled list workable: when the finding turned up, when
+    // it was last decided, and whether anyone has already read it.
+    const meta = '<div style="font-size:11px;color:#64748b;margin-bottom:8px;">Found ' + fmtStamp(p.created_at) +
+      (p.updatedAt ? ' · Last change ' + fmtStamp(p.updatedAt) : '') +
+      (p.reviewedAt ? ' · Checked ' + fmtStamp(p.reviewedAt) : '') + '</div>';
     const actions = p.status === 'pending'
       ? '<div class="actions">' +
-          (p.kind === 'new' ? (function(){ var g = resolveTaCountry((p.row && p.row.typeApproval) || ''); var val = p.country || (g ? g[0] : ''); var assumed = !p.country && g && !g[1]; return '<input class="country" id="c_' + p.id + '" value="' + esc(val) + '" placeholder="Country for new entry" />' + (assumed ? '<span style="font-size:11px;color:#94a3b8;margin-left:6px;">assumed from issuer prefix - please confirm</span>' : ''); })() : '') +
+          (p.kind === 'new' ? (function(){ var g = resolveTaCountry((p.row && p.row.typeApproval) || ''); var val = p.country || (g ? g[0] : ''); var assumed = !p.country && g && !g[1]; return '<input class="country" id="c_' + p.id + '" value="' + esc(val) + '" placeholder="Country for new entry" />' + (assumed ? '<span style="font-size:11px;color:#94a3b8;margin-left:6px;">assumed from issuer prefix</span>' : ''); })() : '') +
           (p.kind === 'info' ? '' : '<button class="btn" onclick="applyProposal(\'' + p.id + '\')">Approve &amp; apply</button>') +
           '<button class="btn secondary" onclick="dismissProposal(\'' + p.id + '\')">Dismiss</button></div>'
-      : '';
-    return '<div class="prop"><div class="top"><span class="title">' + title + '</span><span class="tags">' +
+      : '<div class="actions">' +
+          '<button class="btn secondary" onclick="reopenProposal(\'' + p.id + '\')">Review again</button>' +
+          '<button class="btn secondary" onclick="markOneReviewed(\'' + p.id + '\', ' + (p.reviewedAt ? 'false' : 'true') + ')">' +
+            (p.reviewedAt ? 'Mark unchecked' : 'Mark checked') + '</button>' +
+          '<span style="font-size:11px;color:#64748b;">' +
+            (p.status === 'applied'
+              ? 'Reviewing again does not undo what was written — it offers the decision once more.'
+              : 'Moves this entry back to the pending list.') + '</span></div>';
+    return '<div class="prop"><div class="top"><span class="title">' + box + title + '</span><span class="tags">' +
       '<span class="badge">' + esc(SOURCES[p.source].label) + '</span>' +
       '<span class="badge">' + (p.kind === 'new' ? 'New entry' : p.kind === 'info' ? 'Info' : 'Changed') + '</span>' +
       (p.status !== 'pending' ? '<span class="badge">' + p.status + '</span>' : '') +
-      '</span></div>' + body + actions + '</div>';
+      (p.status !== 'pending' ? '<span class="badge">' + (p.reviewedAt ? 'Checked' : 'Not checked') + '</span>' : '') +
+      '</span></div>' + meta + body + actions + '</div>';
   }).join('') : '<p style="color:#64748b;font-size:13px;">' + (proposalTab === 'pending'
       ? 'No pending updates. Run a check to look for new JRC entries.'
-      : 'No handled proposals yet.') + '</p>';
+      : proposalOnlyUnreviewed
+        ? 'Everything handled has been checked off.'
+        : 'No handled proposals yet.') + '</p>';
 }
 
 // ---------- World map ----------

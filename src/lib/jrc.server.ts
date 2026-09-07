@@ -698,7 +698,7 @@ export async function runUpdateCheck() {
   return { ...totals, sources: results };
 }
 
-export async function approveProposal(id: string, country: string) {
+export async function approveProposal(id: string, country: string, userId?: string | null) {
   const proposal = await getProposal(id);
   if (!proposal) throw new Error("Proposal not found");
   if (proposal.status !== "pending") throw new Error("Proposal already handled");
@@ -809,12 +809,12 @@ export async function approveProposal(id: string, country: string) {
     });
   }
 
-  await updateProposalStatus(id, "approved");
+  await updateProposalStatus(id, "approved", userId);
   return { ok: true };
 }
 
-export async function rejectProposal(id: string) {
-  await updateProposalStatus(id, "rejected");
+export async function rejectProposal(id: string, userId?: string | null) {
+  await updateProposalStatus(id, "rejected", userId);
   return { ok: true };
 }
 

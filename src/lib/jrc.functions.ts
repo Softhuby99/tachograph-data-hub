@@ -7,7 +7,7 @@ import {
   rejectProposal,
   reopenProposal,
 } from "@/lib/jrc.server";
-import { getAllProposals, getRecentCheckRuns } from "@/lib/db.server";
+import { getAllProposals, getRecentCheckRuns, setProposalsReviewed } from "@/lib/db.server";
 
 // ---- reads (public; no auth) ---------------------------------------------
 
@@ -58,15 +58,30 @@ export const approveJrcProposal = createServerFn({ method: "POST" })
     id: String(data?.id ?? ""),
     country: String(data?.country ?? ""),
   }))
-  .handler(async ({ data }) => approveProposal(data.id, data.country));
+  .handler(async ({ data, context }) => approveProposal(data.id, data.country, context?.userId));
 
 export const rejectJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
-  .handler(async ({ data }) => rejectProposal(data.id));
+  .handler(async ({ data, context }) => rejectProposal(data.id, context?.userId));
 
 /** Puts a handled proposal back on the pending list so it can be decided again. */
 export const reopenJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
   .handler(async ({ data }) => reopenProposal(data.id));
+
+/**
+ * Marks proposals as read, or clears the marker. Purely a progress marker for
+ * working through the handled list — it changes no status and writes no card.
+ */
+export const markJrcProposalsReviewed = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: { ids: string[]; reviewed?: boolean }) => ({
+    ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id ?? "")) : [],
+    reviewed: data?.reviewed !== false,
+  }))
+  .handler(async ({ data, context }) => {
+    const count = await setProposalsReviewed(data.ids, data.reviewed, context?.userId);
+    return { ok: true, count };
+  });

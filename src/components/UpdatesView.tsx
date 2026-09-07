@@ -11,6 +11,7 @@ import {
   approveJrcProposal,
   rejectJrcProposal,
   reopenJrcProposal,
+  markJrcProposalsReviewed,
   getProposals,
   getCheckRuns,
 } from "@/lib/jrc.functions";
@@ -26,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RefreshCw, Check, X, ExternalLink, ListChecks } from "lucide-react";
+import { RefreshCw, Check, X, ExternalLink, ListChecks, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
@@ -75,6 +76,9 @@ type Proposal = {
   changes: { fields?: FieldChange[] } | null;
   status: string;
   created_at: string;
+  updated_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
 };
 
 type CheckRun = {
@@ -99,6 +103,9 @@ export function UpdatesView() {
   const authEnabled = authMode.data?.enabled ?? true;
   const signedIn = !authEnabled || !!session;
   const [showHandled, setShowHandled] = useState(false);
+  // Working through dozens of handled entries needs a way to hide the ones
+  // already gone through; without it every pass starts at the top again.
+  const [onlyUnreviewed, setOnlyUnreviewed] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
 
@@ -119,6 +126,7 @@ export function UpdatesView() {
   const approve = useServerFn(approveJrcProposal);
   const reopen = useServerFn(reopenJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
+  const markReviewed = useServerFn(markJrcProposalsReviewed);
 
   const [running, setRunning] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
@@ -206,6 +214,20 @@ export function UpdatesView() {
     onError: (e: Error) => toast.error(`Dismiss failed: ${e.message}`),
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: (vars: { ids: string[]; reviewed: boolean }) => markReviewed({ data: vars }),
+    onSuccess: (_res, vars) => {
+      toast.success(
+        vars.reviewed
+          ? `${vars.ids.length} entr${vars.ids.length === 1 ? "y" : "ies"} marked as checked.`
+          : "Check mark removed.",
+      );
+      setSelected(new Set());
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(`Could not save the check mark: ${e.message}`),
+  });
+
   const all = proposals.data ?? [];
   const bySource = (p: Proposal) =>
     sourceFilter === "all" || (p.source_type ?? "card_status") === sourceFilter;
@@ -235,7 +257,18 @@ export function UpdatesView() {
   const bulkEligible = pending.filter(
     (p) => isChangeProposal(p) || countryFor(p).trim() !== "" || deviceOf(p) !== "Card",
   );
-  const selectedProposals = bulkEligible.filter((p) => selected.has(p.id));
+
+  const handledAll = all.filter((p) => p.status !== "pending" && bySource(p));
+  const isReviewed = (p: Proposal) => !!p.reviewed_at;
+  const handledUnreviewed = handledAll.filter((p) => !isReviewed(p));
+  const handled = onlyUnreviewed ? handledUnreviewed : handledAll;
+  const list = showHandled ? handled : pending;
+
+  // What may be ticked. On the pending list only the proposals that need no
+  // judgement call; in the handled list every entry, because the point there is
+  // to work through a backlog — read a batch, then decide on it in one go.
+  const selectable = showHandled ? handled : bulkEligible;
+  const selectedProposals = selectable.filter((p) => selected.has(p.id));
   const toggleSelected = (id: string) =>
     setSelected((s) => {
       const next = new Set(s);
@@ -243,6 +276,12 @@ export function UpdatesView() {
       else next.add(id);
       return next;
     });
+  const switchTab = (toHandled: boolean) => {
+    // A selection made in one list must not carry over into the other; the
+    // bulk action there would mean something different.
+    setSelected(new Set());
+    setShowHandled(toHandled);
+  };
 
   const runBulkApprove = async () => {
     setBulkRunning(true);
@@ -250,6 +289,10 @@ export function UpdatesView() {
     const failed: string[] = [];
     for (const p of selectedProposals) {
       try {
+        // A handled proposal has to go back to pending before it can be
+        // applied — approveProposal refuses anything else on purpose, so that
+        // an already applied change is never written a second time by accident.
+        if (p.status !== "pending") await reopen({ data: { id: p.id } });
         await approve({ data: { id: p.id, country: countryFor(p) } });
         done++;
       } catch (e) {
@@ -263,12 +306,13 @@ export function UpdatesView() {
     if (failed.length === 0) {
       toast.success(`${done} proposal(s) applied.`);
     } else {
-      toast.error(`${done} applied, ${failed.length} failed. First: ${failed[0]}`);
+      // Reopening happens before applying, so a failure leaves that entry on
+      // the pending list. Say so — otherwise it looks like it vanished.
+      toast.error(
+        `${done} applied, ${failed.length} failed and are now pending. First: ${failed[0]}`,
+      );
     }
   };
-
-  const handled = all.filter((p) => p.status !== "pending" && bySource(p));
-  const list = showHandled ? handled : pending;
 
   // One row per source: the newest run recorded for it.
   const latestBySource = new Map<string, CheckRun>();
@@ -358,17 +402,31 @@ export function UpdatesView() {
         <Button
           size="sm"
           variant={showHandled ? "outline" : "default"}
-          onClick={() => setShowHandled(false)}
+          onClick={() => switchTab(false)}
         >
           Pending ({pending.length})
         </Button>
         <Button
           size="sm"
           variant={showHandled ? "default" : "outline"}
-          onClick={() => setShowHandled(true)}
+          onClick={() => switchTab(true)}
         >
-          Handled ({handled.length})
+          Handled ({handledAll.length})
         </Button>
+        {showHandled && (
+          <Button
+            size="sm"
+            variant={onlyUnreviewed ? "secondary" : "ghost"}
+            onClick={() => {
+              setSelected(new Set());
+              setOnlyUnreviewed((v) => !v);
+            }}
+            title="Show only entries nobody has marked as checked yet"
+          >
+            <EyeOff className="mr-2 h-4 w-4" />
+            Not checked yet ({handledUnreviewed.length})
+          </Button>
+        )}
         <span className="mx-1 h-8 w-px bg-border" />
         <Button
           size="sm"
@@ -389,18 +447,20 @@ export function UpdatesView() {
         ))}
       </div>
 
-      {!showHandled && bulkEligible.length > 0 && signedIn && (
+      {selectable.length > 0 && signedIn && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
           <ListChecks className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm">
             {selected.size > 0
-              ? `${selected.size} of ${bulkEligible.length} selected`
-              : `${bulkEligible.length} proposal(s) can be applied without typing a country`}
+              ? `${selected.size} of ${selectable.length} selected`
+              : showHandled
+                ? `${selectable.length} handled entr${selectable.length === 1 ? "y" : "ies"} — tick what you go through, decide at the end`
+                : `${selectable.length} proposal(s) can be applied without typing a country`}
           </span>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setSelected(new Set(bulkEligible.map((p) => p.id)))}
+            onClick={() => setSelected(new Set(selectable.map((p) => p.id)))}
           >
             Select all
           </Button>
@@ -409,14 +469,45 @@ export function UpdatesView() {
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
                 Clear
               </Button>
+              {showHandled && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      reviewMutation.mutate({
+                        ids: selectedProposals.map((p) => p.id),
+                        reviewed: true,
+                      })
+                    }
+                    disabled={reviewMutation.isPending}
+                  >
+                    <Eye className="mr-2 h-4 w-4" /> Mark checked ({selected.size})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      reviewMutation.mutate({
+                        ids: selectedProposals.map((p) => p.id),
+                        reviewed: false,
+                      })
+                    }
+                    disabled={reviewMutation.isPending}
+                  >
+                    <EyeOff className="mr-2 h-4 w-4" /> Unmark
+                  </Button>
+                </>
+              )}
               <Button size="sm" onClick={() => setBulkOpen(true)}>
                 <Check className="mr-2 h-4 w-4" /> Review &amp; apply ({selected.size})
               </Button>
             </>
           )}
           <span className="text-xs text-muted-foreground">
-            Only field changes and new entries with a documented country are selectable — the rest
-            stay a deliberate single approval.
+            {showHandled
+              ? "Applying a handled entry puts it back on the list first and then writes it — an entry that cannot be applied stays pending."
+              : "Only field changes and new entries with a documented country are selectable — the rest stay a deliberate single approval."}
           </span>
         </div>
       )}
@@ -428,6 +519,13 @@ export function UpdatesView() {
             <DialogDescription>
               Everything below is written to the database and recorded in each card&apos;s change
               history. Check the countries before confirming.
+              {selectedProposals.some((p) => p.status === "approved") && (
+                <span className="mt-2 block text-amber-600 dark:text-amber-400">
+                  {selectedProposals.filter((p) => p.status === "approved").length} of these were
+                  already applied once. Applying again writes the same values a second time — for a
+                  new entry that means a second record.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <table className="w-full text-sm">
@@ -436,6 +534,7 @@ export function UpdatesView() {
                 <th className="py-2 pr-4 font-medium">Type Approval</th>
                 <th className="py-2 pr-4 font-medium">Country</th>
                 <th className="py-2 pr-4 font-medium">Source</th>
+                <th className="py-2 pr-4 font-medium">Status</th>
                 <th className="py-2 pr-4 font-medium">What changes</th>
               </tr>
             </thead>
@@ -445,6 +544,13 @@ export function UpdatesView() {
                   <td className="py-2 pr-4 font-medium">{p.jrc_type_approval || "—"}</td>
                   <td className="py-2 pr-4">{countryFor(p) || "—"}</td>
                   <td className="py-2 pr-4 text-muted-foreground">{p.source_label}</td>
+                  <td className="py-2 pr-4 text-muted-foreground">
+                    {p.status === "pending"
+                      ? "pending"
+                      : p.status === "approved"
+                        ? "already applied"
+                        : "dismissed"}
+                  </td>
                   <td className="py-2 pr-4 text-muted-foreground">
                     {(p.changes?.fields ?? []).length > 0
                       ? (p.changes?.fields ?? []).map((f) => f.label).join(", ")
@@ -469,7 +575,9 @@ export function UpdatesView() {
       {!proposals.isLoading && list.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {showHandled
-            ? "No handled proposals yet."
+            ? onlyUnreviewed
+              ? "Everything handled has been checked off."
+              : "No handled proposals yet."
             : "No pending updates. Run a check to look for new JRC entries."}
         </p>
       )}
@@ -484,15 +592,13 @@ export function UpdatesView() {
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    {p.status === "pending" &&
-                      signedIn &&
-                      bulkEligible.some((e) => e.id === p.id) && (
-                        <Checkbox
-                          checked={selected.has(p.id)}
-                          onCheckedChange={() => toggleSelected(p.id)}
-                          aria-label="Select for bulk approval"
-                        />
-                      )}
+                    {signedIn && selectable.some((e) => e.id === p.id) && (
+                      <Checkbox
+                        checked={selected.has(p.id)}
+                        onCheckedChange={() => toggleSelected(p.id)}
+                        aria-label="Select for bulk approval"
+                      />
+                    )}
                     {p.title ||
                       (p.kind === "new"
                         ? `New JRC entry · ${p.country ? `${p.country} · ` : ""}${p.jrc_type_approval || "—"}`
@@ -520,8 +626,28 @@ export function UpdatesView() {
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
                     </Badge>
                     {p.status !== "pending" && <Badge variant="secondary">{p.status}</Badge>}
+                    {p.status !== "pending" &&
+                      (p.reviewed_at ? (
+                        <Badge variant="outline" className="gap-1">
+                          <Eye className="h-3 w-3" /> Checked
+                        </Badge>
+                      ) : (
+                        <Badge className="gap-1 bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 dark:text-amber-400">
+                          <EyeOff className="h-3 w-3" /> Not checked
+                        </Badge>
+                      ))}
                   </div>
                 </div>
+                {/* Going through the handled list needs dates: when the finding
+                    turned up, when it was last decided, and whether anyone has
+                    already read it. Without them every pass starts blind. */}
+                <p className="pt-1 text-xs text-muted-foreground">
+                  Found {fmtStamp(p.created_at)}
+                  {p.updated_at && p.updated_at !== p.created_at && (
+                    <> · Last change {fmtStamp(p.updated_at)}</>
+                  )}
+                  {p.reviewed_at && <> · Checked {fmtStamp(p.reviewed_at)}</>}
+                </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 {isInfo ? (
@@ -571,6 +697,24 @@ export function UpdatesView() {
                       disabled={reopenMutation.isPending || !signedIn}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" /> Review again
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        reviewMutation.mutate({ ids: [p.id], reviewed: !p.reviewed_at })
+                      }
+                      disabled={reviewMutation.isPending || !signedIn}
+                    >
+                      {p.reviewed_at ? (
+                        <>
+                          <EyeOff className="mr-2 h-4 w-4" /> Mark unchecked
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="mr-2 h-4 w-4" /> Mark checked
+                        </>
+                      )}
                     </Button>
                     <span className="text-xs text-muted-foreground">
                       {p.status === "approved"
@@ -671,6 +815,20 @@ export function UpdatesView() {
       </div>
     </div>
   );
+}
+
+/** Short local date+time; an unparseable or missing stamp shows as a dash. */
+function fmtStamp(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
