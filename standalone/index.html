@@ -274,7 +274,7 @@
 </div>
 
 <script>
-const APP_VERSION = "2.25";
+const APP_VERSION = "2.26";
 document.getElementById("versionBadge").textContent = "V" + APP_VERSION;
 if (!(window.tacho && window.tacho.isDesktop)) document.getElementById("webVersionLink").style.display = "";
 const BASE_DATA = __DATA__;
@@ -440,6 +440,25 @@ function renderList() {
   });
 }
 
+/**
+ * Thousand separators for the "Card Quantities" field, matching the web app's
+ * formatQuantities() in src/lib/utils.ts: 2000 -> 2.000, 2000000 -> 2.000.000.
+ * Values already grouped with , or . are normalised to dots; anything with
+ * fewer than four digits and all non-numeric text stays as typed.
+ */
+function formatQuantities(raw) {
+  return String(raw == null ? '' : raw).replace(/\d[\d.,]*\d/g, (m) => {
+    const digits = m.replace(/[^\d]/g, '');
+    if (digits.length < 4) return m;
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  });
+}
+
+/** Field value for display: quantities get thousand separators. */
+function fieldValue(k, r) {
+  return k === 'card_quantities' ? formatQuantities(r[k] || '') || '—' : linkify(r[k]);
+}
+
 function linkify(val) {
   if (!val) return '—';
   const s = String(val);
@@ -531,7 +550,7 @@ function renderDetail() {
       const val = (r[k] ?? '').toString().replace(/</g,'&lt;');
       return `<div class="field"><div class="k">${label}</div><div class="v"><textarea data-k="${k}">${val}</textarea></div></div>`;
     }
-    return `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`;
+    return `<div class="field"><div class="k">${label}</div><div class="v">${fieldValue(k, r)}</div></div>`;
   };
 
   const sec1Head = editing
@@ -546,7 +565,7 @@ function renderDetail() {
     </div>
     <div class="section">
       <div class="section-head"><h3>Procurement (Group 2)</h3></div>
-      ${fields2.map(([k,label]) => `<div class="field"><div class="k">${label}</div><div class="v">${linkify(r[k])}</div></div>`).join('')}
+      ${fields2.map(([k,label]) => `<div class="field"><div class="k">${label}</div><div class="v">${fieldValue(k, r)}</div></div>`).join('')}
     </div>
   `;
 }
@@ -1510,7 +1529,7 @@ function openCardModal(id, fromCountry) {
   if (fromCountry) lastCountryModal = fromCountry;
   const flag = isoOf(r) ? '<img src="' + flagUrl(isoOf(r),true) + '" onerror="this.style.display=\'none\'" style="height:28px;border-radius:3px;"/>' : '<span style="font-size:24px">' + (r.country_flag||'') + '</span>';
   const fieldHtml = ([k,label]) =>
-    '<div class="field"><div class="k">' + label + '</div><div class="v">' + linkify(r[k]) + '</div></div>';
+    '<div class="field"><div class="k">' + label + '</div><div class="v">' + fieldValue(k, r) + '</div></div>';
   const backCountry = lastCountryModal ? "'" + lastCountryModal.replace(/'/g,"\\'") + "'" : '';
   const backBtn = lastCountryModal
     ? '<button class="cm-back" onclick="openCountryModal(' + backCountry + ')" title="Back to list">&#8592; Back</button>'
