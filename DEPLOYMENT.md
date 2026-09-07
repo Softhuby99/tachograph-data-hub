@@ -36,10 +36,17 @@ DB_PORT=5432
 DB_NAME=tdh
 DB_USER=tdh
 DB_PASSWORD=changeme
+ADMIN_TOKEN=pick-a-long-random-string
 NITRO_SSL_CERT=/certs/fullchain.pem
 NITRO_SSL_KEY=/certs/privkey.pem
 DOMAIN=tdh.example.com
 ```
+
+> `AUTH_MODE=none` is required for a self-hosted container. Without it the app
+> takes the Supabase path, offers a Sign in it cannot serve, and fails with
+> "Missing Supabase environment variable(s)" — the container has no Supabase
+> backend. `ADMIN_TOKEN` then gates writing: unset, the instance is read-only.
+> Both are runtime variables, so they belong in `.env`, not in the image.
 
 > `DB_HOST` non-empty = local PostgreSQL mode. Leave `DB_HOST` unset to fall
 > back to the Lovable/Supabase backend (used by the preview).

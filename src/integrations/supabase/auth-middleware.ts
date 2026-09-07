@@ -41,7 +41,14 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
         ...(!SUPABASE_URL ? ["SUPABASE_URL"] : []),
         ...(!SUPABASE_PUBLISHABLE_KEY ? ["SUPABASE_PUBLISHABLE_KEY"] : []),
       ];
-      const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud.`;
+      // Two very different situations produce this, so the message names both:
+      // the hosted app with Supabase not connected, and a self-hosted container
+      // that should never have taken the Supabase path in the first place.
+      const message =
+        `Missing Supabase environment variable(s): ${missing.join(", ")}. ` +
+        "On Lovable Cloud: connect Supabase. On a self-hosted deployment: set " +
+        "AUTH_MODE=none (plus ADMIN_TOKEN for write access) — the container has " +
+        "no Supabase backend and must not offer a Supabase login.";
       console.error(`[Supabase] ${message}`);
       throw new Error(message);
     }

@@ -64,13 +64,18 @@ RUN chmod +x /entrypoint.sh
 # Persistent data: PostgreSQL data dir + uploads
 VOLUME ["/var/lib/postgresql/data", "/certs"]
 
+# DB_PASSWORD is deliberately NOT defaulted here. The image used to ship
+# DB_PASSWORD=tdh, which quietly defeated the rule that the deployment must set
+# it explicitly: the entrypoint's ${DB_PASSWORD:?} was satisfied by the image
+# default and every container ran on the same known password. Set it in the
+# deployment environment (e.g. /opt/TDH/.env).
+
 ENV NODE_ENV=production \
     PORT=443 \
     DB_HOST=127.0.0.1 \
     DB_PORT=5432 \
     DB_NAME=tdh \
     DB_USER=tdh \
-    DB_PASSWORD=tdh \
     AUTH_MODE=none \
     NITRO_SSL_CERT=/certs/fullchain.pem \
     NITRO_SSL_KEY=/certs/privkey.pem
