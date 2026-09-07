@@ -663,19 +663,25 @@ export async function updateCardFields(id: string, patch: Record<string, string>
   if (error) throw new Error(error.message);
 }
 
-export async function insertCard(row: Record<string, unknown>): Promise<void> {
+/** Inserts a card and returns its id, so callers can keep their lookup maps current. */
+export async function insertCard(row: Record<string, unknown>): Promise<string> {
   if (isLocalDb()) {
     const cols = Object.keys(row);
     const vals = cols.map((_, i) => `$${i + 1}`).join(",");
-    await pool().query(
-      `INSERT INTO public.tachograph_cards (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${vals})`,
+    const { rows } = await pool().query(
+      `INSERT INTO public.tachograph_cards (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${vals}) RETURNING id`,
       cols.map((c) => row[c]),
     );
-    return;
+    return String(rows[0]?.id ?? "");
   }
   const admin = await supabaseAdmin();
-  const { error } = await admin.from("tachograph_cards").insert(row as never);
+  const { data, error } = await admin
+    .from("tachograph_cards")
+    .insert(row as never)
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  return String((data as { id?: string } | null)?.id ?? "");
 }
 
 // ----------------------------------------------------------- cron config

@@ -241,7 +241,17 @@ export const importCards = createServerFn({ method: "POST" })
           // with that id exists, so it cannot collide.
           const csvId = uuidOrNull(raw["id"]);
           if (csvId) insert["id"] = csvId;
-          await insertCard(insert);
+          const newId = await insertCard(insert);
+          // Register the new card in the lookup maps. They are built once
+          // before the loop, so without this a file containing two rows with
+          // the same country + type approval + generation inserted both, and
+          // a second import of the same file kept adding copies instead of
+          // matching what the first run had created.
+          if (newId) {
+            const stored = { ...insert, id: newId };
+            byId.set(newId, stored);
+            byKey.set(matchKey(stored), stored);
+          }
           created++;
         }
       } catch (e) {
