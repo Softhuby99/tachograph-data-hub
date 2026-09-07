@@ -15,6 +15,7 @@ import {
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { flagUrl } from "@/lib/country-flag";
+import { expiryOf, expiryLabel, needsAttention, type Expiry, type ExpiryState } from "@/lib/expiry";
 import { formatQuantities } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,8 @@ import {
   Globe2,
   Wrench,
   History,
+  CalendarClock,
+  AlertTriangle,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
@@ -143,6 +146,46 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr.filter((s) => s && s.trim().length > 0))).sort();
 }
 
+const EXPIRY_LABELS: Record<ExpiryState, string> = {
+  expired: "Expired",
+  critical: "Expires within 3 months",
+  warning: "Expires within 6 months",
+  ok: "Valid",
+  unknown: "Not dated",
+};
+
+const EXPIRY_DOT: Record<ExpiryState, string> = {
+  expired: "bg-destructive",
+  critical: "bg-destructive",
+  warning: "bg-amber-500",
+  ok: "bg-emerald-500",
+  unknown: "bg-muted-foreground/40",
+};
+
+/** Validity of a certificate in one badge; renders nothing without a date. */
+function ExpiryBadge({ expiry, compact = false }: { expiry: Expiry; compact?: boolean }) {
+  if (expiry.state === "unknown" || !expiry.date) return null;
+  const critical = expiry.state === "expired" || expiry.state === "critical";
+  if (!needsAttention(expiry)) {
+    if (compact) return null;
+    return (
+      <span className="text-xs text-muted-foreground">
+        valid until {expiry.date.toISOString().slice(0, 10)}
+      </span>
+    );
+  }
+  return (
+    <Badge
+      variant={critical ? "destructive" : "outline"}
+      className={"gap-1 text-xs font-normal " + (critical ? "" : "border-amber-500 text-amber-600")}
+      title={`Certificate validity ends ${expiry.date.toISOString().slice(0, 10)}`}
+    >
+      <AlertTriangle className="h-3 w-3" />
+      {compact ? (expiry.state === "expired" ? "expired" : `${expiry.days}d`) : expiryLabel(expiry)}
+    </Badge>
+  );
+}
+
 const GROUP1_FIELDS: Array<[keyof TachoCard, string]> = [
   ["country", "Country"],
   ["generation", "Generation"],
@@ -200,6 +243,15 @@ function TachographTool() {
     () => (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
     [rawCards, overrides],
   );
+
+  // The Data tab owns the filter controls; it reports the resulting ids here so
+  // the Tools tab can export exactly the view the user is looking at.
+  const [filteredIds, setFilteredIds] = useState<string[] | null>(null);
+  const filteredCards = useMemo(() => {
+    if (!filteredIds) return cards;
+    const wanted = new Set(filteredIds);
+    return cards.filter((c) => wanted.has(c.id));
+  }, [cards, filteredIds]);
 
   const saveMutation = useMutation({
     mutationFn: (vars: { cardId: string; patch: Record<string, string> }) =>
@@ -416,13 +468,14 @@ function TachographTool() {
             editHint={adminRequired ? "Admin login required to edit" : "Sign in to edit"}
             onSave={saveOverride}
             onReset={resetOverride}
+            onFilteredChange={setFilteredIds}
           />
         )}
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} />}
         {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
         {tab === "updates" && <UpdatesView />}
         {!isLoading && !error && tab === "tools" && (
-          <ToolsView cards={cards} onImport={handleImport} />
+          <ToolsView cards={cards} filteredCards={filteredCards} onImport={handleImport} />
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
@@ -441,6 +494,7 @@ function DataView({
   editHint,
   onSave,
   onReset,
+  onFilteredChange,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
@@ -448,6 +502,8 @@ function DataView({
   editHint: string;
   onSave: (id: string, patch: Partial<TachoCard>) => void;
   onReset: (id: string) => void;
+  /** Reports the current filter upwards so Tools can export exactly this view. */
+  onFilteredChange?: (ids: string[]) => void;
 }) {
   const [country, setCountry] = useState("all");
   const [generation, setGeneration] = useState("all");
@@ -477,6 +533,10 @@ function DataView({
       );
     });
   }, [cards, country, generation, manufacturer, search]);
+
+  useEffect(() => {
+    onFilteredChange?.(filtered.map((c) => c.id));
+  }, [filtered, onFilteredChange]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? null;
 
@@ -601,7 +661,10 @@ function DataView({
                             </Badge>
                           )}
                         </span>
-                        <Badge variant="secondary">{c.generation}</Badge>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <ExpiryBadge expiry={expiryOf(c.certificate_expiry_date)} compact />
+                          <Badge variant="secondary">{c.generation}</Badge>
+                        </span>
                       </div>
                       <p className="line-clamp-1 text-xs text-muted-foreground">
                         {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
@@ -914,6 +977,13 @@ function DetailView({
             if (key === "jrc_certificate_source" || key === "primary_source") {
               return <LinkField key={key} label={label} value={value} className="md:col-span-2" />;
             }
+            if (key === "certificate_expiry_date") {
+              return (
+                <Field key={key} label={label} value={value}>
+                  <ExpiryBadge expiry={expiryOf(value)} />
+                </Field>
+              );
+            }
             return <Field key={key} label={label} value={value} />;
           })}
           {!editing && (
@@ -1073,9 +1143,16 @@ function HistoryCard({ cardId }: { cardId: string }) {
   );
 }
 
+type Drill =
+  | { kind: "generation"; value: string }
+  | { kind: "manufacturer"; value: string }
+  | { kind: "certificate"; value: string }
+  | { kind: "expiry"; value: ExpiryState };
+
 function AnalyticsView({ cards }: { cards: TachoCard[] }) {
-  const [drillGen, setDrillGen] = useState<string | null>(null);
-  const [drillMan, setDrillMan] = useState<string | null>(null);
+  // One selection for every drill-down, so the same window serves generations,
+  // manufacturers, security certificates and the validity buckets.
+  const [drill, setDrill] = useState<Drill | null>(null);
   const total = cards.length;
 
   const genCounts = useMemo(() => {
@@ -1107,27 +1184,78 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
   }, [cards, total]);
   const mfgMax = mfgList[0]?.approvals || 1;
 
+  // Security certificates, from the other direction: which type approvals rest
+  // on a given certificate. The data carried the link all along, but only ever
+  // card -> certificate; "what hangs on ANSSI-CC-2022/38?" had no answer here.
+  const certList = useMemo(() => {
+    const map = new Map<string, { approvals: number; countries: Set<string>; expiry: Expiry }>();
+    for (const c of cards) {
+      const name = String(c.security_certificate ?? "").trim();
+      if (!name || name === "—") continue;
+      let entry = map.get(name);
+      if (!entry) {
+        entry = { approvals: 0, countries: new Set(), expiry: expiryOf(c.certificate_expiry_date) };
+        map.set(name, entry);
+      }
+      entry.approvals++;
+      entry.countries.add(c.country);
+      // Keep the earliest known expiry across the cards sharing the certificate.
+      const e = expiryOf(c.certificate_expiry_date);
+      if (e.date && (!entry.expiry.date || e.date < entry.expiry.date)) entry.expiry = e;
+    }
+    return [...map.entries()]
+      .map(([name, v]) => ({
+        name,
+        approvals: v.approvals,
+        countries: v.countries.size,
+        expiry: v.expiry,
+      }))
+      .sort((a, b) => b.approvals - a.approvals || a.name.localeCompare(b.name));
+  }, [cards]);
+
+  // Validity buckets. The expiry dates were already stored but never evaluated.
+  const expiryBuckets = useMemo(() => {
+    const buckets: Record<ExpiryState, TachoCard[]> = {
+      expired: [],
+      critical: [],
+      warning: [],
+      ok: [],
+      unknown: [],
+    };
+    for (const c of cards) buckets[expiryOf(c.certificate_expiry_date).state].push(c);
+    return buckets;
+  }, [cards]);
+
   // Drill-down opens as a window in the same style as the map view, instead of
   // pushing a list below the chart where it is easy to miss on a long page.
-  const drillTitle = drillGen ? `Generation ${drillGen}` : (drillMan ?? "");
+  const drillTitle = !drill
+    ? ""
+    : drill.kind === "generation"
+      ? `Generation ${drill.value}`
+      : drill.kind === "expiry"
+        ? EXPIRY_LABELS[drill.value as ExpiryState]
+        : drill.value;
   const drillRows = useMemo(() => {
-    const source = drillGen
-      ? cards.filter((c) => c.generation === drillGen)
-      : drillMan
-        ? cards.filter(
-            (c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drillMan,
-          )
-        : [];
+    if (!drill) return [];
+    const source =
+      drill.kind === "generation"
+        ? cards.filter((c) => c.generation === drill.value)
+        : drill.kind === "manufacturer"
+          ? cards.filter(
+              (c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drill.value,
+            )
+          : drill.kind === "certificate"
+            ? cards.filter((c) => String(c.security_certificate ?? "").trim() === drill.value)
+            : cards.filter((c) => expiryOf(c.certificate_expiry_date).state === drill.value);
     return [...source].sort(
       (a, b) =>
         a.country.localeCompare(b.country) ||
         String(a.type_approval_number).localeCompare(String(b.type_approval_number)),
     );
-  }, [cards, drillGen, drillMan]);
-  const closeDrill = () => {
-    setDrillGen(null);
-    setDrillMan(null);
-  };
+  }, [cards, drill]);
+  const closeDrill = () => setDrill(null);
+  const toggleDrill = (next: Drill) =>
+    setDrill((cur) => (cur && cur.kind === next.kind && cur.value === next.value ? null : next));
 
   return (
     <div className="space-y-6">
@@ -1147,10 +1275,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
             {gens.map((g) => (
               <button
                 key={g}
-                onClick={() => {
-                  setDrillMan(null);
-                  setDrillGen(drillGen === g ? null : g);
-                }}
+                onClick={() => toggleDrill({ kind: "generation", value: g })}
                 className="grid w-full grid-cols-[60px_1fr_90px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
               >
                 <span className="font-semibold">{g}</span>
@@ -1178,10 +1303,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
               return (
                 <button
                   key={g}
-                  onClick={() => {
-                    setDrillMan(null);
-                    setDrillGen(drillGen === g ? null : g);
-                  }}
+                  onClick={() => toggleDrill({ kind: "generation", value: g })}
                   className="grid w-full grid-cols-[60px_1fr_60px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
                 >
                   <span className="font-semibold">{g}</span>
@@ -1239,12 +1361,11 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => {
-                          setDrillGen(null);
-                          setDrillMan(drillMan === m.name ? null : m.name);
-                        }}
+                        onClick={() => toggleDrill({ kind: "manufacturer", value: m.name })}
                       >
-                        {drillMan === m.name ? "Hide" : "Show countries"}
+                        {drill?.kind === "manufacturer" && drill.value === m.name
+                          ? "Hide"
+                          : "Show countries"}
                       </Button>
                     </td>
                   </tr>
@@ -1255,10 +1376,99 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarClock className="h-4 w-4 text-muted-foreground" />
+            Certificate validity
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Based on the stored expiry date. &ldquo;Not dated&rdquo; means no readable date is on
+            file — those are not safe to treat as valid.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(["expired", "critical", "warning", "ok", "unknown"] as ExpiryState[]).map((state) => (
+              <button
+                key={state}
+                type="button"
+                disabled={expiryBuckets[state].length === 0}
+                onClick={() => toggleDrill({ kind: "expiry", value: state })}
+                className={
+                  "rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-default disabled:opacity-50 " +
+                  (expiryBuckets[state].length > 0 ? "hover:bg-accent" : "") +
+                  (drill?.kind === "expiry" && drill.value === state ? " bg-accent" : "")
+                }
+              >
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className={`h-2 w-2 rounded-full ${EXPIRY_DOT[state]}`} />
+                  {EXPIRY_LABELS[state]}
+                </div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {expiryBuckets[state].length}
+                </div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            Security certificates — type approvals &amp; countries
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            The reverse view: which type approvals rest on a given certificate. Click a row to list
+            them.
+          </p>
+          <div className="max-h-[420px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card">
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Certificate</th>
+                  <th className="py-2 pr-4 text-right font-medium">Type Approvals</th>
+                  <th className="py-2 pr-4 text-right font-medium">Countries</th>
+                  <th className="py-2 pr-4 font-medium">Validity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {certList.map((c) => (
+                  <tr
+                    key={c.name}
+                    onClick={() => toggleDrill({ kind: "certificate", value: c.name })}
+                    className="cursor-pointer border-b align-top last:border-0 hover:bg-accent/60"
+                    title="Click to list the type approvals"
+                  >
+                    <td className="py-2 pr-4 font-medium">{c.name}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums">{c.approvals}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums">{c.countries}</td>
+                    <td className="py-2 pr-4">
+                      <ExpiryBadge expiry={c.expiry} />
+                    </td>
+                  </tr>
+                ))}
+                {certList.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                      No security certificates recorded.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
       <LabsCard cards={cards} />
 
       {/* Drill-down window — same style as the country window in the map view */}
-      <Dialog open={!!(drillGen || drillMan)} onOpenChange={(o) => !o && closeDrill()}>
+      <Dialog open={!!drill} onOpenChange={(o) => !o && closeDrill()}>
         <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -1275,7 +1485,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                 <th className="py-2 pr-4 font-medium">Type Approval</th>
                 <th className="py-2 pr-4 font-medium">Generation</th>
                 <th className="py-2 pr-4 font-medium">
-                  {drillGen ? "Manufacturer" : "Date / Status"}
+                  {drill?.kind === "generation" ? "Manufacturer" : "Date / Status"}
                 </th>
               </tr>
             </thead>
@@ -1304,7 +1514,7 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
                     <td className="py-2 pr-4">{c.type_approval_number || "—"}</td>
                     <td className="py-2 pr-4">{c.generation || "—"}</td>
                     <td className="py-2 pr-4">
-                      {(drillGen
+                      {(drill?.kind === "generation"
                         ? c.current_manufacturer_normalized || c.current_manufacturer
                         : c.date_status) || "—"}
                     </td>
@@ -1686,19 +1896,23 @@ function Field({
   value,
   sub,
   className,
+  children,
 }: {
   label: string;
   value?: string;
   sub?: string;
   className?: string;
+  /** Rendered next to the value — used for the certificate validity badge. */
+  children?: React.ReactNode;
 }) {
   return (
     <div className={className}>
       <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <div className="text-sm whitespace-pre-wrap">
+      <div className="flex flex-wrap items-center gap-2 text-sm whitespace-pre-wrap">
         {value?.trim() ? value : <span className="text-muted-foreground">—</span>}
+        {children}
       </div>
       {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
     </div>

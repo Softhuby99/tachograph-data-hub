@@ -374,13 +374,35 @@ export function ToolsView({
             >
               <Download className="mr-2 h-4 w-4" /> Export all · comma
             </Button>
-            {filteredCards && filteredCards.length !== cards.length && (
-              <Button
-                variant="secondary"
-                onClick={() => exportRows(filteredCards, "tachograph-cards-filtered", ";")}
-              >
-                <Download className="mr-2 h-4 w-4" /> Export current filter ({filteredCards.length})
-              </Button>
+            {filteredCards && (
+              <>
+                <Button
+                  variant="secondary"
+                  disabled={filteredCards.length === 0}
+                  onClick={() => exportRows(filteredCards, "tachograph-cards-filtered", ";")}
+                  title="Only the rows the Data tab currently shows"
+                >
+                  <Download className="mr-2 h-4 w-4" /> Current filter · CSV ({filteredCards.length}
+                  )
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={filteredCards.length === 0}
+                  onClick={() => {
+                    const stamp = new Date().toISOString().slice(0, 10);
+                    download(
+                      JSON.stringify(filteredCards, null, 2),
+                      `tachograph-cards-filtered-${stamp}.json`,
+                      "application/json;charset=utf-8",
+                    );
+                    toast.success(`${filteredCards.length} row(s) exported as JSON.`);
+                  }}
+                  title="Only the rows the Data tab currently shows"
+                >
+                  <Download className="mr-2 h-4 w-4" /> Current filter · JSON (
+                  {filteredCards.length})
+                </Button>
+              </>
             )}
             <Button
               variant="outline"

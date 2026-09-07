@@ -16,7 +16,16 @@ import {
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { documentedCountry, resolveTaCountry, taPrefix } from "@/lib/ta-country";
 
-import { RefreshCw, Check, X, ExternalLink } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RefreshCw, Check, X, ExternalLink, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
@@ -160,6 +169,10 @@ export function UpdatesView() {
 
   void check;
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+
   const approveMutation = useMutation({
     mutationFn: (vars: { id: string; country: string }) => approve({ data: vars }),
     onSuccess: () => {
@@ -182,6 +195,55 @@ export function UpdatesView() {
   const bySource = (p: Proposal) =>
     sourceFilter === "all" || (p.source_type ?? "card_status") === sourceFilter;
   const pending = all.filter((p) => p.status === "pending" && bySource(p));
+
+  // ---- bulk approval ----------------------------------------------------
+  //
+  // With 21 country conflicts plus a steady trickle of new entries, approving
+  // one at a time is a lot of clicking. Selection is deliberately restricted to
+  // proposals that need no judgement call: a field change on an existing card,
+  // or a new entry whose country is documented. Anything that would need a
+  // country typed in stays a single, deliberate approval.
+
+  /** Country that would be applied — empty when none is documented. */
+  const countryFor = (p: Proposal) =>
+    newCountry[p.id] ?? p.country ?? documentedCountry(p.jrc_type_approval ?? "")?.country ?? "";
+
+  const isChangeProposal = (p: Proposal) =>
+    !!p.card_id && (p.changes?.fields?.length ?? 0) > 0 && p.kind !== "info";
+
+  const bulkEligible = pending.filter((p) => isChangeProposal(p) || countryFor(p).trim() !== "");
+  const selectedProposals = bulkEligible.filter((p) => selected.has(p.id));
+  const toggleSelected = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const runBulkApprove = async () => {
+    setBulkRunning(true);
+    let done = 0;
+    const failed: string[] = [];
+    for (const p of selectedProposals) {
+      try {
+        await approve({ data: { id: p.id, country: countryFor(p) } });
+        done++;
+      } catch (e) {
+        failed.push(`${p.title || p.jrc_type_approval || p.id}: ${(e as Error).message}`);
+      }
+    }
+    setBulkRunning(false);
+    setBulkOpen(false);
+    setSelected(new Set());
+    invalidate();
+    if (failed.length === 0) {
+      toast.success(`${done} proposal(s) applied.`);
+    } else {
+      toast.error(`${done} applied, ${failed.length} failed. First: ${failed[0]}`);
+    }
+  };
+
   const handled = all.filter((p) => p.status !== "pending" && bySource(p));
   const list = showHandled ? handled : pending;
 
@@ -304,6 +366,82 @@ export function UpdatesView() {
         ))}
       </div>
 
+      {!showHandled && bulkEligible.length > 0 && signedIn && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+          <ListChecks className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">
+            {selected.size > 0
+              ? `${selected.size} of ${bulkEligible.length} selected`
+              : `${bulkEligible.length} proposal(s) can be applied without typing a country`}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelected(new Set(bulkEligible.map((p) => p.id)))}
+          >
+            Select all
+          </Button>
+          {selected.size > 0 && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                Clear
+              </Button>
+              <Button size="sm" onClick={() => setBulkOpen(true)}>
+                <Check className="mr-2 h-4 w-4" /> Review &amp; apply ({selected.size})
+              </Button>
+            </>
+          )}
+          <span className="text-xs text-muted-foreground">
+            Only field changes and new entries with a documented country are selectable — the rest
+            stay a deliberate single approval.
+          </span>
+        </div>
+      )}
+
+      <Dialog open={bulkOpen} onOpenChange={(o) => !bulkRunning && setBulkOpen(o)}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Apply {selectedProposals.length} proposal(s)</DialogTitle>
+            <DialogDescription>
+              Everything below is written to the database and recorded in each card&apos;s change
+              history. Check the countries before confirming.
+            </DialogDescription>
+          </DialogHeader>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Type Approval</th>
+                <th className="py-2 pr-4 font-medium">Country</th>
+                <th className="py-2 pr-4 font-medium">Source</th>
+                <th className="py-2 pr-4 font-medium">What changes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedProposals.map((p) => (
+                <tr key={p.id} className="border-b align-top last:border-0">
+                  <td className="py-2 pr-4 font-medium">{p.jrc_type_approval || "—"}</td>
+                  <td className="py-2 pr-4">{countryFor(p) || "—"}</td>
+                  <td className="py-2 pr-4 text-muted-foreground">{p.source_label}</td>
+                  <td className="py-2 pr-4 text-muted-foreground">
+                    {(p.changes?.fields ?? []).length > 0
+                      ? (p.changes?.fields ?? []).map((f) => f.label).join(", ")
+                      : "New entry"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={bulkRunning}>
+              Cancel
+            </Button>
+            <Button onClick={runBulkApprove} disabled={bulkRunning}>
+              {bulkRunning ? "Applying…" : `Apply ${selectedProposals.length}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {proposals.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!proposals.isLoading && list.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -322,7 +460,16 @@ export function UpdatesView() {
             <Card key={p.id}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    {p.status === "pending" &&
+                      signedIn &&
+                      bulkEligible.some((e) => e.id === p.id) && (
+                        <Checkbox
+                          checked={selected.has(p.id)}
+                          onCheckedChange={() => toggleSelected(p.id)}
+                          aria-label="Select for bulk approval"
+                        />
+                      )}
                     {p.title ||
                       (p.kind === "new"
                         ? `New JRC entry · ${p.country ? `${p.country} · ` : ""}${p.jrc_type_approval || "—"}`
