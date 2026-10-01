@@ -15,6 +15,7 @@ import {
 import { getCurrentListing } from "@/lib/market.functions";
 import {
   computeMarketStatus,
+  topCardApprovalByCountry,
   MARKET_STATUS_LABEL,
   MARKET_STATUS_BADGE_CLASS,
   type CurrentListingEntry,
@@ -288,6 +289,10 @@ function TachographTool() {
     () => computeMarketStatus(cards, currentListing),
     [cards, currentListing],
   );
+  const topApprovalByCountry = useMemo(
+    () => topCardApprovalByCountry(marketStatus.groups),
+    [marketStatus],
+  );
 
   // The Data tab owns the filter controls; it reports the resulting ids here so
   // the Tools tab can export exactly the view the user is looking at.
@@ -517,7 +522,7 @@ function TachographTool() {
             marketStatusById={marketStatus.byId}
           />
         )}
-        {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} />}
+        {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} topApproval={topApprovalByCountry} />}
         {!isLoading && !error && tab === "analytics" && (
           <AnalyticsView cards={cards} marketStatus={marketStatus} />
         )}

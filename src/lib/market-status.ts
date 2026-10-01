@@ -379,3 +379,35 @@ export const MARKET_STATUS_BADGE_CLASS: Record<MarketStatus, string> = {
   delisted: "border-destructive text-destructive",
   unmatched: "border-amber-500 text-amber-600",
 };
+
+/** The top-ranked CARD approval of every country lane (v2.45). `status`
+ * "current" means it is the active approval (newest in its lane and still
+ * listed on JRC); "delisted" / "unmatched" mean the country has no confirmed
+ * active approval right now. Shared by the map and the Overview charts. */
+export type CountryTopApproval = {
+  country: string;
+  id: string;
+  generation: string;
+  type_approval_number: string;
+  manufacturer: string;
+  status: MarketStatus;
+};
+
+export function topCardApprovalByCountry(groups: MarketGroup[]): Map<string, CountryTopApproval> {
+  const out = new Map<string, CountryTopApproval>();
+  for (const g of groups) {
+    if (g.deviceType !== "Card") continue;
+    const country = String(g.country ?? "").trim();
+    const top = g.entries[0];
+    if (!country || !top) continue;
+    out.set(country, {
+      country,
+      id: top.id,
+      generation: top.generation,
+      type_approval_number: top.type_approval_number,
+      manufacturer: top.manufacturer,
+      status: top.status,
+    });
+  }
+  return out;
+}
