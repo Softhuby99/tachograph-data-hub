@@ -22,6 +22,7 @@ import {
   type MarketStatusEntry,
   type MarketGroup,
 } from "@/lib/market-status";
+import { approvalHolderOf, chipPlatformOf, isOwnApproval } from "@/lib/chip-platform";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { flagUrl } from "@/lib/country-flag";
@@ -1845,10 +1846,19 @@ function CurrentStatusView({
   marketStatus: { byId: Map<string, MarketStatusEntry>; groups: MarketGroup[] };
 }) {
   const [deviceType, setDeviceType] = useState("all");
+  // "holder" = who holds the type approval; "platform" = whose chip platform
+  // is inside the card (derived from the security certificate, see
+  // src/lib/chip-platform.ts), whoever holds the approval.
+  const [groupBy, setGroupBy] = useState<"holder" | "platform">("holder");
   const [selectedMfg, setSelectedMfg] = useState<string | null>(null);
   const [detailCard, setDetailCard] = useState<TachoCard | null>(null);
 
   const byId = marketStatus.byId;
+  const UNKNOWN_PLATFORM = "Platform unknown";
+  const groupKeyOf = (c: TachoCard) =>
+    groupBy === "holder"
+      ? c.current_manufacturer_normalized || c.current_manufacturer || "—"
+      : chipPlatformOf(c).vendor || UNKNOWN_PLATFORM;
   const deviceTypes = useMemo(
     () => uniq([...DEVICE_TYPES, ...cards.map((c) => c.device_type || "Card")]),
     [cards],
@@ -1869,12 +1879,18 @@ function CurrentStatusView({
   );
 
   const shareList = useMemo(() => {
-    const map: Record<string, { holders: number; countries: Set<string> }> = {};
+    const map: Record<string, { holders: number; countries: Set<string>; own: number; partner: number }> =
+      {};
     for (const c of current) {
-      const m = c.current_manufacturer_normalized || c.current_manufacturer || "—";
-      if (!map[m]) map[m] = { holders: 0, countries: new Set() };
+      const m = groupKeyOf(c);
+      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0 };
       map[m].holders++;
       map[m].countries.add(c.country);
+      if (groupBy === "platform") {
+        const vendor = chipPlatformOf(c).vendor;
+        if (vendor && isOwnApproval(c, vendor)) map[m].own++;
+        else if (vendor) map[m].partner++;
+      }
     }
     const total = current.length || 1;
     return Object.entries(map)
@@ -1882,18 +1898,28 @@ function CurrentStatusView({
         name,
         holders: v.holders,
         countries: v.countries.size,
+        own: v.own,
+        partner: v.partner,
         share: (v.holders / total) * 100,
       }))
-      .sort((a, b) => b.holders - a.holders || b.countries - a.countries);
-  }, [current]);
+      .sort(
+        (a, b) =>
+          Number(a.name === UNKNOWN_PLATFORM) - Number(b.name === UNKNOWN_PLATFORM) ||
+          b.holders - a.holders ||
+          b.countries - a.countries,
+      );
+    // groupKeyOf depends only on groupBy
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, groupBy]);
   const shareMax = shareList[0]?.holders || 1;
 
   const mfgCountries = useMemo(() => {
     if (!selectedMfg) return [];
     return current
-      .filter((c) => (c.current_manufacturer_normalized || c.current_manufacturer || "—") === selectedMfg)
+      .filter((c) => groupKeyOf(c) === selectedMfg)
       .sort((a, b) => a.country.localeCompare(b.country));
-  }, [current, selectedMfg]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, selectedMfg, groupBy]);
 
   return (
     <div className="space-y-6">
@@ -1917,13 +1943,34 @@ function CurrentStatusView({
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Group by
+            </label>
+            <Select
+              value={groupBy}
+              onValueChange={(v) => {
+                setGroupBy(v as "holder" | "platform");
+                setSelectedMfg(null);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="holder">Approval holder</SelectItem>
+                <SelectItem value="platform">Chip platform</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">
-            Current market share {deviceType !== "all" ? `— ${deviceType}` : ""}
+            {groupBy === "platform" ? "Current market share by chip platform" : "Current market share"}{" "}
+            {deviceType !== "all" ? `— ${deviceType}` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1932,14 +1979,21 @@ function CurrentStatusView({
             the newest generation (G2.2 before G2.1 before G1), within it the most recent type
             approval date, still listed on JRC today. {current.length} of{" "}
             {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
+            {groupBy === "platform" &&
+              " Grouped by the vendor of the secure chip platform, taken from the security certificate number (field 7.2 of the type approval); “own” means the platform vendor also holds the approval, “via partner” means another card manufacturer does."}{" "}
             Click a row to list its countries.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Manufacturer</th>
+                  <th className="py-2 pr-3 font-medium">
+                    {groupBy === "platform" ? "Chip platform" : "Manufacturer"}
+                  </th>
                   <th className="py-2 pr-3 text-right font-medium">Current approvals</th>
+                  {groupBy === "platform" && (
+                    <th className="py-2 pr-3 text-right font-medium">Own / via partner</th>
+                  )}
                   <th className="py-2 pr-3 text-right font-medium">Countries</th>
                   <th className="py-2 pr-3 text-right font-medium">Market share</th>
                   <th className="hidden py-2 pr-3 font-medium lg:table-cell"></th>
@@ -1955,6 +2009,11 @@ function CurrentStatusView({
                   >
                     <td className="py-2 pr-3 font-medium">{m.name}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.holders}</td>
+                    {groupBy === "platform" && (
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {m.name === UNKNOWN_PLATFORM ? "—" : `${m.own} / ${m.partner}`}
+                      </td>
+                    )}
                     <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
                     <td className="hidden py-2 pr-3 lg:table-cell">
@@ -1969,7 +2028,7 @@ function CurrentStatusView({
                 ))}
                 {shareList.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={groupBy === "platform" ? 6 : 5} className="py-6 text-center text-muted-foreground">
                       No current entries in scope.
                     </td>
                   </tr>
@@ -2044,11 +2103,16 @@ function CurrentStatusView({
                 <th className="py-2 pr-4 font-medium">Type Approval</th>
                 <th className="py-2 pr-4 font-medium">Generation</th>
                 <th className="py-2 pr-4 font-medium">Approved</th>
+                {groupBy === "platform" && (
+                  <th className="py-2 pr-4 font-medium">Approval holder</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {mfgCountries.map((c) => {
                 const fUrl = flagUrl(c.country, 40);
+                const platform = groupBy === "platform" ? chipPlatformOf(c) : null;
+                const own = platform ? isOwnApproval(c, platform.vendor) : false;
                 return (
                   <tr
                     key={c.id}
@@ -2078,12 +2142,40 @@ function CurrentStatusView({
                     </td>
                     <td className="py-2 pr-4">{c.generation || "—"}</td>
                     <td className="py-2 pr-4">{c.date_status || "—"}</td>
+                    {platform && (
+                      <td className="py-2 pr-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {platform.vendor && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${own ? "border-emerald-500 text-emerald-600" : "border-sky-500 text-sky-600"}`}
+                            >
+                              {own ? "own approval" : "via partner"}
+                            </Badge>
+                          )}
+                          <span>{approvalHolderOf(c) || "—"}</span>
+                        </div>
+                        {platform.evidence && (
+                          <div
+                            className="mt-0.5 text-xs text-muted-foreground"
+                            title={
+                              platform.source === "text"
+                                ? "Derived from the platform text fields only — no known security certificate on file."
+                                : "Derived from the security certificate number."
+                            }
+                          >
+                            {platform.source === "text" ? "platform text: " : ""}
+                            {platform.evidence.slice(0, 60)}
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {mfgCountries.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={groupBy === "platform" ? 5 : 4} className="py-6 text-center text-muted-foreground">
                     No entries.
                   </td>
                 </tr>
