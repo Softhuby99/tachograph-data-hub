@@ -1928,8 +1928,9 @@ function CurrentStatusView({
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
-            One type approval per country/product-group lane — the most recently issued one,
-            still listed on JRC today, whichever manufacturer holds it. {current.length} of{" "}
+            One type approval per country/product-group lane, whichever manufacturer holds it:
+            the newest generation (G2.2 before G2.1 before G1), within it the most recent type
+            approval date, still listed on JRC today. {current.length} of{" "}
             {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
             Click a row to list its countries.
           </p>
@@ -2042,7 +2043,7 @@ function CurrentStatusView({
                 <th className="py-2 pr-4 font-medium">Country</th>
                 <th className="py-2 pr-4 font-medium">Type Approval</th>
                 <th className="py-2 pr-4 font-medium">Generation</th>
-                <th className="py-2 pr-4 font-medium">Issued</th>
+                <th className="py-2 pr-4 font-medium">Approved</th>
               </tr>
             </thead>
             <tbody>
@@ -2076,7 +2077,7 @@ function CurrentStatusView({
                       {c.type_approval_number || "—"}
                     </td>
                     <td className="py-2 pr-4">{c.generation || "—"}</td>
-                    <td className="py-2 pr-4">{c.certificate_issued_date || "—"}</td>
+                    <td className="py-2 pr-4">{c.date_status || "—"}</td>
                   </tr>
                 );
               })}
@@ -2206,13 +2207,24 @@ function MarketHistoryView({ groups, cards }: { groups: MarketGroup[]; cards: Ta
                         <Badge
                           variant="outline"
                           className="text-xs border-amber-500 text-amber-600"
-                          title={`Only ${e.closeDateWarningDays} day${e.closeDateWarningDays === 1 ? "" : "s"} from the neighbouring entry in this lane — worth a manual check for a data entry error.`}
+                          title={`Only ${e.closeDateWarningDays} day${e.closeDateWarningDays === 1 ? "" : "s"} from the top entry of the same generation in this lane — unclear which one is current, worth a manual check for a data entry error.`}
                         >
                           <AlertTriangle className="mr-1 h-3 w-3" /> Check dates
                         </Badge>
                       )}
-                      <span className="text-xs text-muted-foreground">
-                        {e.certificate_issued_date || "no issue date on file"}
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={
+                          e.ranking_date_source === "security_certificate"
+                            ? "No type approval date on file — ranked by the security certificate date instead."
+                            : undefined
+                        }
+                      >
+                        {e.ranking_date_source === "approval"
+                          ? `approved ${e.ranking_date}`
+                          : e.ranking_date_source === "security_certificate"
+                            ? `${e.ranking_date} (security cert., no approval date)`
+                            : "no approval date on file"}
                       </span>
                     </div>
                   </li>

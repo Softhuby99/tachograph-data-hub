@@ -8,21 +8,26 @@
 // it runs the same way in the browser and on the server and never re-derives
 // the override merge.
 //
-// Grouping is by (country, device type) ONLY — NOT by manufacturer and NOT by
-// generation. A country can have only one active type approval per device
-// type at a time: whichever is newest by certificate_issued_date, regardless
-// of which manufacturer holds it. (Confirmed against the Ukraine G1 -> G2
-// case — one country, one manufacturer, two generations, the newer one is
-// current today — and against the Greece case, where a G1 approval from one
-// manufacturer and later G2/G2.2 approvals from a different manufacturer all
-// share one lane: the newest overall wins, the rest are "superseded" no
-// matter who holds them.) Within a group, entries are ranked purely by
-// certificate_issued_date; the most recent is the candidate for "current".
+// Lanes: grouping is by (country, device type) ONLY — not by manufacturer.
+// A country has one active type approval per device type at a time,
+// whichever manufacturer holds it.
 //
-// Two entries in the same lane whose dates fall within CLOSE_DATE_WARNING_DAYS
-// of each other are flagged: that's suspiciously close for two genuinely
-// separate approvals and is more likely a data entry error (duplicate, wrong
-// manufacturer, wrong date) than a real same-quarter handover.
+// Ranking inside a lane (v2.40):
+//   1. Generation first: G2.2 > G2.1 > G1 (> unknown). A newer generation
+//      always beats an older one, even if the older generation has a more
+//      recent approval date (e.g. a G1 renewal issued after the G2.2).
+//   2. Within a generation: newest TYPE APPROVAL date wins.
+// The approval date is `date_status` (JRC "Date" column; on
+// dtc_other_certificates this is field 8 "Date of approval" of the
+// certificate). `certificate_issued_date` is the date of the SECURITY
+// certificate (field 7.2, verified against the PDFs on 08.09.2026) and is
+// only used as a fallback when no approval date is on file — it must not be
+// overwritten with the approval date, it drives the "valid until" display.
+//
+// An entry of the same generation dated within CLOSE_DATE_WARNING_DAYS of the
+// lane's top entry is flagged (on both sides) as a likely data entry error
+// (duplicate, wrong manufacturer, wrong date): it puts in doubt which one is
+// really current.
 
 import { parseLooseDate } from "./expiry";
 
@@ -37,6 +42,7 @@ export type MarketCard = {
   generation?: string | null;
   type_approval_number?: string | null;
   certificate_issued_date?: string | null;
+  date_status?: string | null;
 };
 
 /** Shape returned by getCurrentListing() (src/lib/db.server.ts / market.functions.ts). */
@@ -52,14 +58,17 @@ export type MarketStatusEntry = {
   id: string;
   status: MarketStatus;
   groupKey: string;
-  /** 0 = most recent (or only) dated entry in its group; -1 for undated entries. */
+  /** Position in the lane's ranking (0 = top candidate). */
   rank: number;
   groupSize: number;
 };
 
-/** Two dates in the same lane closer together than this are flagged as a
- * likely data error rather than a genuine back-to-back approval. */
+/** Two approval dates of the same generation in the same lane closer together
+ * than this are flagged as a likely data error. */
 export const CLOSE_DATE_WARNING_DAYS = 92; // ~3 months
+
+/** Where the date used for ranking came from. */
+export type RankingDateSource = "approval" | "security_certificate" | "none";
 
 export type MarketGroupEntry = {
   id: string;
@@ -67,9 +76,12 @@ export type MarketGroupEntry = {
   generation: string;
   type_approval_number: string;
   certificate_issued_date: string;
+  /** The date the lane was ranked by, as stored (see RankingDateSource). */
+  ranking_date: string;
+  ranking_date_source: RankingDateSource;
   status: MarketStatus;
-  /** Set on both sides of a pair whose dates are within
-   * CLOSE_DATE_WARNING_DAYS of each other — worth a manual check. */
+  /** Set on both sides of a same-generation pair whose approval dates are
+   * within CLOSE_DATE_WARNING_DAYS of each other — worth a manual check. */
   closeDateWarningDays?: number;
 };
 
@@ -77,10 +89,9 @@ export type MarketGroup = {
   key: string;
   country: string;
   deviceType: string;
-  /** Every manufacturer that appears in this lane, in entry order. A lane can
-   * now span more than one manufacturer — supersession is purely by date. */
+  /** Every manufacturer that appears in this lane, in ranking order. */
   manufacturers: string[];
-  /** Newest first; undated entries last. */
+  /** Ranking order: newest generation first, then newest approval; undated last. */
   entries: MarketGroupEntry[];
 };
 
@@ -96,49 +107,68 @@ function normApproval(value: string | null | undefined): string {
 //                    e2-151-Extension 1, e5-0100-v02, e1-0005-00 Korr. 01
 //   full long form   e5*165/2014*980/2023*2002*00, e4*AETR*3821/85*0007*00
 //   several in one   e1-232 / e1-227, e4-0042-01; zuvor e4-0026-00
-// Stripping separators and doing a substring test (normApproval) cannot match
-// the long form against the short one ("e516520149802023200200" does not
-// contain "e5200200"), so every record stored in long form showed as
-// Delisted even while JRC still lists it. approvalKeys() pulls out
-// (issuing mark, approval number, extension) from every approval found in a
-// string; two approvals match when mark and number agree and the extensions
-// agree or one side has none (same tolerance the substring test already had).
+// approvalKeys() pulls out (issuing mark, series, approval number, extension)
+// from every approval found in a string. The series separates the AETR
+// numbering (e4-AETR-0001-00) from the EU numbering (e4-0001-00) — they are
+// independent sequences, so the same mark + number in different series are
+// DIFFERENT approvals.
 // ---------------------------------------------------------------------------
 
-type ApprovalKey = { mark: string; number: string; ext: string | null };
+export type ApprovalKey = {
+  mark: string;
+  series: "eu" | "aetr";
+  number: string;
+  ext: string | null;
+};
 
-const LONG_APPROVAL_RE = /\be\s*(\d{1,2}|cy)\s*\*[^\s;,]*?\*\s*(\d{1,5})\s*\*\s*(\d{1,2})(?!\d)/g;
+const LONG_APPROVAL_RE = /\be\s*(\d{1,2}|cy)\s*\*([^\s;,]*?)\*\s*(\d{1,5})\s*\*\s*(\d{1,2})(?!\d)/g;
 const SHORT_APPROVAL_RE =
-  /\be\s*(\d{1,2}|cy)\s*[-_ ]\s*(?:aetr\s*[-_ ]\s*)?(\d{1,5})(?:\s*[-_/]\s*(?:v|extension\s*)?(\d{1,2}))?(?!\d)/g;
+  /\be\s*(\d{1,2}|cy)\s*[-_ ]\s*(aetr\s*[-_ ]\s*)?(\d{1,5})(?:\s*[-_/]\s*(?:v|extension\s*)?(\d{1,2}))?(?!\d)/g;
 
 function stripZeros(value: string): string {
   const t = value.replace(/^0+/, "");
   return t === "" ? "0" : t;
 }
 
-function approvalKeys(value: string | null | undefined): ApprovalKey[] {
+export function approvalKeys(value: string | null | undefined): ApprovalKey[] {
   const text = String(value ?? "").toLowerCase();
   const out: ApprovalKey[] = [];
   for (const m of text.matchAll(LONG_APPROVAL_RE)) {
-    out.push({ mark: m[1], number: stripZeros(m[2]), ext: stripZeros(m[3]) });
+    out.push({
+      mark: m[1],
+      series: m[2].includes("aetr") ? "aetr" : "eu",
+      number: stripZeros(m[3]),
+      ext: stripZeros(m[4]),
+    });
   }
   const rest = text.replace(LONG_APPROVAL_RE, " ");
   for (const m of rest.matchAll(SHORT_APPROVAL_RE)) {
     out.push({
       mark: m[1],
-      number: stripZeros(m[2]),
-      ext: m[3] !== undefined ? stripZeros(m[3]) : null,
+      series: m[2] ? "aetr" : "eu",
+      number: stripZeros(m[3]),
+      ext: m[4] !== undefined ? stripZeros(m[4]) : null,
     });
   }
   return out;
 }
 
-function keysMatch(a: ApprovalKey, b: ApprovalKey): boolean {
+/** Same approval; a missing extension on either side is tolerated (used for
+ * "is this still listed on JRC"). */
+export function keysMatch(a: ApprovalKey, b: ApprovalKey): boolean {
   return (
     a.mark === b.mark &&
+    a.series === b.series &&
     a.number === b.number &&
     (a.ext === null || b.ext === null || a.ext === b.ext)
   );
+}
+
+/** Same approval including the extension (both missing counts as equal). Used
+ * where a looser match would attach a JRC revision to the wrong record, e.g.
+ * the Update Monitor matching e1-209-03 onto a record stored as e1-209. */
+export function keysMatchStrict(a: ApprovalKey, b: ApprovalKey): boolean {
+  return a.mark === b.mark && a.series === b.series && a.number === b.number && a.ext === b.ext;
 }
 
 function manufacturerOf(card: MarketCard): string {
@@ -155,14 +185,51 @@ function groupKeyFor(card: MarketCard): string {
   return `${country}|${deviceType}`;
 }
 
+/** G2.2 = 3, G2.1 / G2 = 2, G1 = 1, anything else 0. */
+export function generationRank(generation: string | null | undefined): number {
+  const g = String(generation ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (/^G2[.,]?2/.test(g) || g === "G2V2") return 3;
+  if (/^G2([.,]?1)?$/.test(g) || g.startsWith("G2.1") || g === "G2V1") return 2;
+  if (/^G1/.test(g)) return 1;
+  return 0;
+}
+
 function parseDateMs(value: string | null | undefined): number {
-  // certificate_issued_date arrives as DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY /
-  // ISO — the same loose formats expiry.ts already parses correctly. The
-  // native Date.parse() silently fails (NaN) on DD.MM.YYYY whenever the day
-  // is >12, and silently swaps day/month when both are <=12 — it must not be
-  // used here.
+  // DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY / ISO via expiry.ts. Never use the
+  // native Date.parse() here: it fails (NaN) on DD.MM.YYYY when the day is
+  // >12 and silently swaps day/month when both are <=12.
   const d = parseLooseDate(value);
   return d ? d.getTime() : NaN;
+}
+
+/** date_status sometimes carries a note after the date, e.g.
+ * "08.06.2023 (JRC-Listung)". Only a trailing parenthetical is stripped —
+ * free text such as "Stand 15.07.2026" (an as-of date, not an approval date)
+ * deliberately stays unparsed. */
+function approvalDateMs(value: string | null | undefined): number {
+  const text = String(value ?? "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+  return parseDateMs(text);
+}
+
+function rankingDate(card: MarketCard): { ms: number; text: string; source: RankingDateSource } {
+  const approval = approvalDateMs(card.date_status);
+  if (!Number.isNaN(approval)) {
+    return { ms: approval, text: String(card.date_status ?? "").trim(), source: "approval" };
+  }
+  const security = parseDateMs(card.certificate_issued_date);
+  if (!Number.isNaN(security)) {
+    return {
+      ms: security,
+      text: String(card.certificate_issued_date ?? "").trim(),
+      source: "security_certificate",
+    };
+  }
+  return { ms: NaN, text: "", source: "none" };
 }
 
 /** Is this type approval still listed on JRC right now, on any of the pages? */
@@ -171,21 +238,22 @@ function isListed(
   listing: CurrentListingEntry[],
   listingKeys: ApprovalKey[][],
 ): boolean {
+  const own = approvalKeys(typeApproval);
+  // Keyed comparison first: it handles long vs short form and knows the AETR
+  // and EU series apart.
+  if (own.length > 0 && listingKeys.some((keys) => keys.some((k) => own.some((o) => keysMatch(o, k))))) {
+    return true;
+  }
+  // Then the older substring test (either direction, separators stripped),
+  // kept so nothing that matched before v2.39 stops matching. It never
+  // confuses the series: "e4000100" is not contained in "e4aetr000100".
   const key = normApproval(typeApproval);
   if (!key) return false;
-  // First pass: substring either direction after stripping separators.
-  // Catches cosmetic differences (e1-181-01 vs e1_181_01) and combined
-  // strings, but NOT long form vs short form — see approvalKeys() above.
-  const bySubstring = listing.some((e) => {
+  return listing.some((e) => {
     const haystack = e.type_approval_number || normApproval(e.raw_type_approval);
     if (!haystack) return false;
     return haystack.includes(key) || key.includes(haystack);
   });
-  if (bySubstring) return true;
-  // Second pass: compare issuing mark + approval number + extension.
-  const own = approvalKeys(typeApproval);
-  if (own.length === 0) return false;
-  return listingKeys.some((keys) => keys.some((k) => own.some((o) => keysMatch(o, k))));
 }
 
 export function computeMarketStatus(
@@ -208,64 +276,87 @@ export function computeMarketStatus(
   const listingKeys = listing.map((e) => approvalKeys(e.raw_type_approval));
 
   for (const [key, members] of groupsByKey) {
-    const dated = members
-      .map((c) => ({ card: c, date: parseDateMs(c.certificate_issued_date) }))
-      .filter((m) => !Number.isNaN(m.date))
-      .sort((a, b) => b.date - a.date);
-    const undated = members.filter((c) => Number.isNaN(parseDateMs(c.certificate_issued_date)));
+    const ranked = members
+      .map((card) => ({ card, gen: generationRank(card.generation), date: rankingDate(card) }))
+      .sort((a, b) => {
+        if (a.gen !== b.gen) return b.gen - a.gen;
+        const aDated = !Number.isNaN(a.date.ms);
+        const bDated = !Number.isNaN(b.date.ms);
+        if (aDated !== bDated) return aDated ? -1 : 1;
+        if (aDated && bDated) return b.date.ms - a.date.ms;
+        return 0;
+      });
 
-    // Flag consecutive dated entries that are suspiciously close together —
-    // more likely a duplicate/data entry error than a genuine same-quarter
-    // handover between approvals.
+    const top = ranked[0];
+    const topDated = top ? !Number.isNaN(top.date.ms) : false;
+
+    // Close-date check, only where it decides who is current: other entries
+    // of the top entry's generation dated within CLOSE_DATE_WARNING_DAYS of
+    // it. Older approvals sitting close to each other (e.g. several parallel
+    // G1 card approvals in 2012) are history, not a conflict, and are not
+    // flagged.
     const closeWarningDays = new Map<string, number>();
-    for (let i = 0; i < dated.length - 1; i++) {
-      const diffDays = Math.round((dated[i].date - dated[i + 1].date) / DAY_MS);
-      if (diffDays <= CLOSE_DATE_WARNING_DAYS) {
-        closeWarningDays.set(dated[i].card.id, diffDays);
-        closeWarningDays.set(dated[i + 1].card.id, diffDays);
+    if (top && topDated) {
+      for (const r of ranked.slice(1)) {
+        if (r.gen !== top.gen || Number.isNaN(r.date.ms)) continue;
+        const diffDays = Math.round(Math.abs(top.date.ms - r.date.ms) / DAY_MS);
+        if (diffDays <= CLOSE_DATE_WARNING_DAYS) {
+          closeWarningDays.set(r.card.id, diffDays);
+          const prev = closeWarningDays.get(top.card.id);
+          closeWarningDays.set(top.card.id, prev === undefined ? diffDays : Math.min(prev, diffDays));
+        }
       }
     }
-
-    dated.forEach((m, index) => {
-      const status: MarketStatus =
-        index === 0
-          ? isListed(String(m.card.type_approval_number ?? ""), listing, listingKeys)
+    ranked.forEach((r, index) => {
+      const dated = !Number.isNaN(r.date.ms);
+      let status: MarketStatus;
+      if (index === 0) {
+        status = !dated
+          ? "unmatched"
+          : isListed(String(r.card.type_approval_number ?? ""), listing, listingKeys)
             ? "current"
-            : "delisted"
-          : "superseded";
-      byId.set(m.card.id, {
-        id: m.card.id,
+            : "delisted";
+      } else if (r.gen < top.gen) {
+        // An older generation than the lane's top entry is superseded whether
+        // or not it carries a date.
+        status = "superseded";
+      } else if (dated && topDated) {
+        status = "superseded";
+      } else {
+        // Same generation as the top entry but no date to compare with (or the
+        // top itself is undated): the order cannot be decided.
+        status = "unmatched";
+      }
+      byId.set(r.card.id, {
+        id: r.card.id,
         status,
         groupKey: key,
         rank: index,
-        groupSize: dated.length,
+        groupSize: ranked.length,
       });
     });
 
-    for (const c of undated) {
-      byId.set(c.id, { id: c.id, status: "unmatched", groupKey: key, rank: -1, groupSize: dated.length });
-    }
-
-    const first = members[0];
-    const orderedMembers = [...dated.map((m) => m.card), ...undated];
     const manufacturers: string[] = [];
-    for (const c of orderedMembers) {
-      const m = manufacturerOf(c);
+    for (const r of ranked) {
+      const m = manufacturerOf(r.card);
       if (m && !manufacturers.includes(m)) manufacturers.push(m);
     }
+    const first = members[0];
     groups.push({
       key,
       country: String(first?.country ?? ""),
       deviceType: String(first?.device_type || "Card"),
       manufacturers,
-      entries: orderedMembers.map((c) => ({
-        id: c.id,
-        manufacturer: manufacturerOf(c),
-        generation: String(c.generation ?? ""),
-        type_approval_number: String(c.type_approval_number ?? ""),
-        certificate_issued_date: String(c.certificate_issued_date ?? ""),
-        status: byId.get(c.id)?.status ?? "unmatched",
-        closeDateWarningDays: closeWarningDays.get(c.id),
+      entries: ranked.map((r) => ({
+        id: r.card.id,
+        manufacturer: manufacturerOf(r.card),
+        generation: String(r.card.generation ?? ""),
+        type_approval_number: String(r.card.type_approval_number ?? ""),
+        certificate_issued_date: String(r.card.certificate_issued_date ?? ""),
+        ranking_date: r.date.text,
+        ranking_date_source: r.date.source,
+        status: byId.get(r.card.id)?.status ?? "unmatched",
+        closeDateWarningDays: closeWarningDays.get(r.card.id),
       })),
     });
   }

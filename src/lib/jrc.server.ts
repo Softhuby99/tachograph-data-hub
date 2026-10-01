@@ -22,6 +22,7 @@ import {
   approvalAuthorityLabel,
 } from "./ta-country";
 import { flagEmoji, normalizeCountry } from "./country-flag";
+import { approvalKeys, keysMatchStrict } from "./market-status";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
@@ -223,12 +224,27 @@ function jrcStatusText(row: JrcRow): string {
 function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   const key = normApproval(row.typeApproval);
   if (!key) return undefined;
-  return cards.find((c) => {
+  // A G1 row must not be swallowed by a G2.x card with the same approval no.
+  const sameGeneration = (c: CardRow) =>
+    !(row.generation && c.generation && row.generation !== c.generation);
+  const bySubstring = cards.find((c) => {
     const haystack = normApproval(c.type_approval_number);
     if (haystack.length === 0 || !haystack.includes(key)) return false;
-    // A G1 row must not be swallowed by a G2.x card with the same approval no.
-    if (row.generation && c.generation && row.generation !== c.generation) return false;
-    return true;
+    return sameGeneration(c);
+  });
+  if (bySubstring) return bySubstring;
+  // Fallback: the same approval written in a different form, e.g. JRC's
+  // "e5-2002-00" vs the stored full legal form "e5*165/2014*980/2023*2002*00".
+  // Without this the Update Monitor proposes such rows as "new" and creates a
+  // duplicate (happened for Iceland on 01.10.2026). Strict match: mark, series
+  // (EU/AETR), number AND extension must agree, so a revision such as
+  // e1-209-03 is never attached to a record stored as e1-209.
+  const rowKeys = approvalKeys(row.typeApproval);
+  if (rowKeys.length === 0) return undefined;
+  return cards.find((c) => {
+    if (!sameGeneration(c)) return false;
+    const cardKeys = approvalKeys(c.type_approval_number);
+    return cardKeys.some((ck) => rowKeys.some((rk) => keysMatchStrict(ck, rk)));
   });
 }
 
