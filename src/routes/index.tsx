@@ -2089,7 +2089,7 @@ function CurrentStatusView({
       {/* Country list for the manufacturer clicked above; clicking a country
           in turn opens the full record, same two-level pattern as Overview. */}
       <Dialog open={!!selectedMfg} onOpenChange={(o) => !o && setSelectedMfg(null)}>
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogContent className={`max-h-[80vh] ${groupBy === "platform" ? "max-w-5xl" : "max-w-2xl"}`}>
           <DialogHeader>
             <DialogTitle>
               {selectedMfg} · {mfgCountries.length} current approval
