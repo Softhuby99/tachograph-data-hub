@@ -1269,6 +1269,7 @@ function HistoryCard({ cardId }: { cardId: string }) {
 
 type Drill =
   | { kind: "generation"; value: string }
+  | { kind: "activeGeneration"; value: string }
   | { kind: "manufacturer"; value: string }
   | { kind: "certificate"; value: string }
   | { kind: "device"; value: string }
@@ -1297,6 +1298,39 @@ function AnalyticsView({
   }, [cards]);
   const gens = ["G1", "G2.1", "G2.2"].filter((g) => genCounts[g]);
   const genMax = Math.max(1, ...Object.values(genCounts));
+
+  // Countries per generation counts only what is in force today (v2.43): per
+  // country the top-ranked CARD approval of its lane (computeMarketStatus —
+  // generation first, then approval date), and only while JRC still lists it
+  // (status "current"). A country that moved from G1 to G2.2 counts once,
+  // under G2.2; superseded, delisted and unmatched approvals are left out.
+  // Vehicle units / motion sensors are not counted: they carry no card
+  // generation and would count a country twice.
+  const activeGen = useMemo(() => {
+    const ids: Record<string, Set<string>> = {};
+    const countries: Record<string, Set<string>> = {};
+    const notActive: string[] = [];
+    for (const g of marketStatus.groups) {
+      if (g.deviceType !== "Card") continue;
+      // Rows without a country cannot be a country (open data issue).
+      if (!String(g.country ?? "").trim()) continue;
+      const top = g.entries[0];
+      if (!top) continue;
+      if (top.status !== "current") {
+        notActive.push(g.country || "—");
+        continue;
+      }
+      const gen = top.generation || "—";
+      (ids[gen] ??= new Set()).add(top.id);
+      (countries[gen] ??= new Set()).add(g.country);
+    }
+    const counts: Record<string, number> = {};
+    for (const [gen, set] of Object.entries(countries)) counts[gen] = set.size;
+    const totalCountries = Object.values(counts).reduce((a, b) => a + b, 0);
+    return { ids, counts, total: totalCountries, notActive: notActive.sort() };
+  }, [marketStatus]);
+  const activeGens = ["G1", "G2.1", "G2.2"].filter((g) => activeGen.counts[g]);
+  const activeMax = Math.max(1, ...activeGens.map((g) => activeGen.counts[g]));
 
   const mfgList = useMemo(() => {
     const map: Record<string, { approvals: number; countries: Set<string> }> = {};
@@ -1377,13 +1411,17 @@ function AnalyticsView({
     ? ""
     : drill.kind === "generation"
       ? `Generation ${drill.value}`
+      : drill.kind === "activeGeneration"
+        ? `Generation ${drill.value} — active card approval per country`
       : drill.kind === "expiry"
         ? EXPIRY_LABELS[drill.value as ExpiryState]
         : drill.value;
   const drillRows = useMemo(() => {
     if (!drill) return [];
     const source =
-      drill.kind === "generation"
+      drill.kind === "activeGeneration"
+        ? cards.filter((c) => activeGen.ids[drill.value]?.has(c.id))
+        : drill.kind === "generation"
         ? cards.filter((c) => c.generation === drill.value)
         : drill.kind === "manufacturer"
           ? cards.filter(
@@ -1399,7 +1437,7 @@ function AnalyticsView({
         a.country.localeCompare(b.country) ||
         String(a.type_approval_number).localeCompare(String(b.type_approval_number)),
     );
-  }, [cards, drill]);
+  }, [cards, drill, activeGen]);
   const closeDrill = () => {
     setDrill(null);
     setDrillCard(null);
@@ -1449,26 +1487,39 @@ function AnalyticsView({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Countries per Generation</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Active card approval per country only (newest in its lane, still listed on JRC)
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
-            {gens.map((g) => (
+            {activeGens.map((g) => (
               <button
                 key={g}
-                onClick={() => toggleDrill({ kind: "generation", value: g })}
+                onClick={() => toggleDrill({ kind: "activeGeneration", value: g })}
                 className="grid w-full grid-cols-[60px_1fr_90px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
               >
                 <span className="font-semibold">{g}</span>
                 <div className="h-5 overflow-hidden rounded bg-muted">
                   <div
                     className="h-full bg-primary transition-all"
-                    style={{ width: `${(genCounts[g] / genMax) * 100}%` }}
+                    style={{ width: `${(activeGen.counts[g] / activeMax) * 100}%` }}
                   />
                 </div>
                 <span className="text-right text-xs text-muted-foreground tabular-nums">
-                  {genCounts[g]} ({((genCounts[g] / total) * 100).toFixed(1)}%)
+                  {activeGen.counts[g]} (
+                  {((activeGen.counts[g] / (activeGen.total || 1)) * 100).toFixed(1)}%)
                 </span>
               </button>
             ))}
+            {activeGen.notActive.length > 0 && (
+              <p
+                className="pt-1 text-xs text-muted-foreground"
+                title={activeGen.notActive.join(", ")}
+              >
+                Not counted (newest approval delisted or not matched):{" "}
+                {activeGen.notActive.join(", ")}
+              </p>
+            )}
           </CardContent>
         </Card>
 
