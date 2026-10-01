@@ -1,4 +1,25 @@
-// Market status: works out, for every card/vehicle-unit/motion-sensor record,
+import pathlib, sys
+
+# ---------------------------------------------------------------------------
+# 1) market-status.ts: lane = (country, device type) only — manufacturer is no
+#    longer part of the grouping key, so a country can hold only one "current"
+#    type approval per device type regardless of who holds it. Also adds a
+#    close-dates data-quality flag (two entries in the same lane whose dates
+#    are within ~3 months of each other are probably a data entry error).
+# ---------------------------------------------------------------------------
+
+ms_path = pathlib.Path("src/lib/market-status.ts")
+ms = ms_path.read_text()
+
+if "parseLooseDate" not in ms:
+    print("FAIL [market-status.ts]: doesn't look like the 2.36 date-parsing fix is applied yet "
+          "(no 'parseLooseDate' found) — apply that patch first.")
+    sys.exit(1)
+
+if "CLOSE_DATE_WARNING_DAYS" in ms:
+    print("SKIP [market-status.ts]: already patched (found CLOSE_DATE_WARNING_DAYS) — leaving it as is.")
+else:
+    NEW_MARKET_STATUS = '''// Market status: works out, for every card/vehicle-unit/motion-sensor record,
 // whether its type approval is the current one in its lane, has been
 // superseded by a newer approval, or has disappeared from JRC entirely.
 //
@@ -226,3 +247,159 @@ export const MARKET_STATUS_BADGE_CLASS: Record<MarketStatus, string> = {
   delisted: "border-destructive text-destructive",
   unmatched: "border-amber-500 text-amber-600",
 };
+'''
+    ms_path.write_text(NEW_MARKET_STATUS)
+    print("OK [market-status.ts]: rewritten with country+device-type lanes + close-date warning")
+
+# ---------------------------------------------------------------------------
+# 2) index.tsx: update the three spots that assumed one manufacturer per lane.
+# ---------------------------------------------------------------------------
+
+idx_path = pathlib.Path("src/routes/index.tsx")
+idx = idx_path.read_text()
+
+def apply(old, new, label):
+    global idx
+    n = idx.count(old)
+    if n != 1:
+        print(f"FAIL [{label}]: found {n} occurrences (need exactly 1)")
+        sys.exit(1)
+    idx = idx.replace(old, new, 1)
+    print(f"OK [{label}]")
+
+apply(
+'''            One type approval per country/manufacturer/product-group lane — the most recently
+            issued one, still listed on JRC today. {current.length} of {scoped.length} record
+            {scoped.length === 1 ? "" : "s"} in scope count as current. Click a row to list its
+            countries.
+          </p>''',
+'''            One type approval per country/product-group lane — the most recently issued one,
+            still listed on JRC today, whichever manufacturer holds it. {current.length} of{" "}
+            {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
+            Click a row to list its countries.
+          </p>''',
+    "1-hint-text",
+)
+
+apply(
+'''  const chains = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return groups
+      .filter((g) => g.entries.length > 1)
+      .filter((g) => deviceType === "all" || (g.deviceType || "Card") === deviceType)
+      .filter(
+        (g) =>
+          !q || g.country.toLowerCase().includes(q) || g.manufacturer.toLowerCase().includes(q),
+      )
+      .sort((a, b) => a.country.localeCompare(b.country) || a.manufacturer.localeCompare(b.manufacturer));
+  }, [groups, deviceType, search]);''',
+'''  const chains = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return groups
+      .filter((g) => g.entries.length > 1)
+      .filter((g) => deviceType === "all" || (g.deviceType || "Card") === deviceType)
+      .filter(
+        (g) =>
+          !q ||
+          g.country.toLowerCase().includes(q) ||
+          g.manufacturers.some((m) => m.toLowerCase().includes(q)),
+      )
+      .sort((a, b) => a.country.localeCompare(b.country) || a.deviceType.localeCompare(b.deviceType));
+  }, [groups, deviceType, search]);''',
+    "2-chains-memo",
+)
+
+apply(
+'''            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {g.country || "—"} · {g.manufacturer || "—"}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {g.deviceType}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ol className="space-y-2 border-l pl-4">
+                {g.entries.map((e) => (
+                  <li
+                    key={e.id}
+                    className="relative cursor-pointer rounded-r px-1 py-0.5 -ml-1 hover:bg-accent/60"
+                    onClick={() => cardById.get(e.id) && setDetailCard(cardById.get(e.id)!)}
+                    title="Click for full details"
+                  >
+                    <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{e.type_approval_number || "—"}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {e.generation || "—"}
+                      </Badge>
+                      <Badge variant="outline" className={`text-xs ${MARKET_STATUS_BADGE_CLASS[e.status]}`}>
+                        {MARKET_STATUS_LABEL[e.status]}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {e.certificate_issued_date || "no issue date on file"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>''',
+'''            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {g.country || "—"}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {g.deviceType}
+                </span>
+              </CardTitle>
+              {g.manufacturers.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {g.manufacturers.length > 1 ? "Manufacturers: " : "Manufacturer: "}
+                  {g.manufacturers.join(", ")}
+                </p>
+              )}
+            </CardHeader>
+            <CardContent>
+              <ol className="space-y-2 border-l pl-4">
+                {g.entries.map((e) => (
+                  <li
+                    key={e.id}
+                    className="relative cursor-pointer rounded-r px-1 py-0.5 -ml-1 hover:bg-accent/60"
+                    onClick={() => cardById.get(e.id) && setDetailCard(cardById.get(e.id)!)}
+                    title="Click for full details"
+                  >
+                    <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{e.type_approval_number || "—"}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {e.generation || "—"}
+                      </Badge>
+                      {e.manufacturer && (
+                        <Badge variant="outline" className="text-xs">
+                          {e.manufacturer}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className={`text-xs ${MARKET_STATUS_BADGE_CLASS[e.status]}`}>
+                        {MARKET_STATUS_LABEL[e.status]}
+                      </Badge>
+                      {e.closeDateWarningDays !== undefined && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-500 text-amber-600"
+                          title={`Only ${e.closeDateWarningDays} day${e.closeDateWarningDays === 1 ? "" : "s"} from the neighbouring entry in this lane — worth a manual check for a data entry error.`}
+                        >
+                          <AlertTriangle className="mr-1 h-3 w-3" /> Check dates
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {e.certificate_issued_date || "no issue date on file"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>''',
+    "3-history-card-and-entries",
+)
+
+idx_path.write_text(idx)
+print("ALL PATCHES APPLIED OK")

@@ -1928,10 +1928,10 @@ function CurrentStatusView({
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
-            One type approval per country/manufacturer/product-group lane — the most recently
-            issued one, still listed on JRC today. {current.length} of {scoped.length} record
-            {scoped.length === 1 ? "" : "s"} in scope count as current. Click a row to list its
-            countries.
+            One type approval per country/product-group lane — the most recently issued one,
+            still listed on JRC today, whichever manufacturer holds it. {current.length} of{" "}
+            {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
+            Click a row to list its countries.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -2119,9 +2119,11 @@ function MarketHistoryView({ groups, cards }: { groups: MarketGroup[]; cards: Ta
       .filter((g) => deviceType === "all" || (g.deviceType || "Card") === deviceType)
       .filter(
         (g) =>
-          !q || g.country.toLowerCase().includes(q) || g.manufacturer.toLowerCase().includes(q),
+          !q ||
+          g.country.toLowerCase().includes(q) ||
+          g.manufacturers.some((m) => m.toLowerCase().includes(q)),
       )
-      .sort((a, b) => a.country.localeCompare(b.country) || a.manufacturer.localeCompare(b.manufacturer));
+      .sort((a, b) => a.country.localeCompare(b.country) || a.deviceType.localeCompare(b.deviceType));
   }, [groups, deviceType, search]);
 
   return (
@@ -2165,11 +2167,17 @@ function MarketHistoryView({ groups, cards }: { groups: MarketGroup[]; cards: Ta
           <Card key={g.key}>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
-                {g.country || "—"} · {g.manufacturer || "—"}
+                {g.country || "—"}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   {g.deviceType}
                 </span>
               </CardTitle>
+              {g.manufacturers.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {g.manufacturers.length > 1 ? "Manufacturers: " : "Manufacturer: "}
+                  {g.manufacturers.join(", ")}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               <ol className="space-y-2 border-l pl-4">
@@ -2186,9 +2194,23 @@ function MarketHistoryView({ groups, cards }: { groups: MarketGroup[]; cards: Ta
                       <Badge variant="secondary" className="text-xs">
                         {e.generation || "—"}
                       </Badge>
+                      {e.manufacturer && (
+                        <Badge variant="outline" className="text-xs">
+                          {e.manufacturer}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className={`text-xs ${MARKET_STATUS_BADGE_CLASS[e.status]}`}>
                         {MARKET_STATUS_LABEL[e.status]}
                       </Badge>
+                      {e.closeDateWarningDays !== undefined && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-500 text-amber-600"
+                          title={`Only ${e.closeDateWarningDays} day${e.closeDateWarningDays === 1 ? "" : "s"} from the neighbouring entry in this lane — worth a manual check for a data entry error.`}
+                        >
+                          <AlertTriangle className="mr-1 h-3 w-3" /> Check dates
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {e.certificate_issued_date || "no issue date on file"}
                       </span>
