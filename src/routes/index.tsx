@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -568,6 +575,62 @@ function DataView({
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // v2.46: the list / detail split is draggable. Dragging the divider widens
+  // the list; the detail pane keeps (at least) the width it has in the default
+  // layout and moves right — the row scrolls horizontally instead of the
+  // detail pane being squeezed. Width is remembered per browser.
+  const DEFAULT_LIST_W = 360;
+  const SPLITTER_W = 24;
+  const [listWidth, setListWidth] = useState<number>(DEFAULT_LIST_W);
+  // Read after mount (not in the initializer) so server and client render the
+  // same markup first.
+  useEffect(() => {
+    try {
+      const v = Number(window.localStorage.getItem("tdh.dataListWidth"));
+      if (v >= 260 && v <= 1600) setListWidth(v);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const [detailMinWidth, setDetailMinWidth] = useState<number | null>(null);
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const splitDrag = useRef<{ x: number; w: number } | null>(null);
+  // Width the detail pane has with the default list width; it never gets
+  // narrower than that (re-measured when the window is resized).
+  useEffect(() => {
+    const measure = () => {
+      const el = splitRef.current;
+      if (el) setDetailMinWidth(Math.max(480, el.clientWidth - DEFAULT_LIST_W - SPLITTER_W));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const saveListWidth = (w: number) => {
+    try {
+      window.localStorage.setItem("tdh.dataListWidth", String(Math.round(w)));
+    } catch {
+      /* storage unavailable — width just isn't remembered */
+    }
+  };
+  const startSplitDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    splitDrag.current = { x: e.clientX, w: listWidth };
+    document.body.style.userSelect = "none";
+  };
+  const moveSplitDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = splitDrag.current;
+    if (!d) return;
+    setListWidth(Math.min(1600, Math.max(260, d.w + e.clientX - d.x)));
+  };
+  const endSplitDrag = () => {
+    if (!splitDrag.current) return;
+    splitDrag.current = null;
+    document.body.style.userSelect = "";
+    saveListWidth(listWidth);
+  };
+
   const countries = useMemo(() => uniq(cards.map((c) => c.country)), [cards]);
   const generations = useMemo(() => uniq(cards.map((c) => c.generation)), [cards]);
   // Empty on older records: everything stored before the device type existed is
@@ -699,8 +762,17 @@ function DataView({
         <ManufacturerTimeline manufacturer={manufacturer} cards={filtered} />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <div>
+      <div
+        ref={splitRef}
+        className="flex flex-col gap-6 lg:flex-row lg:gap-0 lg:overflow-x-auto lg:pb-2"
+        style={
+          {
+            "--list-w": `${listWidth}px`,
+            "--detail-min-w": detailMinWidth ? `${detailMinWidth}px` : "0px",
+          } as CSSProperties
+        }
+      >
+        <div className="min-w-0 lg:w-[var(--list-w)] lg:shrink-0">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {filtered.length} result{filtered.length === 1 ? "" : "s"}
@@ -777,7 +849,25 @@ function DataView({
           </ScrollArea>
         </div>
 
-        <div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize the list · double-click to reset"
+          className="group hidden shrink-0 cursor-col-resize touch-none justify-center pt-7 lg:flex"
+          style={{ width: SPLITTER_W }}
+          onPointerDown={startSplitDrag}
+          onPointerMove={moveSplitDrag}
+          onPointerUp={endSplitDrag}
+          onPointerCancel={endSplitDrag}
+          onDoubleClick={() => {
+            setListWidth(DEFAULT_LIST_W);
+            saveListWidth(DEFAULT_LIST_W);
+          }}
+        >
+          <div className="h-[70vh] w-1 rounded-full bg-border transition-colors group-hover:bg-primary/50 group-active:bg-primary" />
+        </div>
+
+        <div className="min-w-0 lg:min-w-[var(--detail-min-w)] lg:flex-1">
           {selected ? (
             <DetailView
               card={selected}
