@@ -12,6 +12,16 @@ import {
   getOverrides,
   getCardChangeHistory,
 } from "@/lib/cards.functions";
+import { getCurrentListing } from "@/lib/market.functions";
+import {
+  computeMarketStatus,
+  MARKET_STATUS_LABEL,
+  MARKET_STATUS_BADGE_CLASS,
+  type CurrentListingEntry,
+  type MarketStatus,
+  type MarketStatusEntry,
+  type MarketGroup,
+} from "@/lib/market-status";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { flagUrl } from "@/lib/country-flag";
@@ -48,6 +58,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Cpu,
+  Layers,
 } from "lucide-react";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
@@ -133,6 +144,18 @@ function useCards() {
     queryFn: async (): Promise<TachoCard[]> => {
       const data = await fetchCards();
       return data as TachoCard[];
+    },
+  });
+}
+
+/** "What's currently listed on JRC" mirror — see jrc_current_listing / migration 0006. */
+function useCurrentListing() {
+  const fetchListing = useServerFn(getCurrentListing);
+  return useQuery({
+    queryKey: ["jrc_current_listing"],
+    queryFn: async (): Promise<CurrentListingEntry[]> => {
+      const rows = await fetchListing();
+      return rows as CurrentListingEntry[];
     },
   });
 }
@@ -253,6 +276,16 @@ function TachographTool() {
   const cards = useMemo(
     () => (rawCards ?? []).map((c) => ({ ...c, ...(overrides[c.id] ?? {}) })) as TachoCard[],
     [rawCards, overrides],
+  );
+
+  const currentListingQuery = useCurrentListing();
+  const currentListing = useMemo(
+    () => currentListingQuery.data ?? [],
+    [currentListingQuery.data],
+  );
+  const marketStatus = useMemo(
+    () => computeMarketStatus(cards, currentListing),
+    [cards, currentListing],
   );
 
   // The Data tab owns the filter controls; it reports the resulting ids here so
@@ -480,10 +513,13 @@ function TachographTool() {
             onSave={saveOverride}
             onReset={resetOverride}
             onFilteredChange={setFilteredIds}
+            marketStatusById={marketStatus.byId}
           />
         )}
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} />}
-        {!isLoading && !error && tab === "analytics" && <AnalyticsView cards={cards} />}
+        {!isLoading && !error && tab === "analytics" && (
+          <AnalyticsView cards={cards} marketStatus={marketStatus} />
+        )}
         {tab === "updates" && <UpdatesView />}
         {!isLoading && !error && tab === "tools" && (
           <ToolsView cards={cards} filteredCards={filteredCards} onImport={handleImport} />
@@ -506,6 +542,7 @@ function DataView({
   onSave,
   onReset,
   onFilteredChange,
+  marketStatusById,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
@@ -515,6 +552,8 @@ function DataView({
   onReset: (id: string) => void;
   /** Reports the current filter upwards so Tools can export exactly this view. */
   onFilteredChange?: (ids: string[]) => void;
+  /** Current / superseded / delisted / unmatched per card id — see market-status.ts. */
+  marketStatusById?: Map<string, MarketStatusEntry>;
 }) {
   const [country, setCountry] = useState("all");
   const [generation, setGeneration] = useState("all");
@@ -667,6 +706,7 @@ function DataView({
                 const active = selected?.id === c.id;
                 const fUrl = flagUrl(c.country, 40);
                 const edited = !!overrides[c.id];
+                const status = marketStatusById?.get(c.id)?.status;
                 return (
                   <button
                     key={c.id}
@@ -705,6 +745,15 @@ function DataView({
                         </span>
                         <span className="flex shrink-0 items-center gap-1">
                           <ExpiryBadge expiry={expiryOf(c.certificate_expiry_date)} compact />
+                          {status && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${MARKET_STATUS_BADGE_CLASS[status]}`}
+                              title="Market status — see the Market Analytics tab"
+                            >
+                              {MARKET_STATUS_LABEL[status]}
+                            </Badge>
+                          )}
                           <Badge variant="secondary">{c.generation}</Badge>
                         </span>
                       </div>
@@ -731,6 +780,7 @@ function DataView({
               editHint={editHint}
               onSave={(patch) => onSave(selected.id, patch)}
               onReset={() => onReset(selected.id)}
+              marketStatus={marketStatusById?.get(selected.id)?.status}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Select a country on the left.</p>
@@ -897,6 +947,7 @@ function DetailView({
   editHint,
   onSave,
   onReset,
+  marketStatus,
 }: {
   card: TachoCard;
   edited: boolean;
@@ -904,6 +955,7 @@ function DetailView({
   editHint: string;
   onSave: (patch: Partial<TachoCard>) => void;
   onReset: () => void;
+  marketStatus?: MarketStatus;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -957,6 +1009,15 @@ function DetailView({
             <Badge>{card.generation || "—"}</Badge>
             {card.tachograph_application_os && (
               <Badge variant="outline">{card.tachograph_application_os}</Badge>
+            )}
+            {marketStatus && (
+              <Badge
+                variant="outline"
+                className={MARKET_STATUS_BADGE_CLASS[marketStatus]}
+                title="Market status — see the Market Analytics tab"
+              >
+                {MARKET_STATUS_LABEL[marketStatus]}
+              </Badge>
             )}
           </div>
         </div>
@@ -1212,11 +1273,18 @@ type Drill =
   | { kind: "device"; value: string }
   | { kind: "expiry"; value: ExpiryState };
 
-function AnalyticsView({ cards }: { cards: TachoCard[] }) {
+function AnalyticsView({
+  cards,
+  marketStatus,
+}: {
+  cards: TachoCard[];
+  marketStatus: { byId: Map<string, MarketStatusEntry>; groups: MarketGroup[] };
+}) {
   // One selection for every drill-down, so the same window serves generations,
   // manufacturers, security certificates and the validity buckets.
   const [drill, setDrill] = useState<Drill | null>(null);
   const [drillCard, setDrillCard] = useState<TachoCard | null>(null);
+  const [subTab, setSubTab] = useState<"overview" | "current" | "history">("overview");
   const total = cards.length;
 
   const genCounts = useMemo(() => {
@@ -1347,6 +1415,35 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
         </p>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant={subTab === "overview" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSubTab("overview")}
+        >
+          <BarChart3 className="mr-2 h-4 w-4" /> Overview
+        </Button>
+        <Button
+          variant={subTab === "current" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSubTab("current")}
+        >
+          <Layers className="mr-2 h-4 w-4" /> Current Status
+        </Button>
+        <Button
+          variant={subTab === "history" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSubTab("history")}
+        >
+          <History className="mr-2 h-4 w-4" /> History
+        </Button>
+      </div>
+
+      {subTab === "current" && <CurrentStatusView cards={cards} marketStatus={marketStatus} />}
+      {subTab === "history" && <MarketHistoryView groups={marketStatus.groups} />}
+
+      {subTab === "overview" && (
+      <>
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
@@ -1595,6 +1692,8 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
       </Card>
 
       <LabsCard cards={cards} />
+      </>
+      )}
 
       {/* Drill-down window — same style as the country window in the map view */}
       <Dialog open={!!drill} onOpenChange={(o) => !o && closeDrill()}>
@@ -1721,6 +1820,290 @@ function AnalyticsView({ cards }: { cards: TachoCard[] }) {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Market share of manufacturers holding the *current* type approval per
+ * country/device-type lane — i.e. only status === "current" counts. A cert
+ * that is our most-recent record for its lane but has disappeared from JRC
+ * ("delisted") is surfaced separately rather than folded into the total,
+ * since it is no longer a live market position.
+ */
+function CurrentStatusView({
+  cards,
+  marketStatus,
+}: {
+  cards: TachoCard[];
+  marketStatus: { byId: Map<string, MarketStatusEntry>; groups: MarketGroup[] };
+}) {
+  const [deviceType, setDeviceType] = useState("all");
+
+  const byId = marketStatus.byId;
+  const deviceTypes = useMemo(
+    () => uniq([...DEVICE_TYPES, ...cards.map((c) => c.device_type || "Card")]),
+    [cards],
+  );
+
+  const scoped = useMemo(
+    () => cards.filter((c) => deviceType === "all" || (c.device_type || "Card") === deviceType),
+    [cards, deviceType],
+  );
+
+  const current = useMemo(
+    () => scoped.filter((c) => byId.get(c.id)?.status === "current"),
+    [scoped, byId],
+  );
+  const delisted = useMemo(
+    () => scoped.filter((c) => byId.get(c.id)?.status === "delisted"),
+    [scoped, byId],
+  );
+
+  const shareList = useMemo(() => {
+    const map: Record<string, { holders: number; countries: Set<string> }> = {};
+    for (const c of current) {
+      const m = c.current_manufacturer_normalized || c.current_manufacturer || "—";
+      if (!map[m]) map[m] = { holders: 0, countries: new Set() };
+      map[m].holders++;
+      map[m].countries.add(c.country);
+    }
+    const total = current.length || 1;
+    return Object.entries(map)
+      .map(([name, v]) => ({
+        name,
+        holders: v.holders,
+        countries: v.countries.size,
+        share: (v.holders / total) * 100,
+      }))
+      .sort((a, b) => b.holders - a.holders || b.countries - a.countries);
+  }, [current]);
+  const shareMax = shareList[0]?.holders || 1;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Product group
+            </label>
+            <Select value={deviceType} onValueChange={setDeviceType}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All product groups</SelectItem>
+                {deviceTypes.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Current market share {deviceType !== "all" ? `— ${deviceType}` : ""}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            One type approval per country/manufacturer/product-group lane — the most recently
+            issued one, still listed on JRC today. {current.length} of {scoped.length} record
+            {scoped.length === 1 ? "" : "s"} in scope count as current.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Manufacturer</th>
+                  <th className="py-2 pr-3 text-right font-medium">Current approvals</th>
+                  <th className="py-2 pr-3 text-right font-medium">Countries</th>
+                  <th className="py-2 pr-3 text-right font-medium">Market share</th>
+                  <th className="hidden py-2 pr-3 font-medium lg:table-cell"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shareList.map((m) => (
+                  <tr key={m.name} className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-medium">{m.name}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{m.holders}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
+                    <td className="hidden py-2 pr-3 lg:table-cell">
+                      <div className="h-3 overflow-hidden rounded bg-muted">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+                          style={{ width: `${(m.holders / shareMax) * 100}%` }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {shareList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                      No current entries in scope.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {delisted.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Delisted — no longer shown on JRC
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Our most recent record for this lane, but its type approval is not currently listed
+              on either JRC page. Worth a manual check — JRC may have removed it, or the stored
+              type approval number may no longer match its JRC spelling.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Country</th>
+                    <th className="py-2 pr-3 font-medium">Manufacturer</th>
+                    <th className="py-2 pr-3 font-medium">Product group</th>
+                    <th className="py-2 pr-3 font-medium">Type approval</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {delisted.map((c) => (
+                    <tr key={c.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3">{c.country || "—"}</td>
+                      <td className="py-2 pr-3">
+                        {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
+                      </td>
+                      <td className="py-2 pr-3">{c.device_type || "Card"}</td>
+                      <td className="py-2 pr-3 font-medium">{c.type_approval_number || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Succession chains: every (country, manufacturer, product group) lane with
+ * more than one type approval, newest first, each tagged with its status.
+ * This is the "complete history" view for market status — the Data tab
+ * already lists every record flatly, so this one only earns its place by
+ * showing the *lineage* a flat list can't.
+ */
+function MarketHistoryView({ groups }: { groups: MarketGroup[] }) {
+  const [deviceType, setDeviceType] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const deviceTypes = useMemo(() => uniq(groups.map((g) => g.deviceType || "Card")), [groups]);
+
+  const chains = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return groups
+      .filter((g) => g.entries.length > 1)
+      .filter((g) => deviceType === "all" || (g.deviceType || "Card") === deviceType)
+      .filter(
+        (g) =>
+          !q || g.country.toLowerCase().includes(q) || g.manufacturer.toLowerCase().includes(q),
+      )
+      .sort((a, b) => a.country.localeCompare(b.country) || a.manufacturer.localeCompare(b.manufacturer));
+  }, [groups, deviceType, search]);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Search country / manufacturer
+            </label>
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. Ukraine" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Product group
+            </label>
+            <Select value={deviceType} onValueChange={setDeviceType}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All product groups</SelectItem>
+                {deviceTypes.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="text-sm text-muted-foreground">
+        {chains.length} lane{chains.length === 1 ? "" : "s"} with more than one type approval on
+        record.
+      </p>
+
+      <div className="space-y-4">
+        {chains.map((g) => (
+          <Card key={g.key}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {g.country || "—"} · {g.manufacturer || "—"}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {g.deviceType}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ol className="space-y-2 border-l pl-4">
+                {g.entries.map((e) => (
+                  <li key={e.id} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{e.type_approval_number || "—"}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {e.generation || "—"}
+                      </Badge>
+                      <Badge variant="outline" className={`text-xs ${MARKET_STATUS_BADGE_CLASS[e.status]}`}>
+                        {MARKET_STATUS_LABEL[e.status]}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {e.certificate_issued_date || "no issue date on file"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        ))}
+        {chains.length === 0 && (
+          <p className="px-1 py-8 text-center text-sm text-muted-foreground">
+            No multi-entry lanes match this filter.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -758,3 +758,121 @@ export async function getCronConfig(): Promise<{ token: string | null } | null> 
   if (error) throw new Error(error.message);
   return (data as { token: string | null }) ?? null;
 }
+
+// ------------------------------------------------------- jrc current listing
+
+/**
+ * One row per type approval currently shown on a JRC source page, as parsed
+ * on the last successful check run. Replaced wholesale per source_type (see
+ * replaceCurrentListing) — a reader never sees a half-written listing.
+ */
+export type CurrentListingRow = {
+  source_type: string;
+  type_approval_number: string;
+  raw_type_approval: string;
+  manufacturer: string;
+  card_name: string;
+  certificate: string;
+  jrc_date: string;
+  eov: string;
+  generation: string;
+  device_type: string;
+};
+
+export async function getCurrentListing(): Promise<
+  (CurrentListingRow & { updated_at: string })[]
+> {
+  if (isLocalDb()) {
+    const { rows } = await pool().query(
+      `SELECT source_type, type_approval_number, raw_type_approval, manufacturer, card_name,
+              certificate, jrc_date, eov, generation, device_type, updated_at
+         FROM public.jrc_current_listing`,
+    );
+    return rows.map((row) => ({
+      ...(row as CurrentListingRow),
+      updated_at:
+        row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    }));
+  }
+  const admin = await supabaseAdmin();
+  const out: (CurrentListingRow & { updated_at: string })[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin
+      .from("jrc_current_listing")
+      .select(
+        "source_type, type_approval_number, raw_type_approval, manufacturer, card_name, certificate, jrc_date, eov, generation, device_type, updated_at",
+      )
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...((data ?? []) as unknown as (CurrentListingRow & { updated_at: string })[]));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * Replaces the entire listing for one source_type in one go — this is a
+ * mirror of "what JRC shows right now" for that page, not an accumulating
+ * log, so a row that has disappeared from JRC must disappear here too.
+ * Local Postgres does the delete+insert inside one transaction so a reader
+ * never observes the table between the two; the Supabase backend does them
+ * sequentially, same as the rest of this module's snapshot writers.
+ */
+export async function replaceCurrentListing(
+  sourceType: string,
+  rows: CurrentListingRow[],
+): Promise<void> {
+  if (isLocalDb()) {
+    const client = await pool().connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM public.jrc_current_listing WHERE source_type = $1", [
+        sourceType,
+      ]);
+      const columns: Array<[string, (r: CurrentListingRow) => unknown]> = [
+        ["source_type", (r) => r.source_type],
+        ["type_approval_number", (r) => r.type_approval_number],
+        ["raw_type_approval", (r) => r.raw_type_approval],
+        ["manufacturer", (r) => r.manufacturer],
+        ["card_name", (r) => r.card_name],
+        ["certificate", (r) => r.certificate],
+        ["jrc_date", (r) => r.jrc_date],
+        ["eov", (r) => r.eov],
+        ["generation", (r) => r.generation],
+        ["device_type", (r) => r.device_type],
+      ];
+      const width = columns.length;
+      // Chunked: a single very large insert can be silently truncated by the
+      // driver/network layer, same reasoning as upsertSnapshots above.
+      for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const valuesSql = chunk
+          .map((_, row) => `(${columns.map((_, c) => `$${row * width + c + 1}`).join(",")})`)
+          .join(",");
+        const values = chunk.flatMap((r) => columns.map(([, read]) => read(r)));
+        await client.query(
+          `INSERT INTO public.jrc_current_listing (${columns.map(([c]) => `"${c}"`).join(",")})
+           VALUES ${valuesSql}`,
+          values,
+        );
+      }
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+    return;
+  }
+  const admin = await supabaseAdmin();
+  const del = await admin.from("jrc_current_listing").delete().eq("source_type", sourceType);
+  if (del.error) throw new Error(del.error.message);
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200);
+    if (chunk.length === 0) continue;
+    const { error } = await admin.from("jrc_current_listing").insert(chunk as never);
+    if (error) throw new Error(error.message);
+  }
+}

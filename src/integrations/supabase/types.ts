@@ -118,6 +118,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      jrc_current_listing: {
+        Row: {
+          card_name: string;
+          certificate: string;
+          device_type: string;
+          eov: string;
+          generation: string;
+          id: string;
+          jrc_date: string;
+          manufacturer: string;
+          raw_type_approval: string;
+          source_type: string;
+          type_approval_number: string;
+          updated_at: string;
+        };
+        Insert: {
+          card_name?: string;
+          certificate?: string;
+          device_type?: string;
+          eov?: string;
+          generation?: string;
+          id?: string;
+          jrc_date?: string;
+          manufacturer?: string;
+          raw_type_approval?: string;
+          source_type: string;
+          type_approval_number: string;
+          updated_at?: string;
+        };
+        Update: {
+          card_name?: string;
+          certificate?: string;
+          device_type?: string;
+          eov?: string;
+          generation?: string;
+          id?: string;
+          jrc_date?: string;
+          manufacturer?: string;
+          raw_type_approval?: string;
+          source_type?: string;
+          type_approval_number?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       jrc_source_snapshots: {
         Row: {
           created_at: string;

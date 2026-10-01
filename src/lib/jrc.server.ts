@@ -12,6 +12,7 @@ import {
   parseOtherCertificates,
   parsePublicKeyCertificates,
   parseSecurityUpdates,
+  type OtherCertRow,
   type SourceKey,
 } from "./jrc-sources.server";
 import {
@@ -37,7 +38,9 @@ import {
   insertCard,
   insertFieldHistory,
   updateProposalStatus,
+  replaceCurrentListing,
   type ProposalRow,
+  type CurrentListingRow,
 } from "./db.server";
 
 export { JRC_SOURCES } from "./jrc-sources.server";
@@ -89,10 +92,19 @@ export async function fetchJrcRows(): Promise<JrcRow[]> {
   return parseJrcCardStatus(await fetchPage(JRC_CARD_STATUS_URL));
 }
 
-/** "Other certificates" page, reduced to its Card rows. */
-export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
-  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
-  return rows
+/** Fetches + parses the "Other certificates" page once, raw (every component). */
+export async function fetchOtherCertificateRows(): Promise<OtherCertRow[]> {
+  return parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
+}
+
+/**
+ * "Other certificates" page, reduced to its Card rows. Pass `rows` (from
+ * fetchOtherCertificateRows) when the caller already fetched the page, so the
+ * same run doesn't hit JRC twice for the same data.
+ */
+export async function fetchOtherCertificateCardRows(rows?: OtherCertRow[]): Promise<JrcRow[]> {
+  const parsed = rows ?? (await fetchOtherCertificateRows());
+  return parsed
     .filter((r) => r.component.toLowerCase() === "card")
     .map((r) => ({
       manufacturer: r.manufacturer,
@@ -110,14 +122,14 @@ export async function fetchOtherCertificateCardRows(): Promise<JrcRow[]> {
  * The Annex column colour maps to the generation: Annex 1B = G1,
  * Annex 1C (dark blue) = G2.1, Annex 1C v2 (pink) = G2.2.
  */
-export async function fetchOtherCertificateInfoEntries(): Promise<{
+export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): Promise<{
   entries: SnapshotEntry[];
   rowsParsed: number;
 }> {
-  const rows = parseOtherCertificates(await fetchPage(JRC_SOURCES.other_certificates.url));
-  const others = rows.filter((r) => r.component.toLowerCase() !== "card");
+  const parsed = rows ?? (await fetchOtherCertificateRows());
+  const others = parsed.filter((r) => r.component.toLowerCase() !== "card");
   return {
-    rowsParsed: rows.length,
+    rowsParsed: parsed.length,
     entries: others.map((r) => ({
       key: `${r.component}|${r.manufacturer}|${r.name}|${r.typeApproval}`,
       fingerprint: [r.interopCertificate, r.date, r.mandatoryUpdates, r.generation].join("|"),
@@ -512,6 +524,52 @@ export const UPDATE_SOURCE_ORDER = [
   "ted_procurement",
 ] as const;
 
+// ------------------------------------------------------- current listing rows
+// Maps a freshly-parsed JRC row into the jrc_current_listing shape (see
+// db.server.ts / migration 0006). Stored as-is, one row per JRC entry — not
+// deduplicated by latestPerApproval — so the table stays a faithful mirror of
+// what the page currently shows; callers decide how to interpret duplicates.
+
+function cardRowToListingRow(row: JrcRow): CurrentListingRow {
+  return {
+    source_type: "card_status",
+    type_approval_number: normApproval(row.typeApproval),
+    raw_type_approval: row.typeApproval,
+    manufacturer: row.manufacturer,
+    card_name: row.cardName,
+    certificate: row.certificate,
+    jrc_date: row.date,
+    eov: row.eov,
+    generation: row.generation,
+    device_type: "Card",
+  };
+}
+
+/** Card / Vehicle Unit / Motion Sensor for the app's own device types; the
+ * JRC component label as-is for everything else (DSRC, M1N1, Paper, ...). */
+function otherCertDeviceType(component: string): string {
+  const c = component.trim().toLowerCase();
+  if (c === "card") return "Card";
+  if (c === "vu") return "Vehicle Unit";
+  if (c === "ms") return "Motion Sensor";
+  return component.trim();
+}
+
+function otherCertToListingRow(r: OtherCertRow): CurrentListingRow {
+  return {
+    source_type: "other_certificates",
+    type_approval_number: normApproval(r.typeApproval),
+    raw_type_approval: r.typeApproval,
+    manufacturer: r.manufacturer,
+    card_name: r.name,
+    certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
+    jrc_date: r.date,
+    eov: "",
+    generation: r.generation,
+    device_type: otherCertDeviceType(r.component),
+  };
+}
+
 export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
   const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
@@ -581,8 +639,14 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
 
   try {
     if (source === "card_status" || source === "other_certificates") {
+      // Fetched once and reused below for both the proposal diff and the
+      // jrc_current_listing mirror, so a run of this source only hits JRC once.
+      const otherRawRows =
+        source === "other_certificates" ? await fetchOtherCertificateRows() : undefined;
       const rows =
-        source === "card_status" ? await fetchJrcRows() : await fetchOtherCertificateCardRows();
+        source === "card_status"
+          ? await fetchJrcRows()
+          : await fetchOtherCertificateCardRows(otherRawRows);
       const candidates = buildProposals(rows, cardRows, sinceMs, source);
       let created = await insertProposals(candidates);
       let extraCandidates = 0;
@@ -592,12 +656,18 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       if (source === "other_certificates") {
         // Every non-card entry (VU, MS, DSRC, M1N1, Paper, ...) is tracked as an
         // info proposal, with the Annex generation taken from the legend colour.
-        const { entries, rowsParsed } = await fetchOtherCertificateInfoEntries();
+        const { entries, rowsParsed } = await fetchOtherCertificateInfoEntries(otherRawRows);
         extraRows = rowsParsed;
         const info = await runInfoDiff(entries);
         extraCandidates = info.candidates;
         created += info.created;
         baseline = info.baseline;
+
+        // Persist a full mirror of the page (every component, not just cards)
+        // for Market Analytics — see jrc_current_listing (migration 0006).
+        await replaceCurrentListing("other_certificates", (otherRawRows ?? []).map(otherCertToListingRow));
+      } else {
+        await replaceCurrentListing("card_status", rows.map(cardRowToListingRow));
       }
 
       result = {
