@@ -1526,14 +1526,19 @@ function AnalyticsView({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Market Share by Generation</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Share of the {activeGen.total} countries with an active card approval
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
-            {gens.map((g) => {
-              const pct = (genCounts[g] / total) * 100;
+            {activeGens.map((g) => {
+              // Same basis as "Countries per Generation" (v2.44): active card
+              // approval per country, not the number of records.
+              const pct = (activeGen.counts[g] / (activeGen.total || 1)) * 100;
               return (
                 <button
                   key={g}
-                  onClick={() => toggleDrill({ kind: "generation", value: g })}
+                  onClick={() => toggleDrill({ kind: "activeGeneration", value: g })}
                   className="grid w-full grid-cols-[60px_1fr_60px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
                 >
                   <span className="font-semibold">{g}</span>
