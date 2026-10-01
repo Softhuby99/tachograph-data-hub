@@ -23,8 +23,17 @@ export type CcEntry = {
   assurance: string;
   protectionProfiles: string;
   generation: string; // G1 / G2.1 / G2.2 (comma separated), "" for VU/MS
-  issued: string; // DD.MM.YYYY
+  /** Date of THIS certificate (DD.MM.YYYY). For a surveillance / maintenance
+   * certificate (-S02, -M01) that is the date of that report, taken from the
+   * portal's maintenance list — the portal's own "certified" date always stays
+   * the date of the original certificate (v2.48, ANSSI-CC-2018/11-S02 was shown
+   * with 03.04.2018 instead of 26.05.2021). */
+  issued: string;
+  /** Date of the original certificate (portal "certified"), DD.MM.YYYY. */
+  originalIssued: string;
   expires: string; // DD.MM.YYYY
+  /** Surveillance / maintenance reports listed for the product, oldest first. */
+  reports: Array<{ name: string; date: string }>;
   reportUrl: string;
   status: string; // "valid" | "archived"
 };
@@ -249,6 +258,12 @@ export function generationOf(
   return Array.from(gens).join(", ");
 }
 
+/** DD.MM.YYYY -> YYYYMMDD for sorting. */
+function deDateKey(value: string): string {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
+  return m ? `${m[3]}${m[2]}${m[1]}` : value;
+}
+
 function isoToDe(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
   return m ? `${m[3]}.${m[2]}.${m[1]}` : value.trim();
@@ -300,6 +315,7 @@ const CC_FILES = "https://www.commoncriteriaportal.org/nfs/ccpfiles/files/epfile
 const CC_UA = "Mozilla/5.0 (compatible; TachoCertMonitor/1.0)";
 
 type PortalProduct = {
+  id?: string;
   name?: string;
   pps?: string;
   scheme_name?: string;
@@ -313,6 +329,25 @@ type PortalProduct = {
 };
 
 type PortalPp = { ID?: string; Name?: string; PDF_PP?: string };
+
+/** Entry of the portal's `maintsList`: surveillance / maintenance reports. */
+type PortalMaint = { Product_ID?: string; Name?: string; Date?: string };
+
+/** -S02 / -M01 style suffix: the certificate continues an earlier one. */
+const CONTINUATION_SUFFIX = /-(?:s|m|ma[-_]?)\d{1,2}$/i;
+
+/** Does `have` cite exactly `cert` — not a continuation/renewal of it
+ * (2018/11 is not 2018/11-S02) and not a longer number (2018/1 is not 2018/11)? */
+function citesExactly(have: string, cert: string): boolean {
+  const h = normCert(have);
+  const c = normCert(cert);
+  if (!c) return false;
+  for (let i = h.indexOf(c); i >= 0; i = h.indexOf(c, i + 1)) {
+    const rest = h.slice(i + c.length);
+    if (!/^(?:\d|(?:r|s|m|ma)\d)/.test(rest)) return true;
+  }
+  return false;
+}
 
 /** Read `var <name> = [ ... ]` out of the portal HTML. */
 export function extractJsonArray<T>(html: string, variable: string): T[] {
@@ -436,6 +471,14 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
   const html = await res.text();
   const products = extractJsonArray<PortalProduct>(html, "productList");
   const ppsList = extractJsonArray<PortalPp>(html, "ppsList");
+  const maintsByProduct = new Map<string, Array<{ name: string; date: string }>>();
+  for (const m of extractJsonArray<PortalMaint>(html, "maintsList")) {
+    const pid = String(m.Product_ID ?? "").trim();
+    if (!pid) continue;
+    const list = maintsByProduct.get(pid) ?? [];
+    list.push({ name: decodeEntities(m.Name ?? "").trim(), date: isoToDe(m.Date ?? "") });
+    maintsByProduct.set(pid, list);
+  }
   const ppById = new Map(ppsList.map((p) => [p.ID ?? "", ppNumber(p)]));
   const ppNameById = new Map(ppsList.map((p) => [p.ID ?? "", decodeEntities(p.Name ?? "")]));
 
@@ -503,6 +546,16 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
       const pps = (ppCert.length > 0 ? ppCert : ppPortal).sort();
 
       const deviceType = deviceFromPps(pps, product);
+      const originalIssued = isoToDe(item.certified ?? "");
+      const reports = (maintsByProduct.get(String(item.id ?? "").trim()) ?? [])
+        .slice()
+        .sort((a, b) => deDateKey(a.date).localeCompare(deDateKey(b.date)));
+      // A -S02 / -M01 certificate has its own date: the one of its report.
+      let issued = originalIssued;
+      if (number && CONTINUATION_SUFFIX.test(number)) {
+        const own = reports.find((r) => normCert(r.name).endsWith(normCert(number)));
+        if (own?.date) issued = own.date;
+      }
       out.push({
         certificate: number,
         certificateSource: source,
@@ -516,8 +569,10 @@ async function scrapePortal(pageUrl: string, status: string): Promise<CcEntry[]>
           deviceType === "Card"
             ? generationsOf(pps, product, certText, (item.certified ?? "").trim())
             : "",
-        issued: isoToDe(item.certified ?? ""),
+        issued,
+        originalIssued,
         expires: isoToDe(item.archived ?? ""),
+        reports,
         reportUrl: reportUrl || certUrl,
         status,
       });
@@ -645,7 +700,17 @@ function payloadOf(e: CcEntry): Record<string, string> {
       ? "Country of the certification scheme — not the issuing member state of a card."
       : "No country could be derived from the certificate scheme.",
     "Date Certificate Issued": e.issued,
+    ...(e.originalIssued && e.originalIssued !== e.issued
+      ? { "Original certificate issued": e.originalIssued }
+      : {}),
     "Certificate Validity Expiration Date": e.expires,
+    ...(e.reports.length > 0
+      ? {
+          "Surveillance / maintenance reports": e.reports
+            .map((r) => `${r.name} (${r.date})`)
+            .join("; "),
+        }
+      : {}),
     "Certification report": e.reportUrl,
   };
 }
@@ -672,12 +737,23 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
     if (matches.length > 0) {
       for (const card of matches) {
         const fields: CcProposal["changes"]["fields"] = [];
-        if (e.issued && (card.certificate_issued_date || "").trim() !== e.issued) {
+        // Which certificate does the record cite? Exactly this one (e.g.
+        // ANSSI-CC-2018/11-S02) -> its own date. Only the base number
+        // (ANSSI-CC-2018/11) while the portal lists a -S/-M continuation ->
+        // the date of the ORIGINAL certificate, labelled as such. Only the base
+        // number while the portal entry is a renewal (-R01) -> different
+        // certificate, no date proposal at all.
+        const exact = citesExactly(card.security_certificate || "", e.certificate);
+        const continuation = CONTINUATION_SUFFIX.test(e.certificate);
+        if (!exact && !continuation) continue;
+        const dateCert = exact ? e.certificate : e.certificate.replace(CONTINUATION_SUFFIX, "");
+        const proposedIssued = exact ? e.issued : e.originalIssued;
+        if (proposedIssued && (card.certificate_issued_date || "").trim() !== proposedIssued) {
           fields.push({
             field: "certificate_issued_date",
-            label: "Date Certificate Issued",
+            label: `Date Certificate Issued (${dateCert})`,
             old: card.certificate_issued_date || "",
-            new: e.issued,
+            new: proposedIssued,
           });
         }
         if (e.expires && (card.certificate_expiry_date || "").trim() !== e.expires) {
@@ -689,7 +765,7 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
           });
         }
         if (fields.length === 0) continue;
-        const fp = `${SOURCE}:card:${card.id}:${normCert(e.certificate)}:${e.issued}:${e.expires}`;
+        const fp = `${SOURCE}:card:${card.id}:${normCert(e.certificate)}:${proposedIssued}:${e.expires}`;
         if (seen.has(fp)) continue;
         seen.add(fp);
         out.push({
@@ -701,13 +777,15 @@ export function buildCcProposals(entries: CcEntry[], cards: CcCardRow[]): CcProp
           jrc_manufacturer: e.vendor,
           jrc_card_name: e.product,
           jrc_certificate: e.certificate,
-          jrc_date: e.issued,
+          jrc_date: proposedIssued,
           jrc_eov: e.expires,
           jrc_type_approval: "",
           source_url: e.reportUrl || CC_PORTAL_URL,
           source_type: SOURCE,
           source_label: `${SOURCE_LABEL} · Card`,
-          title: `Card · ${card.country} · ${e.certificate} — certificate dates`,
+          title: exact
+            ? `Card · ${card.country} · ${e.certificate} — certificate dates`
+            : `Card · ${card.country} · ${dateCert} (record cites the original; portal lists ${e.certificate}) — certificate dates`,
           payload: payloadOf(e),
           changes: { fields },
           status: "pending",
