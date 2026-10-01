@@ -15,6 +15,8 @@
 // one is what is current today). Within a group, entries are ranked purely by
 // certificate_issued_date; the most recent is the candidate for "current".
 
+import { parseLooseDate } from "./expiry";
+
 export type MarketStatus = "current" | "superseded" | "delisted" | "unmatched";
 
 export type MarketCard = {
@@ -85,8 +87,13 @@ function groupKeyFor(card: MarketCard): string {
 }
 
 function parseDateMs(value: string | null | undefined): number {
-  const t = Date.parse(String(value ?? ""));
-  return Number.isNaN(t) ? NaN : t;
+  // certificate_issued_date arrives as DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY /
+  // ISO — the same loose formats expiry.ts already parses correctly. The
+  // native Date.parse() silently fails (NaN) on DD.MM.YYYY whenever the day
+  // is >12, and silently swaps day/month when both are <=12 — it must not be
+  // used here.
+  const d = parseLooseDate(value);
+  return d ? d.getTime() : NaN;
 }
 
 /** Is this type approval still listed on JRC right now, on any of the pages? */
