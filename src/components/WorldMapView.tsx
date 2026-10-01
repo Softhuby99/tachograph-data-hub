@@ -456,7 +456,11 @@ export function WorldMapView({
             {/* Legend */}
             <div
               className="pointer-events-none absolute bottom-2 left-2 rounded-md border px-2.5 py-2 text-[11px] leading-5"
-              style={{ background: "rgba(15,23,42,0.88)", borderColor: MAP.border, color: MAP.text }}
+              style={{
+                background: "rgba(15,23,42,0.88)",
+                borderColor: MAP.border,
+                color: MAP.text,
+              }}
             >
               <div className="font-semibold">Active card approval</div>
               {GEN_LEGEND.map(([g, c]) => (

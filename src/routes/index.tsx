@@ -1381,7 +1381,7 @@ function AnalyticsView({
   // manufacturers, security certificates and the validity buckets.
   const [drill, setDrill] = useState<Drill | null>(null);
   const [drillCard, setDrillCard] = useState<TachoCard | null>(null);
-  const [subTab, setSubTab] = useState<"overview" | "current" | "history">("overview");
+  const [subTab, setSubTab] = useState<"overview" | "longterm" | "history">("overview");
   const total = cards.length;
 
   const genCounts = useMemo(() => {
@@ -1558,11 +1558,11 @@ function AnalyticsView({
           <BarChart3 className="mr-2 h-4 w-4" /> Overview
         </Button>
         <Button
-          variant={subTab === "current" ? "default" : "outline"}
+          variant={subTab === "longterm" ? "default" : "outline"}
           size="sm"
-          onClick={() => setSubTab("current")}
+          onClick={() => setSubTab("longterm")}
         >
-          <Layers className="mr-2 h-4 w-4" /> Current Status
+          <Layers className="mr-2 h-4 w-4" /> Long Term History
         </Button>
         <Button
           variant={subTab === "history" ? "default" : "outline"}
@@ -1573,7 +1573,77 @@ function AnalyticsView({
         </Button>
       </div>
 
-      {subTab === "current" && <CurrentStatusView cards={cards} marketStatus={marketStatus} />}
+      {/* v2.47: all type approvals ever recorded per manufacturer (moved here
+          from Overview, which now shows the current market share). */}
+      {subTab === "longterm" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Manufacturers — Type Approvals &amp; Countries
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Click a row to list its type approvals.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Manufacturer</th>
+                    <th className="py-2 pr-3 text-right font-medium">Type Approvals</th>
+                    <th className="py-2 pr-3 text-right font-medium">Countries</th>
+                    <th className="py-2 pr-3 text-right font-medium">Market Share</th>
+                    <th className="hidden py-2 pr-3 font-medium w-56 lg:table-cell"></th>
+                    <th className="py-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mfgList.map((m) => (
+                    // The whole row opens the drill-down. The button alone sat in
+                    // the last column of a six-column table and was scrolled out
+                    // of sight on narrower screens — easy to conclude it is
+                    // missing entirely.
+                    <tr
+                      key={m.name}
+                      onClick={() => toggleDrill({ kind: "manufacturer", value: m.name })}
+                      className="cursor-pointer border-b last:border-0 hover:bg-accent/60"
+                      title="Click to list the type approvals"
+                    >
+                      <td className="py-2 pr-3 font-medium">{m.name}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{m.approvals}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
+                      <td className="hidden py-2 pr-3 lg:table-cell">
+                        <div className="h-3 overflow-hidden rounded bg-muted">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+                            style={{ width: `${(m.approvals / mfgMax) * 100}%` }}
+                          />
+                        </div>
+                      </td>
+                      <td className="py-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleDrill({ kind: "manufacturer", value: m.name });
+                          }}
+                        >
+                          {drill?.kind === "manufacturer" && drill.value === m.name
+                            ? "Hide"
+                            : "Show countries"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {subTab === "history" && <MarketHistoryView groups={marketStatus.groups} cards={cards} />}
 
       {subTab === "overview" && (
@@ -1653,73 +1723,8 @@ function AnalyticsView({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Manufacturers — Type Approvals &amp; Countries
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Click a row to list its type approvals.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Manufacturer</th>
-                  <th className="py-2 pr-3 text-right font-medium">Type Approvals</th>
-                  <th className="py-2 pr-3 text-right font-medium">Countries</th>
-                  <th className="py-2 pr-3 text-right font-medium">Market Share</th>
-                  <th className="hidden py-2 pr-3 font-medium w-56 lg:table-cell"></th>
-                  <th className="py-2 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {mfgList.map((m) => (
-                  // The whole row opens the drill-down. The button alone sat in
-                  // the last column of a six-column table and was scrolled out
-                  // of sight on narrower screens — easy to conclude it is
-                  // missing entirely.
-                  <tr
-                    key={m.name}
-                    onClick={() => toggleDrill({ kind: "manufacturer", value: m.name })}
-                    className="cursor-pointer border-b last:border-0 hover:bg-accent/60"
-                    title="Click to list the type approvals"
-                  >
-                    <td className="py-2 pr-3 font-medium">{m.name}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{m.approvals}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
-                    <td className="hidden py-2 pr-3 lg:table-cell">
-                      <div className="h-3 overflow-hidden rounded bg-muted">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
-                          style={{ width: `${(m.approvals / mfgMax) * 100}%` }}
-                        />
-                      </div>
-                    </td>
-                    <td className="py-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleDrill({ kind: "manufacturer", value: m.name });
-                        }}
-                      >
-                        {drill?.kind === "manufacturer" && drill.value === m.name
-                          ? "Hide"
-                          : "Show countries"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* v2.47: current market share (formerly the Current Status tab) */}
+      <CurrentStatusView cards={cards} marketStatus={marketStatus} />
 
       <Card>
         <CardHeader className="pb-2">
