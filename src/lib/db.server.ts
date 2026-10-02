@@ -504,6 +504,27 @@ export async function getProposal(id: string): Promise<ProposalRow | null> {
  * pending precisely because the earlier decision is in doubt, and the marker
  * still records that it was read.
  */
+/**
+ * v2.50 (code review 11): remember which record an approved record-creating
+ * proposal produced (or was linked to). Approving it again after "Review
+ * again" then finds the record instead of inserting a second copy.
+ */
+export async function setProposalCardId(id: string, cardId: string): Promise<void> {
+  if (isLocalDb()) {
+    await pool().query("UPDATE public.jrc_update_proposals SET card_id = $2 WHERE id = $1", [
+      id,
+      cardId,
+    ]);
+    return;
+  }
+  const admin = await supabaseAdmin();
+  const { error } = await admin
+    .from("jrc_update_proposals")
+    .update({ card_id: cardId } as never)
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function updateProposalStatus(
   id: string,
   status: string,

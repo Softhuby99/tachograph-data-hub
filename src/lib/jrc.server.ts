@@ -40,6 +40,8 @@ import {
   insertFieldHistory,
   updateProposalStatus,
   replaceCurrentListing,
+  getCurrentListing as dbGetCurrentListing,
+  setProposalCardId,
   type ProposalRow,
   type CurrentListingRow,
 } from "./db.server";
@@ -227,24 +229,32 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   // A G1 row must not be swallowed by a G2.x card with the same approval no.
   const sameGeneration = (c: CardRow) =>
     !(row.generation && c.generation && row.generation !== c.generation);
-  const bySubstring = cards.find((c) => {
-    const haystack = normApproval(c.type_approval_number);
-    if (haystack.length === 0 || !haystack.includes(key)) return false;
-    return sameGeneration(c);
-  });
-  if (bySubstring) return bySubstring;
-  // Fallback: the same approval written in a different form, e.g. JRC's
-  // "e5-2002-00" vs the stored full legal form "e5*165/2014*980/2023*2002*00".
-  // Without this the Update Monitor proposes such rows as "new" and creates a
-  // duplicate (happened for Iceland on 01.10.2026). Strict match: mark, series
-  // (EU/AETR), number AND extension must agree, so a revision such as
-  // e1-209-03 is never attached to a record stored as e1-209.
+  // v2.50 (code review 26): structured approval keys decide first. Mark,
+  // series (EU/AETR), number AND extension must agree, so the same approval in
+  // another spelling matches (JRC "e5-2002-00" vs the stored long form
+  // "e5*165/2014*980/2023*2002*00") while a revision never does ("e1-209" is
+  // not "e1-209-03"). The substring test used to run first and attached
+  // revisions to the wrong record.
   const rowKeys = approvalKeys(row.typeApproval);
-  if (rowKeys.length === 0) return undefined;
+  if (rowKeys.length > 0) {
+    const hits = cards.filter((c) => {
+      if (!sameGeneration(c)) return false;
+      const cardKeys = approvalKeys(c.type_approval_number);
+      return cardKeys.some((ck) => rowKeys.some((rk) => keysMatchStrict(ck, rk)));
+    });
+    if (hits.length > 0) {
+      // Several records can carry the same approval (one row per country,
+      // duplicates). Prefer the one stored in exactly this spelling.
+      return hits.find((c) => normApproval(c.type_approval_number) === key) ?? hits[0];
+    }
+  }
+  // Substring only where one side has no parseable approval (free text such
+  // as "Not identified", unusual formats) — never between two parseable ones.
   return cards.find((c) => {
     if (!sameGeneration(c)) return false;
-    const cardKeys = approvalKeys(c.type_approval_number);
-    return cardKeys.some((ck) => rowKeys.some((rk) => keysMatchStrict(ck, rk)));
+    const haystack = normApproval(c.type_approval_number);
+    if (haystack.length === 0 || !haystack.includes(key)) return false;
+    return rowKeys.length === 0 || approvalKeys(c.type_approval_number).length === 0;
   });
 }
 
@@ -586,6 +596,26 @@ function otherCertToListingRow(r: OtherCertRow): CurrentListingRow {
   };
 }
 
+/**
+ * v2.50 (code review 13): a JRC page that parses to nothing (changed layout, a
+ * maintenance page served with HTTP 200) used to replace jrc_current_listing
+ * with an empty list — every approval then showed as Delisted. Such a result
+ * now fails the run for that source and the previous listing stays.
+ */
+async function assertPlausibleListing(sourceType: string, nextCount: number): Promise<void> {
+  const prevCount = (await dbGetCurrentListing()).filter((r) => r.source_type === sourceType).length;
+  if (nextCount === 0) {
+    throw new Error(
+      `${sourceType}: the page parsed to 0 rows — previous listing (${prevCount} rows) kept. Check whether the JRC page layout changed.`,
+    );
+  }
+  if (prevCount >= 20 && nextCount < prevCount * 0.5) {
+    throw new Error(
+      `${sourceType}: only ${nextCount} rows parsed (before: ${prevCount}) — previous listing kept. Check the JRC page.`,
+    );
+  }
+}
+
 export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
   const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
@@ -612,12 +642,20 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     const snapRows = await getSnapshots(source);
     for (const s of snapRows) snapshot.set(s.entry_key, s.fingerprint);
     const baseline = snapshot.size === 0;
+    if (entries.length === 0 && !baseline) {
+      throw new Error(`${source}: the page parsed to 0 entries — snapshot kept. Check the page layout.`);
+    }
 
     let created = 0;
     let candidates = 0;
+    // v2.50 (code review 12): only MAX_INFO_PER_SOURCE changes become proposals
+    // per run. The rest must NOT be written into the snapshot, otherwise they
+    // count as "seen" and are never proposed. They come up again next run.
+    let deferred = new Set<string>();
     if (!baseline) {
       const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
       candidates = changed.length;
+      deferred = new Set(changed.slice(MAX_INFO_PER_SOURCE).map((e) => e.key));
       const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => ({
         fingerprint: `${source}:${e.key}:${e.fingerprint}`,
         kind: "info",
@@ -642,7 +680,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     }
 
     // Chunked: a single very large upsert is silently truncated.
-    const snapRowsToWrite = entries.map((e) => ({
+    const snapRowsToWrite = entries.filter((e) => !deferred.has(e.key)).map((e) => ({
       source_type: source,
       entry_key: e.key,
       fingerprint: e.fingerprint,
@@ -663,6 +701,12 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
         source === "card_status"
           ? await fetchJrcRows()
           : await fetchOtherCertificateCardRows(otherRawRows);
+      // Before anything is written: proposals from a broken parse are as wrong
+      // as an emptied listing.
+      await assertPlausibleListing(
+        source,
+        source === "card_status" ? rows.length : (otherRawRows ?? []).length,
+      );
       const candidates = buildProposals(rows, cardRows, sinceMs, source);
       let created = await insertProposals(candidates);
       let extraCandidates = 0;
@@ -703,7 +747,13 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       const entries = await fetchCcEntries();
       const ccCards = await getCardsForCc();
       const candidates = buildCcProposals(entries, ccCards);
-      const created = await insertProposals(candidates.slice(0, 80) as unknown as ProposalInsert[]);
+      // v2.50 (code review 25): filter known fingerprints first, then cap —
+      // capping first let 80 already-known entries block every new one. Sorted
+      // so the order no longer depends on the parallel portal scraping.
+      const fresh = candidates
+        .filter((c) => !known.has(c.fingerprint))
+        .sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+      const created = await insertProposals(fresh.slice(0, 80) as unknown as ProposalInsert[]);
       result = {
         source,
         label: meta.label,
@@ -801,7 +851,7 @@ export async function approveProposal(id: string, country: string, userId?: stri
   // thing rather than fall into the note path, where it wrote nothing at all.
   const createsRecord = !proposal.card_id && (proposal.kind !== "info" || deviceType !== "Card");
 
-  if (proposal.kind === "info" && !createsRecord) {
+  if (proposal.kind === "info" && !createsRecord && !proposal.card_id) {
     // Informational sources have no direct card column. Applying them records
     // the finding on the verification note of the matching country's cards.
     const payload = proposal.payload ?? {};
@@ -873,7 +923,22 @@ export async function approveProposal(id: string, country: string, userId?: stri
     if (!name && deviceType === "Card") {
       throw new Error("Country is required for a new card entry");
     }
-    await insertCard({
+    // v2.50 (code review 11): a record with this approval for this country may
+    // already exist (an earlier approval of this very proposal, or a manual
+    // entry). Link to it instead of inserting a second copy.
+    const cardsNow = (await dbGetCardsForJrc()) as CardRow[];
+    const existing = proposal.jrc_type_approval
+      ? matchCard(
+          { typeApproval: proposal.jrc_type_approval, generation: proposal.generation } as JrcRow,
+          cardsNow.filter((c) => normalizeCountry(c.country ?? "") === name),
+        )
+      : undefined;
+    if (existing) {
+      await setProposalCardId(id, existing.id);
+      await updateProposalStatus(id, "approved", userId);
+      return { ok: true, linkedExisting: existing.id };
+    }
+    const newId = await insertCard({
       country: name,
       country_flag: flagEmoji(name),
       // Cards, vehicle units and motion sensors share the table; the source
@@ -893,6 +958,7 @@ export async function approveProposal(id: string, country: string, userId?: stri
         .join(" · "),
       jrc_certificate_source: proposal.source_url,
     });
+    if (newId) await setProposalCardId(id, newId);
   }
 
   await updateProposalStatus(id, "approved", userId);
