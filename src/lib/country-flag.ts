@@ -14,6 +14,7 @@
 
 export const COUNTRY_ISO: Record<string, string> = {
   Albania: "al",
+  Andorra: "ad",
   Armenia: "am",
   Austria: "at",
   Azerbaijan: "az",
@@ -85,6 +86,9 @@ const COUNTRY_ALIASES: Record<string, string> = {
   "bosnia & herzegovina": "Bosnia and Herzegovina",
   "bosnia-herzegovina": "Bosnia and Herzegovina",
   "republic of moldova": "Moldova",
+  kirgisistan: "Kyrgyzstan",
+  kirgistan: "Kyrgyzstan",
+  "kyrgyz republic": "Kyrgyzstan",
 };
 
 /**

@@ -94,8 +94,37 @@ export const getEventLog = createServerFn({ method: "POST" })
 
 export const getEventOverview = createServerFn({ method: "POST" }).handler(async () => {
   await requireAdmin("read log overview");
-  return await eventOverview();
+  const [overview, { schedulerStatus }] = await Promise.all([
+    eventOverview(),
+    import("@/lib/scheduler.server"),
+  ]);
+  const scheduler = await schedulerStatus();
+  return {
+    ...overview,
+    scheduler,
+    schedule: {
+      configured: scheduler.available && scheduler.enabled,
+      note: !scheduler.available
+        ? "Scheduler needs the local database — runs only manually or via the cron endpoint."
+        : scheduler.enabled
+          ? `Daily at ${scheduler.time} (${scheduler.timezone}); a run missed by more than 24 h is caught up 10 minutes after a restart.`
+          : "Switched off — runs only when started manually or via the cron endpoint.",
+    },
+  };
 });
+
+/** v2.53: switch the daily run on/off and set its time (Europe/Berlin). */
+export const setSchedule = createServerFn({ method: "POST" })
+  .inputValidator((data: { enabled: boolean; time: string }) => ({
+    enabled: data?.enabled === true,
+    time: String(data?.time ?? "").trim(),
+  }))
+  .handler(async ({ data }) => {
+    await requireAdmin("change schedule");
+    const { setSchedulerConfig, schedulerStatus } = await import("@/lib/scheduler.server");
+    await setSchedulerConfig(data);
+    return await schedulerStatus();
+  });
 
 export const ackEventLog = createServerFn({ method: "POST" })
   .inputValidator((data: { ids: string[]; note?: string }) => ({

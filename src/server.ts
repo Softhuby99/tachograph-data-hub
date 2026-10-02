@@ -20,6 +20,11 @@ function events(): Promise<EventsModule | null> {
 }
 void events().then((m) => m?.emitBootOnce());
 
+// v2.53: daily automatic update run (local PostgreSQL only; no-op otherwise).
+void import("./lib/scheduler.server")
+  .then((m) => m.startScheduler())
+  .catch((e) => console.error("[scheduler] not started", e));
+
 function logServerError(error: unknown, request: Request, swallowed: boolean) {
   void events().then((m) => {
     if (!m) return;

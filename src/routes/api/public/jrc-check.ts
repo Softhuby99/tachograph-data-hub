@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "crypto";
 
-// Scheduled update check. Called by the database cron job (or any external
-// scheduler) with a shared secret; never by the browser.
+// Scheduled update check for an external scheduler (the app has its own daily
+// scheduler since v2.53). Called with a shared secret; never by the browser.
 // Security: POST-only, header-only (no query param), env secret checked before
 // any DB access, timing-safe comparison.
 
@@ -83,29 +83,26 @@ async function logCronDenied(provided: string) {
   }
 }
 
+/**
+ * v2.53: the cron endpoint shares the scheduler's code path — same lease (no
+ * parallel runs), same log entries, followed by log retention and the data
+ * quality summary.
+ */
 async function runCheck() {
-  const { runUpdateCheck } = await import("@/lib/jrc.server");
+  const { runAutomaticUpdate, UpdateBusyError } = await import("@/lib/scheduler.server");
   try {
-    const result = await runUpdateCheck("cron");
+    const result = await runAutomaticUpdate("cron");
     return new Response(JSON.stringify({ ok: true, result }), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (e) {
-    try {
-      const m = await import("@/lib/events.server");
-      await m.emitEvent({
-        level: "ERROR",
-        category: "update",
-        code: "update.run.failed",
-        status: "failed",
-        trigger: "cron",
-        message: `Scheduled update run aborted: ${m.errorMessage(e)}`,
-        details: m.errorDetails(e),
-        dedupKey: "update.run.failed:cron",
+    if (e instanceof UpdateBusyError) {
+      return new Response(JSON.stringify({ ok: false, busy: true, error: e.message }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
       });
-    } catch {
-      /* ignore */
     }
+    // Failure is already in the operations log (update.run.failed).
     return new Response(
       JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }),
       { status: 500, headers: { "content-type": "application/json" } },

@@ -1,8 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Loader2, ShieldCheck, Package, ScrollText, Database } from "lucide-react";
+import {
+  Download,
+  Upload,
+  Loader2,
+  ShieldCheck,
+  Package,
+  ScrollText,
+  Database,
+  ShieldAlert,
+} from "lucide-react";
 import { EventLogView } from "@/components/EventLogView";
+import { DataQualityView } from "@/components/DataQualityView";
 import { toast } from "sonner";
 import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
 import { flagEmoji, isoForCountry, normalizeCountry } from "@/lib/country-flag";
@@ -630,13 +640,14 @@ function DataToolsPanel({
 /**
  * v2.52: Tools is split into sub-tabs. "Log" (operations log) exists only for
  * a signed-in admin — the server enforces this independently. "Data & Export"
- * holds the previous cards unchanged. (Data quality follows in v2.53.)
+ * holds the previous cards unchanged. v2.53 adds "Data quality" (admin only).
  */
 export function ToolsView({
   cards,
   filteredCards,
   onImport,
   isAdmin = false,
+  onOpenCard,
 }: {
   cards: ExportRow[];
   filteredCards?: ExportRow[];
@@ -644,8 +655,9 @@ export function ToolsView({
     rows: Record<string, string>[],
   ) => Promise<{ updated: number; created: number; unchanged: number; errors: string[] }>;
   isAdmin?: boolean;
+  onOpenCard?: (cardId: string) => void;
 }) {
-  const [sub, setSub] = useState<"log" | "data">(isAdmin ? "log" : "data");
+  const [sub, setSub] = useState<"log" | "quality" | "data">(isAdmin ? "log" : "data");
   const active = isAdmin ? sub : "data";
   return (
     <div className="space-y-4">
@@ -660,6 +672,13 @@ export function ToolsView({
           </Button>
           <Button
             size="sm"
+            variant={active === "quality" ? "default" : "outline"}
+            onClick={() => setSub("quality")}
+          >
+            <ShieldAlert className="mr-2 h-4 w-4" /> Data quality
+          </Button>
+          <Button
+            size="sm"
             variant={active === "data" ? "default" : "outline"}
             onClick={() => setSub("data")}
           >
@@ -669,6 +688,8 @@ export function ToolsView({
       )}
       {active === "log" ? (
         <EventLogView />
+      ) : active === "quality" ? (
+        <DataQualityView onOpenCard={onOpenCard} />
       ) : (
         <DataToolsPanel cards={cards} filteredCards={filteredCards} onImport={onImport} />
       )}

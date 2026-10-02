@@ -40,11 +40,30 @@ export const getCheckRuns = createServerFn({ method: "GET" }).handler(async () =
   return await getRecentCheckRuns(20);
 });
 
+/** v2.53: schedule shown in the Update Monitor header (public, no log data). */
+export const getScheduleInfo = createServerFn({ method: "GET" }).handler(async () => {
+  const { schedulerStatus } = await import("@/lib/scheduler.server");
+  const s = await schedulerStatus();
+  return {
+    available: s.available,
+    enabled: s.enabled,
+    time: s.time,
+    timezone: s.timezone,
+    nextRunAt: s.nextRunAt,
+    running: s.running,
+  };
+});
+
 // ---- writes (optional auth) ---------------------------------------------
 
 export const checkUpdates = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
-  .handler(async () => logActionFailure("Update run", {}, () => runUpdateCheck("manual")));
+  .handler(async () =>
+    logActionFailure("Update run", {}, async () => {
+      const { withManualLease } = await import("@/lib/scheduler.server");
+      return withManualLease(() => runUpdateCheck("manual"));
+    }),
+  );
 
 export const checkUpdateSource = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
@@ -52,8 +71,17 @@ export const checkUpdateSource = createServerFn({ method: "POST" })
     source: String(data?.source ?? ""),
   }))
   .handler(async ({ data }) =>
-    logActionFailure("Update source " + data.source, { details: { source: data.source } }, () =>
-      runUpdateCheckForSource(data.source as never, { trigger: "manual" }),
+    logActionFailure(
+      "Update source " + data.source,
+      { details: { source: data.source } },
+      async () => {
+        // v2.53: refused while an automatic run holds the lease; holds a short
+        // lease itself so the scheduler waits for a manual check.
+        const { withManualLease } = await import("@/lib/scheduler.server");
+        return withManualLease(() =>
+          runUpdateCheckForSource(data.source as never, { trigger: "manual" }),
+        );
+      },
     ),
   );
 
@@ -64,8 +92,10 @@ export const approveJrcProposal = createServerFn({ method: "POST" })
     country: String(data?.country ?? ""),
   }))
   .handler(async ({ data, context }) =>
-    logActionFailure("Approve proposal", { proposalId: data.id, details: { country: data.country } }, () =>
-      approveProposal(data.id, data.country, context?.userId),
+    logActionFailure(
+      "Approve proposal",
+      { proposalId: data.id, details: { country: data.country } },
+      () => approveProposal(data.id, data.country, context?.userId),
     ),
   );
 

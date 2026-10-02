@@ -936,8 +936,8 @@ async function logSourceEvents(r: SourceResult, runId: string, trigger: RunTrigg
   }
 }
 
-export async function runUpdateCheck(trigger: RunTrigger = "manual") {
-  const runId = randomUUID();
+export async function runUpdateCheck(trigger: RunTrigger = "manual", opts: { runId?: string } = {}) {
+  const runId = opts.runId ?? randomUUID();
   const startedAt = Date.now();
   const results: SourceResult[] = [];
   for (const source of UPDATE_SOURCE_ORDER) {

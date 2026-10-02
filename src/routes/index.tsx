@@ -269,6 +269,8 @@ function TachographTool() {
   const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
+  // v2.53: record opened from Tools → Data quality (read-only window).
+  const [toolsRecordId, setToolsRecordId] = useState<string | null>(null);
   const overridesQuery = useOverrides();
   const overrides = useMemo(() => overridesQuery.data ?? {}, [overridesQuery.data]);
 
@@ -279,6 +281,7 @@ function TachographTool() {
     const res = await importCardsFn({ data: { rows } });
     await qc.invalidateQueries({ queryKey: ["tachograph_cards"] });
     await qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+    await qc.invalidateQueries({ queryKey: ["data_quality"] });
     return res;
   };
   const resetOverrideFn = useServerFn(resetCardOverride);
@@ -317,6 +320,7 @@ function TachographTool() {
     onSuccess: () => {
       toast.success("Changes saved for everyone.");
       void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+      void qc.invalidateQueries({ queryKey: ["data_quality"] });
       void qc.invalidateQueries({ queryKey: ["card_field_history"] });
     },
     onError: (e: Error) => toast.error(`Save failed: ${e.message}`),
@@ -327,6 +331,7 @@ function TachographTool() {
     onSuccess: () => {
       toast.success("Manual edits removed.");
       void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+      void qc.invalidateQueries({ queryKey: ["data_quality"] });
       void qc.invalidateQueries({ queryKey: ["card_field_history"] });
     },
     onError: (e: Error) => toast.error(`Reset failed: ${e.message}`),
@@ -599,8 +604,13 @@ function TachographTool() {
             filteredCards={filteredCards}
             onImport={handleImport}
             isAdmin={isLogAdmin}
+            onOpenCard={setToolsRecordId}
           />
         )}
+        <RecordDetailDialog
+          card={toolsRecordId ? (cards.find((c) => c.id === toolsRecordId) ?? null) : null}
+          onClose={() => setToolsRecordId(null)}
+        />
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
           Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,

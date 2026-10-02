@@ -21,7 +21,15 @@ import { envFlag } from "@/lib/env-flag";
 import { eventsBackendAvailable, eventsQuery } from "@/lib/db.server";
 
 export type EventLevel = "ERROR" | "WARN" | "INFO";
-export type EventCategory = "update" | "auth" | "action" | "proxy" | "system" | "log";
+export type EventCategory =
+  | "update"
+  | "auth"
+  | "action"
+  | "proxy"
+  | "system"
+  | "log"
+  | "scheduler"
+  | "quality";
 
 export type EventInput = {
   level: EventLevel;
@@ -433,6 +441,8 @@ export async function logActionFailure<T>(
     return await fn();
   } catch (e) {
     if (e instanceof Response) throw e; // auth / HTTP responses are logged where they arise
+    // v2.53: "another update run is in progress" is an expected refusal, not a failure.
+    if (e instanceof Error && e.name === "UpdateBusyError") throw e;
     const ctx = await requestContext();
     await emitEvent({
       level: "ERROR",
@@ -628,6 +638,100 @@ export async function eventOverview(): Promise<{
       note: "No automatic schedule set up yet — runs only when started manually or via the cron endpoint.",
     },
   };
+}
+
+// ------------------------------------------------------------- retention (v2.53)
+
+export const RETENTION = {
+  /** ERROR and WARN rows are kept this many days (by last occurrence). */
+  problemDays: 365,
+  /** INFO rows are kept this many days. */
+  infoDays: 90,
+  /** Client IP and user agent are cleared from every row after this many days. */
+  personalDays: 90,
+  /** Hard cap on rows; above it the oldest INFO rows go first. */
+  maxRows: 20000,
+} as const;
+
+export type CleanupResult = {
+  deletedProblems: number;
+  deletedInfo: number;
+  anonymised: number;
+  deletedForCap: number;
+  remaining: number;
+};
+
+/**
+ * Applies the agreed retention. Runs with the daily automatic update run.
+ * Never deletes a single entry on request — only by age and the row cap.
+ * Over the cap, the oldest INFO rows are removed first, then the oldest
+ * acknowledged problems; open (unacknowledged) problems are never removed for
+ * the cap.
+ */
+export async function cleanupEvents(): Promise<CleanupResult | null> {
+  if (!eventsBackendAvailable()) return null;
+  const n = async (sql: string, params: unknown[] = []) =>
+    (await eventsQuery<{ id: string }>(sql, params)).length;
+  const deletedProblems = await n(
+    `DELETE FROM public.app_events
+      WHERE level IN ('ERROR','WARN') AND last_seen_at < now() - make_interval(days => $1)
+      RETURNING id`,
+    [RETENTION.problemDays],
+  );
+  const deletedInfo = await n(
+    `DELETE FROM public.app_events
+      WHERE level = 'INFO' AND last_seen_at < now() - make_interval(days => $1)
+      RETURNING id`,
+    [RETENTION.infoDays],
+  );
+  const anonymised = await n(
+    `UPDATE public.app_events SET client_ip = '', user_agent = ''
+      WHERE created_at < now() - make_interval(days => $1)
+        AND (client_ip <> '' OR user_agent <> '')
+      RETURNING id`,
+    [RETENTION.personalDays],
+  );
+  let deletedForCap = 0;
+  const total = async () =>
+    (await eventsQuery<{ n: number }>(`SELECT count(*)::int AS n FROM public.app_events`))[0]?.n ??
+    0;
+  let count = await total();
+  if (count > RETENTION.maxRows) {
+    deletedForCap += await n(
+      `DELETE FROM public.app_events WHERE id IN (
+         SELECT id FROM public.app_events WHERE level = 'INFO'
+          ORDER BY last_seen_at ASC LIMIT $1)
+       RETURNING id`,
+      [count - RETENTION.maxRows],
+    );
+    count = await total();
+  }
+  if (count > RETENTION.maxRows) {
+    deletedForCap += await n(
+      `DELETE FROM public.app_events WHERE id IN (
+         SELECT id FROM public.app_events WHERE ack_at IS NOT NULL
+          ORDER BY last_seen_at ASC LIMIT $1)
+       RETURNING id`,
+      [count - RETENTION.maxRows],
+    );
+    count = await total();
+  }
+  const result = { deletedProblems, deletedInfo, anonymised, deletedForCap, remaining: count };
+  if (deletedProblems + deletedInfo + anonymised + deletedForCap > 0) {
+    await emitEvent({
+      level: "INFO",
+      category: "log",
+      code: "log.cleanup",
+      status: "success",
+      trigger: "scheduler",
+      message:
+        `Log retention: ${deletedProblems + deletedInfo + deletedForCap} entr` +
+        `${deletedProblems + deletedInfo + deletedForCap === 1 ? "y" : "ies"} removed, ` +
+        `IP/user agent cleared from ${anonymised}; ${count} remain`,
+      details: result,
+    });
+  }
+  return result;
 }
 
 // ------------------------------------------------------------- admin checks

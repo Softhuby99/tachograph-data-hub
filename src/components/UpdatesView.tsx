@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   checkUpdates,
   checkUpdateSource,
+  getScheduleInfo,
   approveJrcProposal,
   rejectJrcProposal,
   reopenJrcProposal,
@@ -121,6 +122,14 @@ export function UpdatesView() {
     queryFn: async (): Promise<CheckRun[]> => (await fetchCheckRuns()) as CheckRun[],
   });
 
+  // v2.53: the real schedule (Tools → Log) instead of a fixed text.
+  const fetchSchedule = useServerFn(getScheduleInfo);
+  const schedule = useQuery({
+    queryKey: ["schedule_info"],
+    queryFn: async () => await fetchSchedule(),
+    refetchInterval: 60_000,
+  });
+
   const check = useServerFn(checkUpdates);
   const checkOne = useServerFn(checkUpdateSource);
   const approve = useServerFn(approveJrcProposal);
@@ -146,6 +155,7 @@ export function UpdatesView() {
     setSourceState({});
     let created = 0;
     let rows = 0;
+    let aborted = false;
     try {
       for (const key of Object.keys(SOURCE_LABELS)) {
         setActiveSource(key);
@@ -159,13 +169,25 @@ export function UpdatesView() {
             [key]: res.error ? "error" : res.created > 0 ? "updated" : "clean",
           }));
         } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          // v2.53: an automatic run holds the lease — stop instead of failing
+          // every remaining source with the same message.
+          if (/is in progress/.test(msg)) {
+            setSourceState((s) => {
+              const next = { ...s };
+              delete next[key];
+              return next;
+            });
+            toast.warning(msg);
+            aborted = true;
+            break;
+          }
           setSourceState((s) => ({ ...s, [key]: "error" }));
-          toast.error(
-            `${SOURCE_LABELS[key]} failed: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          toast.error(`${SOURCE_LABELS[key]} failed: ${msg}`);
         }
       }
-      toast.success(`Check finished — ${rows} rows read, ${created} new proposal(s).`);
+      if (!aborted)
+        toast.success(`Check finished — ${rows} rows read, ${created} new proposal(s).`);
     } finally {
       setActiveSource(null);
       setRunning(false);
@@ -357,8 +379,14 @@ export function UpdatesView() {
         <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
           <span>Monitored sources</span>
           <span className="text-muted-foreground">
-            Auto-check daily 03:00 UTC · Last check:{" "}
-            {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
+            {schedule.data?.available
+              ? schedule.data.enabled
+                ? `Auto-check daily ${schedule.data.time} (${schedule.data.timezone})${
+                    schedule.data.running ? " · running now" : ""
+                  }`
+                : "Auto-check off"
+              : "Auto-check via cron endpoint"}{" "}
+            · Last check: {lastCheckAt ? new Date(lastCheckAt).toLocaleString() : "never"}
           </span>
         </div>
         {Object.keys(SOURCE_LABELS).map((key) => {

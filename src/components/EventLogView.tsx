@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   AlertTriangle,
   CheckCheck,
+  Clock,
   ChevronDown,
   ChevronRight,
   Download,
@@ -17,7 +18,13 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ackEventLog, exportEventLog, getEventLog, getEventOverview } from "@/lib/events.functions";
+import {
+  ackEventLog,
+  exportEventLog,
+  getEventLog,
+  getEventOverview,
+  setSchedule,
+} from "@/lib/events.functions";
 
 // v2.52: Tools → Log (operations log). Admin only — the server refuses every
 // call without a valid admin token; this component is only rendered for admins.
@@ -34,6 +41,8 @@ const CATEGORIES: { value: string; label: string }[] = [
   { value: "proxy", label: "Fetch proxy" },
   { value: "system", label: "System" },
   { value: "log", label: "Log" },
+  { value: "scheduler", label: "Schedule" },
+  { value: "quality", label: "Data quality" },
 ];
 const PERIODS: { value: string; label: string; days: number | null }[] = [
   { value: "1", label: "Last 24 h", days: 1 },
@@ -110,6 +119,106 @@ function toServerFilter(f: Filter) {
     limit: PAGE,
     offset: f.offset,
   };
+}
+
+type SchedulerStatusView = {
+  available: boolean;
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  nextRunAt: string | null;
+  lastStartAt: string | null;
+  lastFinishAt: string | null;
+  lastStatus: string | null;
+  lastTrigger: string | null;
+  lastMessage: string | null;
+  running: boolean;
+};
+
+/**
+ * v2.53: the daily automatic run — on/off and time (Europe/Berlin), next run,
+ * last automatic run. Saving is admin-checked on the server.
+ */
+function SchedulePanel({ status }: { status: SchedulerStatusView }) {
+  const qc = useQueryClient();
+  const save = useServerFn(setSchedule);
+  const [enabled, setEnabled] = useState(status.enabled);
+  const [time, setTime] = useState(status.time);
+  const [saving, setSaving] = useState(false);
+  const dirty = enabled !== status.enabled || time !== status.time;
+
+  if (!status.available) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        The built-in scheduler needs the local database. Updates run manually or via the cron
+        endpoint.
+      </p>
+    );
+  }
+
+  const onSave = async () => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      toast.error("Time must be HH:MM");
+      return;
+    }
+    setSaving(true);
+    try {
+      await save({ data: { enabled, time } });
+      toast.success(
+        enabled ? `Daily update run at ${time} saved.` : "Daily update run switched off.",
+      );
+      void qc.invalidateQueries({ queryKey: ["event_overview"] });
+      void qc.invalidateQueries({ queryKey: ["schedule_info"] });
+    } catch (e) {
+      toast.error(`Saving the schedule failed: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const statusText =
+    status.lastStatus === "running"
+      ? "running now"
+      : status.lastStatus
+        ? `${status.lastStatus}${status.lastMessage ? ` — ${status.lastMessage}` : ""}`
+        : "";
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+      <span className="inline-flex items-center gap-1.5 font-medium">
+        <Clock className="h-3.5 w-3.5 text-primary" /> Daily update run
+      </span>
+      <label className="inline-flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-3.5 w-3.5"
+        />
+        on
+      </label>
+      <label className="inline-flex items-center gap-1.5">
+        at
+        <Input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="h-7 w-[6.5rem] text-xs"
+          disabled={!enabled}
+        />
+        <span className="text-muted-foreground">{status.timezone}</span>
+      </label>
+      <Button size="sm" className="h-7" disabled={!dirty || saving} onClick={() => void onSave()}>
+        {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null} Save
+      </Button>
+      <span className="text-muted-foreground">
+        Next: {status.enabled ? fmt(status.nextRunAt) : "—"} · Last automatic:{" "}
+        {fmt(status.lastStartAt)}
+        {status.lastTrigger ? ` (${status.lastTrigger})` : ""}
+        {statusText ? ` · ${statusText}` : ""}
+      </span>
+    </div>
+  );
 }
 
 export function EventLogView() {
@@ -230,7 +339,14 @@ export function EventLogView() {
               }`}
               title={ov?.schedule.note}
             >
-              Schedule: {ov ? (ov.schedule.configured ? "active" : "not set up") : "…"}
+              Schedule:{" "}
+              {ov
+                ? ov.schedule.configured
+                  ? `daily ${ov.scheduler.time}`
+                  : ov.scheduler.available
+                    ? "off"
+                    : "not available"
+                : "…"}
             </span>
             <span className="text-muted-foreground">
               {sources.length === 0
@@ -240,6 +356,8 @@ export function EventLogView() {
                   : `${failing.length} of ${sources.length} sources failed in their last run.`}
             </span>
           </div>
+
+          {ov?.scheduler && <SchedulePanel status={ov.scheduler} />}
 
           {sources.length > 0 && (
             <div className="overflow-x-auto rounded-md border">
