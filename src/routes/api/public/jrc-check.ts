@@ -33,6 +33,7 @@ async function handle(request: Request) {
   const envSecret = process.env["CRON_SECRET"];
   if (envSecret && envSecret.length > 0) {
     if (safeEqual(provided, envSecret)) return runCheck();
+    await logCronDenied(provided);
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "content-type": "application/json" },
@@ -50,6 +51,7 @@ async function handle(request: Request) {
     });
   }
   if (!dbToken || !safeEqual(provided, dbToken)) {
+    await logCronDenied(provided);
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "content-type": "application/json" },
@@ -59,14 +61,51 @@ async function handle(request: Request) {
   return runCheck();
 }
 
+/** v2.52: rejected cron calls are logged (auth category, counts toward brute force). */
+async function logCronDenied(provided: string) {
+  try {
+    const m = await import("@/lib/events.server");
+    const ctx = await m.requestContext();
+    await m.emitEvent({
+      level: "WARN",
+      category: "auth",
+      code: "auth.cron.denied",
+      status: "denied",
+      trigger: "cron",
+      message: `Cron endpoint: ${provided ? "wrong" : "missing"} secret — run refused`,
+      clientIp: ctx.clientIp,
+      userAgent: ctx.userAgent,
+      requestId: ctx.requestId,
+      httpStatus: 401,
+    });
+  } catch {
+    /* logging must never change the outcome */
+  }
+}
+
 async function runCheck() {
   const { runUpdateCheck } = await import("@/lib/jrc.server");
   try {
-    const result = await runUpdateCheck();
+    const result = await runUpdateCheck("cron");
     return new Response(JSON.stringify({ ok: true, result }), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (e) {
+    try {
+      const m = await import("@/lib/events.server");
+      await m.emitEvent({
+        level: "ERROR",
+        category: "update",
+        code: "update.run.failed",
+        status: "failed",
+        trigger: "cron",
+        message: `Scheduled update run aborted: ${m.errorMessage(e)}`,
+        details: m.errorDetails(e),
+        dedupKey: "update.run.failed:cron",
+      });
+    } catch {
+      /* ignore */
+    }
     return new Response(
       JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }),
       { status: 500, headers: { "content-type": "application/json" } },

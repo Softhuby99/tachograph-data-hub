@@ -13,6 +13,7 @@ import {
   uuidOrNull,
 } from "@/lib/db.server";
 import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
+import { emitEvent, logActionFailure } from "@/lib/events.server";
 
 // Shared, database-backed manual edits of card fields.
 // The original row in tachograph_cards stays untouched; the patch is merged on read.
@@ -46,7 +47,11 @@ export const saveCardOverride = createServerFn({ method: "POST" })
     cardId: String(data?.cardId ?? ""),
     patch: (data?.patch ?? {}) as Record<string, string>,
   }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }) =>
+    logActionFailure(
+      "Save card edit",
+      { cardId: data.cardId, details: { fields: Object.keys(data.patch) } },
+      async () => {
     if (!data.cardId) throw new Error("Missing card id");
 
     const existing = await getOverridePatch(data.cardId);
@@ -83,12 +88,15 @@ export const saveCardOverride = createServerFn({ method: "POST" })
     await saveOverride(data.cardId, merged, context?.userId ?? null);
     await insertFieldHistory(history);
     return { ok: true, cleared: false };
-  });
+      },
+    ),
+  );
 
 export const resetCardOverride = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }) =>
+    logActionFailure("Reset card edits", { cardId: data.cardId }, async () => {
     // Removing the manual edits is itself a change worth recording: the fields
     // fall back to the base row, and without an entry the history would show
     // an edit that silently disappeared again.
@@ -109,7 +117,8 @@ export const resetCardOverride = createServerFn({ method: "POST" })
     await deleteOverride(data.cardId);
     await insertFieldHistory(history);
     return { ok: true };
-  });
+    }),
+  );
 
 // ---- CSV import ----------------------------------------------------------
 
@@ -173,7 +182,9 @@ export const importCards = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: Record<string, string>[] }) => ({
     rows: Array.isArray(data?.rows) ? data.rows : [],
   }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }) =>
+    logActionFailure("CSV import", { details: { rows: data.rows.length } }, async () => {
+    const started = Date.now();
     const cards = (await getAllCards()) as Record<string, unknown>[];
     const byId = new Map(cards.map((c) => [String(c["id"]), c]));
     const byKey = new Map(cards.map((c) => [matchKey(c), c]));
@@ -262,5 +273,20 @@ export const importCards = createServerFn({ method: "POST" })
       }
     }
 
+    // v2.52: one summary entry per import (row errors listed, capped).
+    await emitEvent({
+      level: errors.length ? "WARN" : "INFO",
+      category: "action",
+      code: "action.import.completed",
+      status: errors.length ? "partial" : "success",
+      trigger: "manual",
+      actor: "local-admin",
+      durationMs: Date.now() - started,
+      message:
+        `CSV import: ${data.rows.length} row(s) — ${created} new, ${updated} updated, ` +
+        `${unchanged} unchanged, ${errors.length} with errors`,
+      details: { rows: data.rows.length, created, updated, unchanged, errors: errors.slice(0, 20) },
+    });
     return { updated, created, unchanged, errors };
-  });
+    }),
+  );

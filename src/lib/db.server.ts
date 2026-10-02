@@ -63,6 +63,7 @@ export type CardRow = {
   jrc_interoperability_status: string;
   jrc_certificate_source: string;
   data_reference_date: string;
+  device_type?: string | null;
 };
 
 export type OverrideRow = { card_id: string; patch: Record<string, string> };
@@ -146,7 +147,7 @@ export async function getAllCards(): Promise<Record<string, unknown>[]> {
 
 export async function getCardsForJrc(): Promise<CardRow[]> {
   const cols =
-    "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source,data_reference_date";
+    "id,country,generation,type_approval_number,current_manufacturer,tachograph_application_os,jrc_interoperability_status,jrc_certificate_source,data_reference_date,device_type";
   if (isLocalDb()) {
     const { rows } = await pool().query(`SELECT ${cols} FROM public.tachograph_cards`);
     return rows as unknown as CardRow[];
@@ -293,6 +294,19 @@ export async function insertFieldHistory(entries: FieldHistoryEntry[]): Promise<
     if (error) throw new Error(error.message);
   } catch (e) {
     console.error("[history] could not record field change:", e);
+    // v2.52: also into the operations log (dynamic import: events.server
+    // imports this module).
+    void import("./events.server").then((m) =>
+      m.emitEvent({
+        level: "ERROR",
+        category: "action",
+        code: "action.history.failed",
+        status: "failed",
+        message: `Field history could not be recorded (${rows.length} change(s)): ${m.errorMessage(e)}`,
+        cardId: (rows[0] as { card_id?: string } | undefined)?.card_id ?? null,
+        details: { fields: rows.map((r) => (r as { field?: string }).field ?? "").slice(0, 20), ...m.errorDetails(e) },
+      }),
+    );
   }
 }
 
@@ -651,11 +665,17 @@ export async function insertCheckRun(row: {
   proposals_created: number;
   status: string;
   message: string;
-}): Promise<void> {
+  /** v2.52: run grouping, who started it, how long the source took. */
+  run_id?: string | null;
+  triggered_by?: string;
+  duration_ms?: number | null;
+}): Promise<string | null> {
   if (isLocalDb()) {
-    await pool().query(
-      `INSERT INTO public.jrc_check_runs (source_type, source_url, rows_parsed, proposals_created, status, message)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+    const { rows } = await pool().query(
+      `INSERT INTO public.jrc_check_runs
+         (source_type, source_url, rows_parsed, proposals_created, status, message, run_id, triggered_by, duration_ms)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id`,
       [
         row.source_type,
         row.source_url,
@@ -663,13 +683,18 @@ export async function insertCheckRun(row: {
         row.proposals_created,
         row.status,
         row.message,
+        row.run_id ?? null,
+        row.triggered_by ?? "manual",
+        row.duration_ms ?? null,
       ],
     );
-    return;
+    return (rows[0]?.id as string | undefined) ?? null;
   }
+  const { run_id: _r, triggered_by: _t, duration_ms: _d, ...base } = row;
   const admin = await supabaseAdmin();
-  const { error } = await admin.from("jrc_check_runs").insert([row] as never);
+  const { error } = await admin.from("jrc_check_runs").insert([base] as never);
   if (error) throw new Error(error.message);
+  return null;
 }
 
 export async function getRecentCheckRuns(limit = 20): Promise<CheckRunRow[]> {
@@ -896,4 +921,20 @@ export async function replaceCurrentListing(
     const { error } = await admin.from("jrc_current_listing").insert(chunk as never);
     if (error) throw new Error(error.message);
   }
+}
+
+// ----------------------------------------------------------- operations log (v2.52)
+
+/** The operations log lives in the local PostgreSQL only (see events.server.ts). */
+export function eventsBackendAvailable(): boolean {
+  return isLocalDb();
+}
+
+/** Parameterised query for events.server.ts — local PostgreSQL only. */
+export async function eventsQuery<T = Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  const { rows } = await pool().query(sql, params as never[]);
+  return rows as unknown as T[];
 }

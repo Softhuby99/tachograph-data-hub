@@ -72,6 +72,7 @@ import {
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
 import { ToolsView } from "@/components/ToolsView";
+import { getEventOverview, verifyAdminLogin } from "@/lib/events.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -347,22 +348,65 @@ function TachographTool() {
 
   const resetOverride = (id: string) => resetMutation.mutate(id);
 
-  // Read stored admin token on mount (local mode with ADMIN_TOKEN).
+  const verifyAdminFn = useServerFn(verifyAdminLogin);
+  const [adminChecking, setAdminChecking] = useState(false);
+
+  // Read the stored admin token on mount and re-check it on the server once
+  // (v2.52): a token that no longer matches (ADMIN_TOKEN changed) is dropped
+  // instead of failing on the first write.
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     const stored = localStorage.getItem("admin-token");
-    if (stored) setAdminToken(stored);
+    if (!stored) return;
+    setAdminToken(stored);
+    void verifyAdminFn({ data: { token: stored, mode: "session" } })
+      .then((res) => {
+        if (!res.ok) {
+          localStorage.removeItem("admin-token");
+          setAdminToken(null);
+          toast.error("Stored admin login is no longer valid — please sign in again.");
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const submitAdminToken = () => {
+  // v2.52: the server confirms the token before it is stored; a wrong token is
+  // rejected right away (and logged), not only at the first write.
+  const submitAdminToken = async () => {
     const token = adminInput.trim();
-    if (!token) return;
-    localStorage.setItem("admin-token", token);
-    setAdminToken(token);
-    setAdminInput("");
-    setAdminLoginOpen(false);
-    toast.success("Admin token saved.");
+    if (!token || adminChecking) return;
+    setAdminChecking(true);
+    try {
+      const res = await verifyAdminFn({ data: { token, mode: "login" } });
+      if (!res.ok) {
+        toast.error("Admin login failed: wrong token.");
+        return;
+      }
+      localStorage.setItem("admin-token", token);
+      setAdminToken(token);
+      setAdminInput("");
+      setAdminLoginOpen(false);
+      toast.success("Admin login confirmed.");
+    } catch (e) {
+      toast.error(`Admin login failed: ${(e as Error).message}`);
+    } finally {
+      setAdminChecking(false);
+    }
   };
+
+  // v2.52: open errors / warnings of the operations log, admins only.
+  const isLogAdmin = adminRequired && !!adminToken;
+  const overviewFn = useServerFn(getEventOverview);
+  const logOverview = useQuery({
+    queryKey: ["event_overview"],
+    queryFn: () => overviewFn(),
+    enabled: isLogAdmin,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const openErrors = isLogAdmin ? (logOverview.data?.openErrors ?? 0) : 0;
+  const openWarnings = isLogAdmin ? (logOverview.data?.openWarnings ?? 0) : 0;
 
   const signOutAdmin = () => {
     localStorage.removeItem("admin-token");
@@ -459,6 +503,21 @@ function TachographTool() {
               onClick={() => setTab("tools")}
             >
               <Wrench className="mr-2 h-4 w-4" /> Tools
+              {openErrors > 0 ? (
+                <span
+                  className="ml-1.5 rounded-full bg-red-600 px-1.5 text-[10px] font-bold leading-4 text-white"
+                  title={`${openErrors} open error(s) in the operations log`}
+                >
+                  {openErrors}
+                </span>
+              ) : openWarnings > 0 ? (
+                <span
+                  className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-4 text-white"
+                  title={`${openWarnings} open warning(s) in the operations log`}
+                >
+                  {openWarnings}
+                </span>
+              ) : null}
             </Button>
             <span className="mx-1 h-8 w-px bg-border" />
             {authEnabled &&
@@ -490,12 +549,12 @@ function TachographTool() {
                   value={adminInput}
                   onChange={(e) => setAdminInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") submitAdminToken();
+                    if (e.key === "Enter") void submitAdminToken();
                   }}
                   autoFocus
                 />
-                <Button size="sm" onClick={submitAdminToken}>
-                  OK
+                <Button size="sm" onClick={() => void submitAdminToken()} disabled={adminChecking}>
+                  {adminChecking ? "…" : "OK"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -535,7 +594,12 @@ function TachographTool() {
         )}
         {tab === "updates" && <UpdatesView />}
         {!isLoading && !error && tab === "tools" && (
-          <ToolsView cards={cards} filteredCards={filteredCards} onImport={handleImport} />
+          <ToolsView
+            cards={cards}
+            filteredCards={filteredCards}
+            onImport={handleImport}
+            isAdmin={isLogAdmin}
+          />
         )}
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">

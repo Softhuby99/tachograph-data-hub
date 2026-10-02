@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Loader2, ShieldCheck, Package } from "lucide-react";
+import { Download, Upload, Loader2, ShieldCheck, Package, ScrollText, Database } from "lucide-react";
+import { EventLogView } from "@/components/EventLogView";
 import { toast } from "sonner";
 import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
 import { flagEmoji, isoForCountry, normalizeCountry } from "@/lib/country-flag";
@@ -250,7 +251,7 @@ export function csvToObjects(text: string): Record<string, string>[] {
   });
 }
 
-export function ToolsView({
+function DataToolsPanel({
   cards,
   filteredCards,
   onImport,
@@ -622,6 +623,55 @@ export function ToolsView({
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * v2.52: Tools is split into sub-tabs. "Log" (operations log) exists only for
+ * a signed-in admin — the server enforces this independently. "Data & Export"
+ * holds the previous cards unchanged. (Data quality follows in v2.53.)
+ */
+export function ToolsView({
+  cards,
+  filteredCards,
+  onImport,
+  isAdmin = false,
+}: {
+  cards: ExportRow[];
+  filteredCards?: ExportRow[];
+  onImport?: (
+    rows: Record<string, string>[],
+  ) => Promise<{ updated: number; created: number; unchanged: number; errors: string[] }>;
+  isAdmin?: boolean;
+}) {
+  const [sub, setSub] = useState<"log" | "data">(isAdmin ? "log" : "data");
+  const active = isAdmin ? sub : "data";
+  return (
+    <div className="space-y-4">
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={active === "log" ? "default" : "outline"}
+            onClick={() => setSub("log")}
+          >
+            <ScrollText className="mr-2 h-4 w-4" /> Log
+          </Button>
+          <Button
+            size="sm"
+            variant={active === "data" ? "default" : "outline"}
+            onClick={() => setSub("data")}
+          >
+            <Database className="mr-2 h-4 w-4" /> Data &amp; Export
+          </Button>
+        </div>
+      )}
+      {active === "log" ? (
+        <EventLogView />
+      ) : (
+        <DataToolsPanel cards={cards} filteredCards={filteredCards} onImport={onImport} />
+      )}
     </div>
   );
 }

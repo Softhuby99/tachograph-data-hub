@@ -8,6 +8,7 @@ import {
   reopenProposal,
 } from "@/lib/jrc.server";
 import { getAllProposals, getRecentCheckRuns, setProposalsReviewed } from "@/lib/db.server";
+import { logActionFailure } from "@/lib/events.server";
 
 // ---- reads (public; no auth) ---------------------------------------------
 
@@ -43,14 +44,18 @@ export const getCheckRuns = createServerFn({ method: "GET" }).handler(async () =
 
 export const checkUpdates = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
-  .handler(async () => runUpdateCheck());
+  .handler(async () => logActionFailure("Update run", {}, () => runUpdateCheck("manual")));
 
 export const checkUpdateSource = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { source: string }) => ({
     source: String(data?.source ?? ""),
   }))
-  .handler(async ({ data }) => runUpdateCheckForSource(data.source as never));
+  .handler(async ({ data }) =>
+    logActionFailure("Update source " + data.source, { details: { source: data.source } }, () =>
+      runUpdateCheckForSource(data.source as never, { trigger: "manual" }),
+    ),
+  );
 
 export const approveJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
@@ -58,18 +63,28 @@ export const approveJrcProposal = createServerFn({ method: "POST" })
     id: String(data?.id ?? ""),
     country: String(data?.country ?? ""),
   }))
-  .handler(async ({ data, context }) => approveProposal(data.id, data.country, context?.userId));
+  .handler(async ({ data, context }) =>
+    logActionFailure("Approve proposal", { proposalId: data.id, details: { country: data.country } }, () =>
+      approveProposal(data.id, data.country, context?.userId),
+    ),
+  );
 
 export const rejectJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
-  .handler(async ({ data, context }) => rejectProposal(data.id, context?.userId));
+  .handler(async ({ data, context }) =>
+    logActionFailure("Reject proposal", { proposalId: data.id }, () =>
+      rejectProposal(data.id, context?.userId),
+    ),
+  );
 
 /** Puts a handled proposal back on the pending list so it can be decided again. */
 export const reopenJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
-  .handler(async ({ data }) => reopenProposal(data.id));
+  .handler(async ({ data }) =>
+    logActionFailure("Reopen proposal", { proposalId: data.id }, () => reopenProposal(data.id)),
+  );
 
 /**
  * Marks proposals as read, or clears the marker. Purely a progress marker for
@@ -82,6 +97,10 @@ export const markJrcProposalsReviewed = createServerFn({ method: "POST" })
     reviewed: data?.reviewed !== false,
   }))
   .handler(async ({ data, context }) => {
-    const count = await setProposalsReviewed(data.ids, data.reviewed, context?.userId);
+    const count = await logActionFailure(
+      "Mark proposals reviewed",
+      { details: { count: data.ids.length } },
+      () => setProposalsReviewed(data.ids, data.reviewed, context?.userId),
+    );
     return { ok: true, count };
   });

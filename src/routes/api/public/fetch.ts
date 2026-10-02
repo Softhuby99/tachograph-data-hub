@@ -11,6 +11,27 @@ const ALLOWED_HOSTS = new Set([
   "www.commoncriteriaportal.org",
 ]);
 
+/**
+ * v2.52: proxy problems go to the operations log (category proxy). Folded per
+ * code + allowlisted host so a flood of requests is one counting entry; a
+ * rejected host is folded into a single entry (the name comes from the caller).
+ */
+function logProxy(code: string, message: string, host: string, extra: Record<string, unknown> = {}) {
+  void import("@/lib/events.server")
+    .then((m) =>
+      m.emitEvent({
+        level: "WARN",
+        category: "proxy",
+        code,
+        status: "failed",
+        message,
+        details: { host, ...extra },
+        dedupKey: ALLOWED_HOSTS.has(host) ? `${code}:${host}` : code,
+      }),
+    )
+    .catch(() => undefined);
+}
+
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB (default)
 const TIMEOUT_MS = 15_000;
 
@@ -150,9 +171,19 @@ export const Route = createFileRoute("/api/public/fetch")({
           !ALLOWED_HOSTS.has(target.hostname) ||
           target.port !== ""
         ) {
+          logProxy("proxy.host_denied", "Fetch proxy: target not allowed", target.hostname, {
+            protocol: target.protocol,
+            port: target.port,
+          });
           return new Response("Host not allowed", { status: 403 });
         }
+        // v2.51: an abort that happened before this point does not fire the
+        // listener below retroactively — stop before taking a slot.
+        if (request.signal?.aborted) {
+          return new Response("Client closed request", { status: 499 });
+        }
         if (inFlight >= MAX_CONCURRENT) {
+          logProxy("proxy.busy", `Fetch proxy busy (${MAX_CONCURRENT} requests running) — request rejected with 429`, target.hostname);
           return new Response("Busy, try again shortly", {
             status: 429,
             headers: { "retry-after": "10" },
@@ -166,9 +197,15 @@ export const Route = createFileRoute("/api/public/fetch")({
         const onClientAbort = () => controller.abort();
         request.signal?.addEventListener("abort", onClientAbort);
 
+        const startedAt = Date.now();
         try {
           const res = await fetchFollowRedirects(target, controller.signal);
           if (!res.ok) {
+            logProxy("proxy.upstream_status", `Fetch proxy: ${target.hostname} answered HTTP ${res.status}`, target.hostname, {
+              status: res.status,
+              path: target.pathname,
+              ms: Date.now() - startedAt,
+            });
             return new Response(`Upstream request failed [${res.status}]`, { status: 502 });
           }
 
@@ -194,6 +231,10 @@ export const Route = createFileRoute("/api/public/fetch")({
             total += value.byteLength;
             if (total > limit) {
               await reader.cancel();
+              logProxy("proxy.too_large", `Fetch proxy: response of ${target.hostname} exceeds ${limit} bytes`, target.hostname, {
+                path: target.pathname,
+                limit,
+              });
               return new Response("Response too large", { status: 502 });
             }
             if (decoder) text += decoder.decode(value, { stream: true });
@@ -221,8 +262,18 @@ export const Route = createFileRoute("/api/public/fetch")({
           });
         } catch (e) {
           if (e instanceof Error && e.name === "AbortError") {
+            // A client that went away is not a problem of the proxy — not logged.
+            if (!request.signal?.aborted) {
+              logProxy("proxy.timeout", `Fetch proxy: ${target.hostname} did not answer within the deadline`, target.hostname, {
+                path: target.pathname,
+                ms: Date.now() - startedAt,
+              });
+            }
             return new Response("Request timed out", { status: 504 });
           }
+          logProxy("proxy.upstream_error", `Fetch proxy: ${target.hostname} — ${e instanceof Error ? e.message : String(e)}`, target.hostname, {
+            path: target.pathname,
+          });
           return new Response(`Upstream error: ${e instanceof Error ? e.message : String(e)}`, {
             status: 502,
           });

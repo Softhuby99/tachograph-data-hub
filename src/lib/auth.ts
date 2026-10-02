@@ -42,6 +42,14 @@ const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) 
   const request = getRequest();
   const provided = request?.headers?.get("x-admin-token") ?? "";
   if (!safeEqualStr(provided, adminToken)) {
+    // v2.52: every rejected write is logged (operations log, auth category).
+    // Dynamic import keeps the server-only logger out of the client bundle.
+    try {
+      const { logAdminDenied } = await import("@/lib/events.server");
+      await logAdminDenied("write", provided);
+    } catch {
+      /* logging must never change the outcome */
+    }
     throw new Response("Unauthorized: missing or wrong admin token", { status: 401 });
   }
   return next({

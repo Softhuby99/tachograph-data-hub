@@ -41,6 +41,28 @@ HBA
 chown postgres:postgres "$PG_DATA/pg_hba.conf"
 chmod 600 "$PG_DATA/pg_hba.conf"
 
+# v2.51: reject reserved or malformed role/database names before anything
+# starts. DB_USER=tdh_ro would own the tables AND hit the password-less
+# read-only pg_hba entry; postgres would undo the NOSUPERUSER hardening.
+_tdh_u="${DB_USER:-tdh}"
+_tdh_d="${DB_NAME:-tdh}"
+for _tdh_v in "$_tdh_u" "$_tdh_d"; do
+  if ! printf '%s' "$_tdh_v" | grep -Eq '^[a-z_][a-z0-9_]{0,62}$'; then
+    echo "[entrypoint] FATAL: DB_USER/DB_NAME '$_tdh_v' invalid (allowed: a-z 0-9 _, max 63 chars)" >&2
+    exit 1
+  fi
+done
+case "$_tdh_u" in
+  postgres | tdh_ro | pg_*)
+    echo "[entrypoint] FATAL: DB_USER=$_tdh_u is a reserved role — use a dedicated app role" >&2
+    exit 1 ;;
+esac
+case "$_tdh_d" in
+  postgres | template0 | template1)
+    echo "[entrypoint] FATAL: DB_NAME=$_tdh_d is a reserved database" >&2
+    exit 1 ;;
+esac
+
 # --- 2. Start PostgreSQL temporarily to create the app DB/user + seed ---
 su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" -o '-c unix_socket_permissions=0770' -l /tmp/pg.log start -w"
 
@@ -88,6 +110,21 @@ fi
 # --- 2b. Apply incremental schema migrations (idempotent, tracked) ---
 su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"CREATE TABLE IF NOT EXISTS public.schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());\""
 
+# v2.52: migration results go to the operations log (app_events) once that
+# table exists. Values reach psql as variables, never via shell strings.
+log_migration_event() { # level code message migrations
+  runuser -u postgres -- psql -d "$DB_NAME" -q -v lvl="$1" -v code="$2" -v msg="$3" -v names="$4" \
+    >/dev/null 2>&1 <<'SQL' || true
+SELECT to_regclass('public.app_events') IS NOT NULL AS has_events \gset
+\if :has_events
+INSERT INTO public.app_events (level, category, code, status, message, details)
+VALUES (:'lvl', 'system', :'code', CASE WHEN :'lvl' = 'ERROR' THEN 'failed' ELSE 'success' END,
+        :'msg', jsonb_build_object('migrations', :'names'));
+\endif
+SQL
+}
+
+APPLIED_NOW=""
 if [ -d /app/db/migrations ]; then
   for f in $(ls /app/db/migrations/*.sql 2>/dev/null | sort); do
     name="$(basename "$f")"
@@ -97,9 +134,19 @@ if [ -d /app/db/migrations ]; then
       continue
     fi
     echo "[entrypoint] Applying migration $name…"
-    su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f \"$f\""
+    if ! su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f \"$f\""; then
+      echo "[entrypoint] FATAL: migration $name failed — container start aborted" >&2
+      log_migration_event ERROR system.migration.failed \
+        "Schema migration $name failed — container start aborted" "$name"
+      su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
+      exit 1
+    fi
     su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"INSERT INTO public.schema_migrations (filename) VALUES ('$name') ON CONFLICT DO NOTHING;\""
+    APPLIED_NOW="${APPLIED_NOW:+$APPLIED_NOW, }$name"
   done
+fi
+if [ -n "$APPLIED_NOW" ]; then
+  log_migration_event INFO system.migration.applied "Schema migrations applied: $APPLIED_NOW" "$APPLIED_NOW"
 fi
 
 # Ensure ownership of everything in the app schema stays with the app user.

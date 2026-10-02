@@ -23,6 +23,8 @@ import {
 } from "./ta-country";
 import { flagEmoji, normalizeCountry } from "./country-flag";
 import { approvalKeys, keysMatchStrict } from "./market-status";
+import { randomUUID } from "crypto";
+import { emitEvent } from "./events.server";
 
 import {
   getCardsForJrc as dbGetCardsForJrc,
@@ -200,6 +202,7 @@ type CardRow = {
   tachograph_application_os: string;
   jrc_interoperability_status: string;
   jrc_certificate_source: string;
+  device_type?: string | null;
 };
 
 export type FieldChange = { field: string; label: string; old: string; new: string };
@@ -537,7 +540,16 @@ type SourceResult = {
   created: number;
   baseline: boolean;
   error?: string;
+  /** v2.52: info changes held back for the next run (MAX_INFO_PER_SOURCE). */
+  deferred?: number;
+  /** v2.52: new CC proposals beyond the per-run cap. */
+  capped?: number;
+  implausible?: boolean;
+  durationMs?: number;
+  checkRunId?: string | null;
 };
+
+export type RunTrigger = "manual" | "cron" | "scheduler";
 
 export const UPDATE_SOURCE_ORDER = [
   "card_status",
@@ -602,21 +614,37 @@ function otherCertToListingRow(r: OtherCertRow): CurrentListingRow {
  * with an empty list — every approval then showed as Delisted. Such a result
  * now fails the run for that source and the previous listing stays.
  */
+/** v2.52: a parse result blocked as implausible (nothing written). */
+export class ImplausibleSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImplausibleSourceError";
+  }
+}
+
 async function assertPlausibleListing(sourceType: string, nextCount: number): Promise<void> {
   const prevCount = (await dbGetCurrentListing()).filter((r) => r.source_type === sourceType).length;
   if (nextCount === 0) {
-    throw new Error(
+    throw new ImplausibleSourceError(
       `${sourceType}: the page parsed to 0 rows — previous listing (${prevCount} rows) kept. Check whether the JRC page layout changed.`,
     );
   }
   if (prevCount >= 20 && nextCount < prevCount * 0.5) {
-    throw new Error(
+    throw new ImplausibleSourceError(
       `${sourceType}: only ${nextCount} rows parsed (before: ${prevCount}) — previous listing kept. Check the JRC page.`,
     );
   }
 }
 
-export async function runUpdateCheckForSource(source: SourceKey): Promise<SourceResult> {
+export async function runUpdateCheckForSource(
+  source: SourceKey,
+  opts: { runId?: string; trigger?: RunTrigger } = {},
+): Promise<SourceResult> {
+  const startedAt = Date.now();
+  const runId = opts.runId ?? randomUUID();
+  const trigger: RunTrigger = opts.trigger ?? "manual";
+  let deferredInfo = 0;
+  let cappedCc = 0;
   const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
     const t = Date.parse(c.data_reference_date ?? "");
@@ -643,7 +671,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     for (const s of snapRows) snapshot.set(s.entry_key, s.fingerprint);
     const baseline = snapshot.size === 0;
     if (entries.length === 0 && !baseline) {
-      throw new Error(`${source}: the page parsed to 0 entries — snapshot kept. Check the page layout.`);
+      throw new ImplausibleSourceError(`${source}: the page parsed to 0 entries — snapshot kept. Check the page layout.`);
     }
 
     let created = 0;
@@ -688,7 +716,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     }));
     await upsertSnapshots(snapRowsToWrite);
 
-    return { candidates, created, baseline };
+    return { candidates, created, baseline, deferred: deferred.size };
   };
 
   try {
@@ -707,21 +735,36 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
         source,
         source === "card_status" ? rows.length : (otherRawRows ?? []).length,
       );
-      const candidates = buildProposals(rows, cardRows, sinceMs, source);
+      // v2.51: the info part of other_certificates is parsed and checked here
+      // too — BEFORE the first proposal is written. In v2.50 card proposals were
+      // already stored when the info check failed afterwards.
+      const otherInfo =
+        source === "other_certificates"
+          ? await fetchOtherCertificateInfoEntries(otherRawRows)
+          : undefined;
+      if (otherInfo && otherInfo.entries.length === 0 && (await getSnapshots(source)).length > 0) {
+        throw new ImplausibleSourceError(
+          `${source}: the page parsed to 0 info entries — nothing written, snapshot and listing kept. Check the page layout.`,
+        );
+      }
+      // Card rows only ever match card records (v2.51).
+      const cardRecords = cardRows.filter((c) => (c.device_type || "Card") === "Card");
+      const candidates = buildProposals(rows, cardRecords, sinceMs, source);
       let created = await insertProposals(candidates);
       let extraCandidates = 0;
       let extraRows = 0;
       let baseline = false;
 
-      if (source === "other_certificates") {
+      if (source === "other_certificates" && otherInfo) {
         // Every non-card entry (VU, MS, DSRC, M1N1, Paper, ...) is tracked as an
         // info proposal, with the Annex generation taken from the legend colour.
-        const { entries, rowsParsed } = await fetchOtherCertificateInfoEntries(otherRawRows);
+        const { entries, rowsParsed } = otherInfo;
         extraRows = rowsParsed;
         const info = await runInfoDiff(entries);
         extraCandidates = info.candidates;
         created += info.created;
         baseline = info.baseline;
+        deferredInfo = info.deferred;
 
         // Persist a full mirror of the page (every component, not just cards)
         // for Market Analytics — see jrc_current_listing (migration 0006).
@@ -754,6 +797,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
         .filter((c) => !known.has(c.fingerprint))
         .sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
       const created = await insertProposals(fresh.slice(0, 80) as unknown as ProposalInsert[]);
+      cappedCc = Math.max(0, fresh.length - 80);
       result = {
         source,
         label: meta.label,
@@ -779,6 +823,7 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
     } else {
       const { entries, rowsParsed } = await collectInfoEntries(source);
       const info = await runInfoDiff(entries);
+      deferredInfo = info.deferred;
       result = {
         source,
         label: meta.label,
@@ -797,10 +842,14 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       created: 0,
       baseline: false,
       error: e instanceof Error ? e.message : String(e),
+      implausible: e instanceof ImplausibleSourceError,
     };
   }
+  result.deferred = deferredInfo;
+  result.capped = cappedCc;
+  result.durationMs = Date.now() - startedAt;
 
-  await insertCheckRun({
+  const checkRunId = await insertCheckRun({
     source_type: result.source,
     source_url: meta.url,
     rows_parsed: result.rowsParsed,
@@ -811,15 +860,88 @@ export async function runUpdateCheckForSource(source: SourceKey): Promise<Source
       : result.baseline
         ? `Baseline recorded from ${result.rowsParsed} row(s) — future changes will be reported`
         : `${result.rowsParsed} row(s) scanned, ${result.candidates} relevant, ${result.created} new proposal(s)`,
+    run_id: runId,
+    triggered_by: trigger,
+    duration_ms: result.durationMs,
+  }).catch(async (e: unknown) => {
+    await emitEvent({
+      level: "ERROR",
+      category: "update",
+      code: "update.checkrun.write_failed",
+      status: "failed",
+      trigger,
+      runId,
+      sourceType: result.source,
+      message: `${meta.label}: run result could not be stored — ${e instanceof Error ? e.message : String(e)}`,
+      dedupKey: "update.checkrun.write_failed",
+    });
+    return null;
   });
+  result.checkRunId = checkRunId;
+  await logSourceEvents(result, runId, trigger, meta.label);
 
   return result;
 }
 
-export async function runUpdateCheck() {
+/** Digits/ids stripped so the same failure folds into one open log entry. */
+function foldKey(message: string): string {
+  return message.replace(/\d+/g, "#").slice(0, 160);
+}
+
+async function logSourceEvents(r: SourceResult, runId: string, trigger: RunTrigger, label: string) {
+  const common = {
+    category: "update" as const,
+    trigger,
+    sourceType: r.source,
+    runId,
+    checkRunId: r.checkRunId,
+    durationMs: r.durationMs,
+  };
+  if (r.error) {
+    const code = r.implausible ? "update.source.implausible" : "update.source.failed";
+    await emitEvent({
+      ...common,
+      level: "ERROR",
+      code,
+      status: "failed",
+      message: r.implausible
+        ? `${label}: parse result rejected as implausible, nothing written — ${r.error}`
+        : `${label}: ${r.error}`,
+      details: { source: r.source, label, error: r.error },
+      dedupKey: `${code}:${r.source}:${foldKey(r.error)}`,
+    });
+    return;
+  }
+  if ((r.deferred ?? 0) > 0) {
+    await emitEvent({
+      ...common,
+      level: "WARN",
+      code: "update.source.deferred",
+      status: "partial",
+      message: `${label}: ${r.deferred} change(s) beyond the per-run limit held back — they come up again in the next run`,
+      details: { source: r.source, deferred: r.deferred, candidates: r.candidates, created: r.created },
+      dedupKey: `update.source.deferred:${r.source}`,
+    });
+  }
+  if ((r.capped ?? 0) > 0) {
+    await emitEvent({
+      ...common,
+      level: "WARN",
+      code: "update.source.capped",
+      status: "partial",
+      message: `${label}: ${r.created} new proposal(s) stored, ${r.capped} more beyond the per-run cap follow in the next run`,
+      details: { source: r.source, capped: r.capped, created: r.created },
+      dedupKey: `update.source.capped:${r.source}`,
+    });
+  }
+}
+
+export async function runUpdateCheck(trigger: RunTrigger = "manual") {
+  const runId = randomUUID();
+  const startedAt = Date.now();
   const results: SourceResult[] = [];
   for (const source of UPDATE_SOURCE_ORDER) {
-    results.push(await runUpdateCheckForSource(source));
+    results.push(await runUpdateCheckForSource(source, { runId, trigger }));
   }
 
   const totals = results.reduce(
@@ -831,7 +953,35 @@ export async function runUpdateCheck() {
     { rowsParsed: 0, candidates: 0, created: 0 },
   );
 
-  return { ...totals, sources: results };
+  const failed = results.filter((r) => r.error);
+  const status = failed.length === 0 ? "success" : failed.length === results.length ? "failed" : "partial";
+  await emitEvent({
+    level: "INFO",
+    category: "update",
+    code: "update.run.completed",
+    status,
+    trigger,
+    runId,
+    durationMs: Date.now() - startedAt,
+    message:
+      `Update run (${trigger}): ${results.length - failed.length}/${results.length} source(s) ok, ` +
+      `${totals.created} new proposal(s)` +
+      (failed.length ? ` — failed: ${failed.map((r) => r.label).join(", ")}` : ""),
+    details: {
+      sources: results.map((r) => ({
+        source: r.source,
+        ok: !r.error,
+        rows: r.rowsParsed,
+        candidates: r.candidates,
+        created: r.created,
+        deferred: r.deferred ?? 0,
+        capped: r.capped ?? 0,
+        ms: r.durationMs ?? null,
+      })),
+    },
+  });
+
+  return { ...totals, runId, status, sources: results };
 }
 
 export async function approveProposal(id: string, country: string, userId?: string | null) {
@@ -930,7 +1080,13 @@ export async function approveProposal(id: string, country: string, userId?: stri
     const existing = proposal.jrc_type_approval
       ? matchCard(
           { typeApproval: proposal.jrc_type_approval, generation: proposal.generation } as JrcRow,
-          cardsNow.filter((c) => normalizeCountry(c.country ?? "") === name),
+          // Same device type AND same country (v2.51): a new vehicle unit must
+          // never be linked to a card that happens to share the number.
+          cardsNow.filter(
+            (c) =>
+              (c.device_type || "Card") === deviceType &&
+              normalizeCountry(c.country ?? "") === name,
+          ),
         )
       : undefined;
     if (existing) {
