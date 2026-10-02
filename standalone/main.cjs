@@ -48,7 +48,14 @@ function createWindow() {
   // app-owned path that survives restarts and isn't shared with other apps.
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const data = fs.readFileSync(path.join(__dirname, "data.json"), "utf8");
-  const injected = html.replace("__DATA__", data);
+  // "</script>" inside a JSON string would end the <script> element early:
+  // write every "<" as its JSON escape. Function replacement so "$&" in the
+  // data is not interpreted as a replacement pattern.
+  const safeData = data
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+  const injected = html.replace("__DATA__", () => safeData);
   const tempDir = app.getPath("userData");
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
   const target = path.join(tempDir, "tachograph-card-info-tool.html");

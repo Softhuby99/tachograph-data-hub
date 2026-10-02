@@ -43,7 +43,7 @@ WORKDIR /app
 
 # PostgreSQL + supervisord for single-container orchestration.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      postgresql postgresql-contrib supervisor ca-certificates \
+      postgresql postgresql-contrib supervisor ca-certificates libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # App server bundle
@@ -53,6 +53,11 @@ COPY --from=build /app/package.json ./
 # dependency tracing cannot follow — install it explicitly so Node resolves
 # it from /app/node_modules at runtime.
 RUN npm install --omit=dev pg@^8.23.0
+# v2.49: the web server runs as this unprivileged user (see supervisord.conf).
+# It still listens on 443 inside the container through one file capability on
+# the node binary; nothing else about node changes.
+RUN useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --uid 10001 tdhweb \
+    && setcap 'cap_net_bind_service=+ep' "$(readlink -f "$(command -v node)")"
 COPY db/init.sql /app/db/init.sql
 # init.sql pulls the card seed in with \ir, so it has to sit next to it.
 COPY db/seed_cards.sql /app/db/seed_cards.sql

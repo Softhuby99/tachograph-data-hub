@@ -14,21 +14,60 @@ if [ ! -s "$PG_DATA/PG_VERSION" ]; then
   echo "[entrypoint] Initialising PostgreSQL data directory…"
   mkdir -p "$PG_DATA"
   chown -R postgres:postgres "$(dirname "$PG_DATA")"
-  su postgres -c "$PG_BIN/initdb -D \"$PG_DATA\" --auth=trust"
+  su postgres -c "$PG_BIN/initdb -D \"$PG_DATA\" --auth-local=trust --auth-host=scram-sha-256"
 fi
 
+# --- 1b. Client authentication (v2.49) — rewritten on every start so existing
+# data directories (created with --auth=trust) are corrected as well.
+#  * Unix socket: trust, but the socket is created with permissions 0770
+#    (group postgres), so only root and postgres can reach it — i.e. the
+#    entrypoint and `docker exec tacho psql -U postgres …`. The web server runs
+#    as tdhweb and cannot use it.
+#  * TCP (127.0.0.1 / ::1): password (scram-sha-256) for everyone, including
+#    the web app. Only the read-only audit role tdh_ro keeps trust: it has no
+#    password and can only read.
+if [ ! -f "$PG_DATA/pg_hba.conf.pre-v249" ] && [ -f "$PG_DATA/pg_hba.conf" ]; then
+  cp -p "$PG_DATA/pg_hba.conf" "$PG_DATA/pg_hba.conf.pre-v249"
+fi
+cat > "$PG_DATA/pg_hba.conf" <<'HBA'
+# Managed by docker/entrypoint.sh (v2.49) — rewritten on every container start.
+# TYPE  DATABASE  USER     ADDRESS        METHOD
+local   all       all                     trust
+host    all       tdh_ro   127.0.0.1/32   trust
+host    all       tdh_ro   ::1/128        trust
+host    all       all      127.0.0.1/32   scram-sha-256
+host    all       all      ::1/128        scram-sha-256
+HBA
+chown postgres:postgres "$PG_DATA/pg_hba.conf"
+chmod 600 "$PG_DATA/pg_hba.conf"
+
 # --- 2. Start PostgreSQL temporarily to create the app DB/user + seed ---
-su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" -l /tmp/pg.log start -w"
+su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" -o '-c unix_socket_permissions=0770' -l /tmp/pg.log start -w"
 
 DB_NAME="${DB_NAME:-tdh}"
 DB_USER="${DB_USER:-tdh}"
 # No default password — the deployment must set DB_PASSWORD explicitly.
 DB_PASSWORD="${DB_PASSWORD:?DB_PASSWORD must be set (e.g. in /opt/TDH/.env)}"
 
-if ! su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'\"" | grep -q 1; then
+# Role name and password reach psql as variables (runuser, no shell string),
+# so quotes in DB_PASSWORD can neither break the start nor inject SQL.
+if ! runuser -u postgres -- psql -tA -v u="$DB_USER" <<'SQL' | grep -q 1
+SELECT 1 FROM pg_roles WHERE rolname = :'u';
+SQL
+then
   echo "[entrypoint] Creating role $DB_USER…"
-  su postgres -c "psql -c \"CREATE USER \\\"$DB_USER\\\" WITH PASSWORD '$DB_PASSWORD' SUPERUSER;\""
+  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -v u="$DB_USER" <<'SQL'
+CREATE ROLE :"u" LOGIN;
+SQL
 fi
+# v2.49: the app role is never a superuser (it used to be created with
+# SUPERUSER). It owns the app tables, which is all it needs. The password is
+# (re)applied on every start so it is stored as scram-sha-256 and always
+# matches DB_PASSWORD from the deployment env.
+runuser -u postgres -- psql -v ON_ERROR_STOP=1 -v u="$DB_USER" -v pw="$DB_PASSWORD" >/dev/null <<'SQL'
+SET password_encryption = 'scram-sha-256';
+ALTER ROLE :"u" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD :'pw';
+SQL
 
 if ! su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME'\"" | grep -q 1; then
   echo "[entrypoint] Creating database $DB_NAME…"
@@ -86,5 +125,16 @@ if [ -n "${NITRO_SSL_CERT:-}" ] && { [ ! -f /certs/fullchain.pem ] || [ ! -f /ce
   fi
 fi
 
-echo "[entrypoint] Starting supervisord (PostgreSQL + Nitro)…"
+# --- 4. TLS material for the unprivileged web server (v2.49) ---
+# /certs is mounted read-only and the key is usually root-only. Copy cert and
+# key to a tmpfs-like location owned by tdhweb and point Nitro there.
+if [ -n "${NITRO_SSL_CERT:-}" ] && [ -f "${NITRO_SSL_CERT}" ] && [ -f "${NITRO_SSL_KEY:-}" ]; then
+  install -d -m 0750 -o tdhweb -g tdhweb /run/tdh-certs
+  install -m 0644 -o tdhweb -g tdhweb "$NITRO_SSL_CERT" /run/tdh-certs/fullchain.pem
+  install -m 0600 -o tdhweb -g tdhweb "$NITRO_SSL_KEY" /run/tdh-certs/privkey.pem
+  export NITRO_SSL_CERT=/run/tdh-certs/fullchain.pem
+  export NITRO_SSL_KEY=/run/tdh-certs/privkey.pem
+fi
+
+echo "[entrypoint] Starting supervisord (PostgreSQL + Nitro as tdhweb)…"
 exec "$@"

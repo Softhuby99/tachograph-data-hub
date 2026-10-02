@@ -22,6 +22,11 @@ const LARGE_HOSTS = new Set(["www.commoncriteriaportal.org"]);
 const LARGE_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const LARGE_TIMEOUT_MS = 90_000;
 const maxBytesFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_MAX_BYTES : MAX_BYTES);
+
+// v2.49: the endpoint is public. At most this many upstream fetches run at the
+// same time; further requests get 429 instead of piling up memory/sockets.
+const MAX_CONCURRENT = 3;
+let inFlight = 0;
 const timeoutFor = (h: string) => (LARGE_HOSTS.has(h) ? LARGE_TIMEOUT_MS : TIMEOUT_MS);
 
 type PortalProduct = {
@@ -97,32 +102,32 @@ function compactCommonCriteriaPage(html: string): string {
   return `var productList = ${JSON.stringify(tachographProducts)};\nvar ppsList = ${JSON.stringify(tachographPps)};`;
 }
 
-/** Fetch with manual redirect following — each hop must stay in the allowlist. */
-async function fetchFollowRedirects(url: URL, maxHops = 5): Promise<Response> {
+/**
+ * Fetch with manual redirect following — each hop must stay in the allowlist
+ * (https, allowlisted host, default port). The caller's signal carries ONE
+ * deadline for the whole request including reading the body (v2.49: the old
+ * per-hop timer was cleared as soon as headers arrived, so a slow body could
+ * hold the request open indefinitely).
+ */
+async function fetchFollowRedirects(url: URL, signal: AbortSignal, maxHops = 5): Promise<Response> {
   let current = url;
   for (let hop = 0; hop < maxHops; hop++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutFor(current.hostname));
-    try {
-      const res = await fetch(current.toString(), {
-        headers: { "user-agent": "TachographCardsInfoTool/1.0" },
-        redirect: "manual",
-        signal: controller.signal,
-      });
-      if (res.status >= 300 && res.status < 400) {
-        const loc = res.headers.get("location");
-        if (!loc) return res;
-        const next = new URL(loc, current);
-        if (next.protocol !== "https:" || !ALLOWED_HOSTS.has(next.hostname)) {
-          return new Response("Redirect target not allowed", { status: 502 });
-        }
-        current = next;
-        continue;
+    const res = await fetch(current.toString(), {
+      headers: { "user-agent": "TachographCardsInfoTool/1.0" },
+      redirect: "manual",
+      signal,
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (!loc) return res;
+      const next = new URL(loc, current);
+      if (next.protocol !== "https:" || !ALLOWED_HOSTS.has(next.hostname) || next.port !== "") {
+        return new Response("Redirect target not allowed", { status: 502 });
       }
-      return res;
-    } finally {
-      clearTimeout(timer);
+      current = next;
+      continue;
     }
+    return res;
   }
   return new Response("Too many redirects", { status: 502 });
 }
@@ -140,12 +145,29 @@ export const Route = createFileRoute("/api/public/fetch")({
         } catch {
           return new Response("Invalid url", { status: 400 });
         }
-        if (target.protocol !== "https:" || !ALLOWED_HOSTS.has(target.hostname)) {
+        if (
+          target.protocol !== "https:" ||
+          !ALLOWED_HOSTS.has(target.hostname) ||
+          target.port !== ""
+        ) {
           return new Response("Host not allowed", { status: 403 });
         }
+        if (inFlight >= MAX_CONCURRENT) {
+          return new Response("Busy, try again shortly", {
+            status: 429,
+            headers: { "retry-after": "10" },
+          });
+        }
+        inFlight++;
+        // One deadline for redirects + headers + body; also stop when the
+        // client goes away.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutFor(target.hostname));
+        const onClientAbort = () => controller.abort();
+        request.signal?.addEventListener("abort", onClientAbort);
 
         try {
-          const res = await fetchFollowRedirects(target);
+          const res = await fetchFollowRedirects(target, controller.signal);
           if (!res.ok) {
             return new Response(`Upstream request failed [${res.status}]`, { status: 502 });
           }
@@ -204,6 +226,10 @@ export const Route = createFileRoute("/api/public/fetch")({
           return new Response(`Upstream error: ${e instanceof Error ? e.message : String(e)}`, {
             status: 502,
           });
+        } finally {
+          clearTimeout(timer);
+          request.signal?.removeEventListener("abort", onClientAbort);
+          inFlight--;
         }
       },
     },
