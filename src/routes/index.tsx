@@ -269,6 +269,13 @@ function TachographTool() {
   const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
+  // v2.54: a manual edit that collided with someone else's change.
+  const [editConflict, setEditConflict] = useState<{
+    cardId: string;
+    conflicts: { field: string; original: string; theirs: string; yours: string }[];
+    changes: Record<string, string>;
+    expected: Record<string, string>;
+  } | null>(null);
   // v2.53: record opened from Tools → Data quality (read-only window).
   const [toolsRecordId, setToolsRecordId] = useState<string | null>(null);
   const overridesQuery = useOverrides();
@@ -315,9 +322,18 @@ function TachographTool() {
   }, [cards, filteredIds]);
 
   const saveMutation = useMutation({
-    mutationFn: (vars: { cardId: string; patch: Record<string, string> }) =>
-      saveOverrideFn({ data: vars }),
-    onSuccess: () => {
+    mutationFn: async (vars: {
+      cardId: string;
+      patch?: Record<string, string>;
+      changes?: Record<string, string>;
+      expected?: Record<string, string>;
+    }) => (await saveOverrideFn({ data: vars })) as SaveEditResult | undefined,
+    onSuccess: (res, vars) => {
+      if (res && res.ok === false) {
+        setEditConflict({ cardId: vars.cardId, conflicts: res.conflicts, changes: vars.changes ?? {}, expected: vars.expected ?? {} });
+        void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
+        return;
+      }
       toast.success("Changes saved for everyone.");
       void qc.invalidateQueries({ queryKey: ["tachograph_card_overrides"] });
       void qc.invalidateQueries({ queryKey: ["data_quality"] });
@@ -337,7 +353,27 @@ function TachographTool() {
     onError: (e: Error) => toast.error(`Reset failed: ${e.message}`),
   });
 
-  const saveOverride = (id: string, patch: Partial<TachoCard>) => {
+  const saveOverride = (
+    id: string,
+    patch: Partial<TachoCard>,
+    original?: Record<string, string>,
+  ) => {
+    // v2.54 (code review 18): send only what the editor changed, together with
+    // the value they started from.
+    if (original) {
+      const changes: Record<string, string> = {};
+      const expected: Record<string, string> = {};
+      for (const [k, v] of Object.entries(patch)) {
+        const now = String(v ?? "");
+        if (now !== (original[k] ?? "")) {
+          changes[k] = now;
+          expected[k] = original[k] ?? "";
+        }
+      }
+      if (Object.keys(changes).length === 0) return;
+      saveMutation.mutate({ cardId: id, changes, expected });
+      return;
+    }
     const base = rawCards?.find((c) => c.id === id);
     if (!base) return;
     const cleanedPatch: Record<string, string> = {};
@@ -611,6 +647,24 @@ function TachographTool() {
           card={toolsRecordId ? (cards.find((c) => c.id === toolsRecordId) ?? null) : null}
           onClose={() => setToolsRecordId(null)}
         />
+        <EditConflictDialog
+          conflict={editConflict}
+          onKeepTheirs={() => {
+            setEditConflict(null);
+            toast.info("Kept the saved values — your conflicting changes were not written.");
+          }}
+          onOverwrite={() => {
+            if (!editConflict) return;
+            const expected = { ...editConflict.expected };
+            for (const c of editConflict.conflicts) expected[c.field] = c.theirs;
+            saveMutation.mutate({
+              cardId: editConflict.cardId,
+              changes: editConflict.changes,
+              expected,
+            });
+            setEditConflict(null);
+          }}
+        />
 
         <footer className="mt-8 border-t pt-4 text-xs text-muted-foreground">
           Last data update: {cards?.[0]?.data_reference_date ?? "—"} · Source: JRC, ANSSI, RDW,
@@ -635,7 +689,7 @@ function DataView({
   overrides: Overrides;
   canEdit: boolean;
   editHint: string;
-  onSave: (id: string, patch: Partial<TachoCard>) => void;
+  onSave: (id: string, patch: Partial<TachoCard>, original?: Record<string, string>) => void;
   onReset: (id: string) => void;
   /** Reports the current filter upwards so Tools can export exactly this view. */
   onFilteredChange?: (ids: string[]) => void;
@@ -948,7 +1002,7 @@ function DataView({
               edited={!!overrides[selected.id]}
               canEdit={canEdit}
               editHint={editHint}
-              onSave={(patch) => onSave(selected.id, patch)}
+              onSave={(patch, original) => onSave(selected.id, patch, original)}
               onReset={() => onReset(selected.id)}
               marketStatus={marketStatusById?.get(selected.id)?.status}
             />
@@ -1123,12 +1177,16 @@ function DetailView({
   edited: boolean;
   canEdit: boolean;
   editHint: string;
-  onSave: (patch: Partial<TachoCard>) => void;
+  onSave: (patch: Partial<TachoCard>, original?: Record<string, string>) => void;
   onReset: () => void;
   marketStatus?: MarketStatus;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  // v2.54 (code review 18): what the record showed when editing started — the
+  // server only writes fields that differ from it and reports a conflict when
+  // someone else changed the same field meanwhile.
+  const [original, setOriginal] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setEditing(false);
@@ -1141,6 +1199,7 @@ function DetailView({
       d[k as string] = String((card as Record<string, unknown>)[k as string] ?? "");
     }
     setDraft(d);
+    setOriginal(d);
     setEditing(true);
   };
   const cancel = () => {
@@ -1148,7 +1207,7 @@ function DetailView({
     setDraft({});
   };
   const save = () => {
-    onSave(draft as Partial<TachoCard>);
+    onSave(draft as Partial<TachoCard>, original);
     setEditing(false);
   };
 
@@ -2993,5 +3052,70 @@ function LinkField({
         </div>
       )}
     </div>
+  );
+}
+
+type SaveEditResult =
+  | { ok: true; applied?: string[]; cleared?: boolean }
+  | { ok: false; conflicts: { field: string; original: string; theirs: string; yours: string }[] };
+
+const FIELD_LABEL = new Map<string, string>(
+  GROUP1_FIELDS.map(([k, label]) => [k as string, label]),
+);
+
+/**
+ * v2.54 (code review 18): someone else saved the same field while this edit
+ * was open. Nothing was written; the editor chooses per save.
+ */
+function EditConflictDialog({
+  conflict,
+  onKeepTheirs,
+  onOverwrite,
+}: {
+  conflict: {
+    conflicts: { field: string; original: string; theirs: string; yours: string }[];
+  } | null;
+  onKeepTheirs: () => void;
+  onOverwrite: () => void;
+}) {
+  return (
+    <Dialog open={!!conflict} onOpenChange={(o) => !o && onKeepTheirs()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Someone else changed this record meanwhile</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Nothing was saved. These fields were changed by someone else after you started editing:
+        </p>
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/60 text-left text-muted-foreground">
+              <tr>
+                <th className="px-2 py-1.5 font-medium">Field</th>
+                <th className="px-2 py-1.5 font-medium">When you started</th>
+                <th className="px-2 py-1.5 font-medium">Saved now</th>
+                <th className="px-2 py-1.5 font-medium">Yours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(conflict?.conflicts ?? []).map((c) => (
+                <tr key={c.field} className="border-t align-top">
+                  <td className="px-2 py-1.5 font-medium">{FIELD_LABEL.get(c.field) ?? c.field}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{c.original || "—"}</td>
+                  <td className="px-2 py-1.5">{c.theirs || "—"}</td>
+                  <td className="px-2 py-1.5 font-medium">{c.yours || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onKeepTheirs}>
+            Keep saved values
+          </Button>
+          <Button onClick={onOverwrite}>Overwrite with mine</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

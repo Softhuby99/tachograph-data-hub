@@ -28,12 +28,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RefreshCw, Check, X, ExternalLink, ListChecks, Eye, EyeOff } from "lucide-react";
+import {
+  RefreshCw,
+  Check,
+  X,
+  ExternalLink,
+  ListChecks,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
+
+/** v2.54: live state of a proposed field change (see jrc.server fieldStates). */
+type FieldState = {
+  field: string;
+  label: string;
+  detected: string;
+  current: string;
+  proposed: string;
+  manual: string | null;
+  stale: boolean;
+  manualConflict: boolean;
+  alreadyApplied: boolean;
+};
+
+type ApproveResponse =
+  | { ok: true; alreadyApproved?: boolean; keptManual?: string[]; applied?: string[] }
+  | { ok: false; conflict: { message: string; fields: FieldState[] } };
 
 const SOURCE_LABELS: Record<string, string> = {
   card_status: "Card status",
@@ -75,6 +101,8 @@ type Proposal = {
   title: string | null;
   payload: Record<string, string> | null;
   changes: { fields?: FieldChange[] } | null;
+  /** v2.54: pending field changes only. */
+  live?: FieldState[];
   status: string;
   created_at: string;
   updated_at?: string | null;
@@ -109,6 +137,12 @@ export function UpdatesView() {
   const [onlyUnreviewed, setOnlyUnreviewed] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [newCountry, setNewCountry] = useState<Record<string, string>>({});
+  // v2.54: per proposal — which value wins for fields with a manual edit, and
+  // whether a change since detection was acknowledged.
+  const [resolutions, setResolutions] = useState<
+    Record<string, Record<string, "source" | "manual">>
+  >({});
+  const [confirmStale, setConfirmStale] = useState<Record<string, boolean>>({});
 
   const fetchProposals = useServerFn(getProposals);
   const proposals = useQuery({
@@ -206,9 +240,26 @@ export function UpdatesView() {
   const [bulkRunning, setBulkRunning] = useState(false);
 
   const approveMutation = useMutation({
-    mutationFn: (vars: { id: string; country: string }) => approve({ data: vars }),
-    onSuccess: () => {
-      toast.success("Update applied to the database.");
+    mutationFn: async (vars: {
+      id: string;
+      country: string;
+      resolutions?: Record<string, "source" | "manual">;
+      confirmStale?: boolean;
+    }) => (await approve({ data: vars })) as ApproveResponse | undefined,
+    onSuccess: (res) => {
+      if (res && res.ok === false) {
+        // The record changed or a manual value is in the way — the card now
+        // shows the current state; decide and approve again.
+        toast.warning(`Not applied: ${res.conflict.message}.`);
+        invalidate();
+        return;
+      }
+      const kept = res && res.ok ? (res.keptManual ?? []) : [];
+      toast.success(
+        kept.length > 0
+          ? `Applied; manual value kept for ${kept.length} field(s).`
+          : "Update applied to the database.",
+      );
       invalidate();
     },
     onError: (e: Error) => toast.error(`Apply failed: ${e.message}`),
@@ -275,9 +326,21 @@ export function UpdatesView() {
 
   const isChangeProposal = (p: Proposal) =>
     !!p.card_id && (p.changes?.fields?.length ?? 0) > 0 && p.kind !== "info";
+  /** v2.54: every manual conflict has a choice and a stale record was acknowledged. */
+  const decided = (p: Proposal) => {
+    const open = (p.live ?? []).filter((f) => !f.alreadyApplied);
+    if (open.some((f) => f.manualConflict && !resolutions[p.id]?.[f.field])) return false;
+    if (open.some((f) => f.stale) && !confirmStale[p.id]) return false;
+    return true;
+  };
+  /** v2.54: needs a decision (manual value in the way, or changed since found). */
+  const needsDecision = (p: Proposal) =>
+    (p.live ?? []).some((f) => !f.alreadyApplied && (f.stale || f.manualConflict));
 
   const bulkEligible = pending.filter(
-    (p) => isChangeProposal(p) || countryFor(p).trim() !== "" || deviceOf(p) !== "Card",
+    (p) =>
+      !needsDecision(p) &&
+      (isChangeProposal(p) || countryFor(p).trim() !== "" || deviceOf(p) !== "Card"),
   );
 
   const handledAll = all.filter((p) => p.status !== "pending" && bySource(p));
@@ -315,7 +378,11 @@ export function UpdatesView() {
         // applied — approveProposal refuses anything else on purpose, so that
         // an already applied change is never written a second time by accident.
         if (p.status !== "pending") await reopen({ data: { id: p.id } });
-        await approve({ data: { id: p.id, country: countryFor(p) } });
+        const res = (await approve({ data: { id: p.id, country: countryFor(p) } })) as
+          | ApproveResponse
+          | undefined;
+        if (res && res.ok === false)
+          throw new Error(`needs a single decision — ${res.conflict.message}`);
         done++;
       } catch (e) {
         failed.push(`${p.title || p.jrc_type_approval || p.id}: ${(e as Error).message}`);
@@ -693,7 +760,19 @@ export function UpdatesView() {
                   </div>
                 )}
 
-                {fields.length > 0 && (
+                {p.status === "pending" && (p.live?.length ?? 0) > 0 && (
+                  <LiveFieldTable
+                    groupId={p.id}
+                    states={p.live!}
+                    resolution={resolutions[p.id] ?? {}}
+                    onResolve={(field, v) =>
+                      setResolutions((r) => ({ ...r, [p.id]: { ...(r[p.id] ?? {}), [field]: v } }))
+                    }
+                    confirmed={!!confirmStale[p.id]}
+                    onConfirm={(v) => setConfirmStale((c) => ({ ...c, [p.id]: v }))}
+                  />
+                )}
+                {fields.length > 0 && !(p.status === "pending" && (p.live?.length ?? 0) > 0) && (
                   <div className="rounded-md border">
                     <div className="grid grid-cols-3 gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium">
                       <span>Field</span>
@@ -805,6 +884,8 @@ export function UpdatesView() {
                       size="sm"
                       onClick={() =>
                         approveMutation.mutate({
+                          resolutions: resolutions[p.id],
+                          confirmStale: !!confirmStale[p.id],
                           id: p.id,
                           // No issuer-prefix fallback here either: an unedited field
                           // must stay empty rather than silently store the authority's
@@ -816,7 +897,8 @@ export function UpdatesView() {
                             "",
                         })
                       }
-                      disabled={approveMutation.isPending || !signedIn}
+                      disabled={approveMutation.isPending || !signedIn || !decided(p)}
+                      title={decided(p) ? undefined : "Decide the highlighted fields first"}
                     >
                       <Check className="mr-2 h-4 w-4" />{" "}
                       {deviceOf(p) !== "Card"
@@ -864,6 +946,113 @@ function Detail({ label, value }: { label: string; value: string }) {
     <div>
       <span className="text-muted-foreground">{label}: </span>
       <span>{value || "—"}</span>
+    </div>
+  );
+}
+
+/**
+ * v2.54 (code review 16/17): proposed field changes against the record as it
+ * is now. A field with a manual value that differs from the proposal needs a
+ * choice; a record that changed since the proposal was found needs an
+ * explicit confirmation. The server re-checks both inside the approval.
+ */
+function LiveFieldTable({
+  groupId,
+  states,
+  resolution,
+  onResolve,
+  confirmed,
+  onConfirm,
+}: {
+  groupId: string;
+  states: FieldState[];
+  resolution: Record<string, "source" | "manual">;
+  onResolve: (field: string, v: "source" | "manual") => void;
+  confirmed: boolean;
+  onConfirm: (v: boolean) => void;
+}) {
+  const anyStale = states.some((s) => s.stale && !s.alreadyApplied);
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border">
+        <div className="grid grid-cols-3 gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium">
+          <span>Field</span>
+          <span>Now in the record</span>
+          <span>Proposed</span>
+        </div>
+        {states.map((f) => {
+          const conflict = !f.alreadyApplied && (f.stale || f.manualConflict);
+          return (
+            <div
+              key={f.field}
+              className={`grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0 ${conflict ? "bg-amber-50 dark:bg-amber-950/40" : ""}`}
+            >
+              <span className="font-medium">
+                {f.label}
+                {f.manual !== null && (
+                  <Badge variant="outline" className="ml-1 px-1 py-0 text-[10px]">
+                    manual
+                  </Badge>
+                )}
+              </span>
+              <span>
+                <span className={f.alreadyApplied ? "" : "text-muted-foreground line-through"}>
+                  {f.current || "—"}
+                </span>
+                {f.stale && !f.alreadyApplied && (
+                  <span className="mt-0.5 block text-[11px] text-amber-700 dark:text-amber-400">
+                    was “{f.detected || "—"}” when found
+                  </span>
+                )}
+              </span>
+              <span>
+                {f.alreadyApplied ? (
+                  <span className="text-muted-foreground">already shown — nothing to write</span>
+                ) : (
+                  <span className="text-foreground">{f.proposed}</span>
+                )}
+                {f.manualConflict && !f.alreadyApplied && (
+                  <span className="mt-1 flex flex-wrap gap-3 text-[11px]">
+                    <label className="inline-flex items-center gap-1">
+                      <input
+                        type="radio"
+                        name={`res-${groupId}-${f.field}`}
+                        checked={resolution[f.field] === "source"}
+                        onChange={() => onResolve(f.field, "source")}
+                      />
+                      use proposed (manual value is removed)
+                    </label>
+                    <label className="inline-flex items-center gap-1">
+                      <input
+                        type="radio"
+                        name={`res-${groupId}-${f.field}`}
+                        checked={resolution[f.field] === "manual"}
+                        onChange={() => onResolve(f.field, "manual")}
+                      />
+                      keep manual
+                    </label>
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {anyStale && (
+        <label className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={confirmed}
+            onChange={(e) => onConfirm(e.target.checked)}
+          />
+          <span>
+            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+            The record changed since this proposal was found. I checked the current value and want
+            to apply the proposal anyway.
+          </span>
+        </label>
+      )}
     </div>
   );
 }

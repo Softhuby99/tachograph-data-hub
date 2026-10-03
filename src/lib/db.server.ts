@@ -51,6 +51,49 @@ export function isLocalDb(): boolean {
   return !!process.env["DB_HOST"];
 }
 
+// ------------------------------------------------------- transactions (v2.54)
+
+export type TxQuery = <T = Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+) => Promise<T[]>;
+
+/**
+ * Runs fn inside one transaction on one connection (local PostgreSQL only).
+ * Code review 10: approving a proposal or saving an edit touches several rows
+ * (card, override, history, proposal status) — all or nothing.
+ */
+export async function withTransaction<T>(fn: (q: TxQuery) => Promise<T>): Promise<T> {
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    const q: TxQuery = async (sql, params = []) =>
+      (await client.query(sql, params as never[])).rows as never;
+    const result = await fn(q);
+    await client.query("COMMIT");
+    return result;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Overrides merged into card rows — the values a reader actually sees. */
+export async function withOverrides<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  const overrides = await getAllOverrides();
+  if (overrides.length === 0) return rows;
+  const byId = new Map(overrides.map((o) => [o.card_id, o.patch ?? {}]));
+  return rows.map((r) => {
+    const patch = byId.get(r.id);
+    if (!patch) return r;
+    const merged = { ...r } as Record<string, unknown>;
+    for (const [k, v] of Object.entries(patch)) merged[k] = v;
+    return merged as T;
+  });
+}
+
 // --------------------------------------------------------------------- types
 
 export type CardRow = {
@@ -250,6 +293,36 @@ export async function getCardById(id: string): Promise<Record<string, unknown> |
  * transaction that changed the data: a failure here is logged and swallowed so
  * a broken history table can never block an edit.
  */
+/** v2.54: history rows written inside a transaction (they commit or roll back with the change). */
+export async function insertFieldHistoryTx(
+  q: TxQuery,
+  entries: FieldHistoryEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const values: unknown[] = [];
+  const tuples = entries.map((e, i) => {
+    const b = i * 9;
+    values.push(
+      e.card_id,
+      e.field,
+      e.old_value ?? "",
+      e.new_value ?? "",
+      e.origin,
+      e.source_label ?? "",
+      e.source_url ?? "",
+      e.proposal_id ?? null,
+      uuidOrNull(e.changed_by),
+    );
+    return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`;
+  });
+  await q(
+    `INSERT INTO public.card_field_history
+       (card_id, field, old_value, new_value, origin, source_label, source_url, proposal_id, changed_by)
+     VALUES ${tuples.join(",")}`,
+    values,
+  );
+}
+
 export async function insertFieldHistory(entries: FieldHistoryEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const rows = entries.map((e) => ({
@@ -304,7 +377,10 @@ export async function insertFieldHistory(entries: FieldHistoryEntry[]): Promise<
         status: "failed",
         message: `Field history could not be recorded (${rows.length} change(s)): ${m.errorMessage(e)}`,
         cardId: (rows[0] as { card_id?: string } | undefined)?.card_id ?? null,
-        details: { fields: rows.map((r) => (r as { field?: string }).field ?? "").slice(0, 20), ...m.errorDetails(e) },
+        details: {
+          fields: rows.map((r) => (r as { field?: string }).field ?? "").slice(0, 20),
+          ...m.errorDetails(e),
+        },
       }),
     );
   }
@@ -392,6 +468,124 @@ export async function saveOverride(
     .from("tachograph_card_overrides")
     .upsert({ card_id: cardId, patch, edited_by: uuidOrNull(editedBy) }, { onConflict: "card_id" });
   if (error) throw new Error(error.message);
+}
+
+// ------------------------------------------------- manual edits (v2.54, review 18)
+
+/** Fields a manual edit may set: the card columns plus the virtual card_quantities. */
+export const EDITABLE_FIELDS = new Set(
+  CARD_COLUMNS.split(",")
+    .filter((c) => !["id", "created_at", "updated_at", "data_reference_date"].includes(c))
+    .concat(["card_quantities"]),
+);
+
+export type EditConflict = { field: string; original: string; theirs: string; yours: string };
+export type EditResult =
+  | { ok: true; applied: string[]; cleared: boolean }
+  | { ok: false; conflicts: EditConflict[] };
+
+const s_ = (v: unknown) => String(v ?? "");
+
+/**
+ * Saves a manual edit field by field. `expected` holds what the editor saw
+ * when they started; a field that someone else changed in the meantime is a
+ * conflict unless both ended up with the same value. Fields the editor did
+ * not touch are never written. Local PostgreSQL: one transaction with the
+ * card and override rows locked; history is written in the same transaction.
+ */
+export async function applyCardEdit(
+  cardId: string,
+  changes: Record<string, string>,
+  expected: Record<string, string>,
+  userId: string | null,
+  normalise: (patch: Record<string, string>, base: Record<string, unknown>) => void,
+): Promise<EditResult> {
+  const run = async (
+    read: () => Promise<{ base: Record<string, unknown> | null; patch: Record<string, string> }>,
+    write: (next: Record<string, string> | null, history: FieldHistoryEntry[]) => Promise<void>,
+  ): Promise<EditResult> => {
+    const { base, patch } = await read();
+    if (!base) throw new Error("Record not found");
+    const current = (f: string) =>
+      Object.prototype.hasOwnProperty.call(patch, f) ? s_(patch[f]) : s_(base[f]);
+    const conflicts: EditConflict[] = [];
+    const apply: Record<string, string> = {};
+    for (const [field, yours] of Object.entries(changes)) {
+      const original = s_(expected[field]);
+      const theirs = current(field);
+      if (yours === original) continue; // not touched by this editor
+      if (theirs === yours) continue; // already the same value
+      if (theirs !== original) {
+        conflicts.push({ field, original, theirs, yours });
+        continue;
+      }
+      apply[field] = yours;
+    }
+    if (conflicts.length > 0) return { ok: false, conflicts };
+    if (Object.keys(apply).length === 0) return { ok: true, applied: [], cleared: false };
+    normalise(apply, base);
+    const next: Record<string, string> = { ...patch };
+    const history: FieldHistoryEntry[] = [];
+    for (const [field, value] of Object.entries(apply)) {
+      const before = current(field);
+      if (value === s_(base[field])) delete next[field];
+      else next[field] = value;
+      if (before !== value)
+        history.push({
+          card_id: cardId,
+          field,
+          old_value: before,
+          new_value: value,
+          origin: "manual",
+          changed_by: userId,
+        });
+    }
+    const empty = Object.keys(next).length === 0;
+    await write(empty ? null : next, history);
+    return { ok: true, applied: Object.keys(apply), cleared: empty };
+  };
+
+  if (isLocalDb()) {
+    return await withTransaction(async (q) =>
+      run(
+        async () => {
+          const [base] = await q(`SELECT * FROM public.tachograph_cards WHERE id = $1 FOR UPDATE`, [
+            cardId,
+          ]);
+          const [ov] = await q<{ patch: Record<string, string> }>(
+            `SELECT patch FROM public.tachograph_card_overrides WHERE card_id = $1 FOR UPDATE`,
+            [cardId],
+          );
+          return { base: base ?? null, patch: { ...(ov?.patch ?? {}) } };
+        },
+        async (next, history) => {
+          if (next === null) {
+            await q(`DELETE FROM public.tachograph_card_overrides WHERE card_id = $1`, [cardId]);
+          } else {
+            await q(
+              `INSERT INTO public.tachograph_card_overrides (card_id, patch, edited_by)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (card_id) DO UPDATE SET patch = $2, edited_by = $3, updated_at = now()`,
+              [cardId, JSON.stringify(next), uuidOrNull(userId)],
+            );
+          }
+          await insertFieldHistoryTx(q, history);
+        },
+      ),
+    );
+  }
+  // Hosted backend: same rules, without the row locks.
+  return await run(
+    async () => ({
+      base: await getCardById(cardId),
+      patch: { ...((await getOverridePatch(cardId)) ?? {}) },
+    }),
+    async (next, history) => {
+      if (next === null) await deleteOverride(cardId);
+      else await saveOverride(cardId, next, userId);
+      await insertFieldHistory(history);
+    },
+  );
 }
 
 export async function deleteOverride(cardId: string): Promise<void> {
@@ -825,9 +1019,7 @@ export type CurrentListingRow = {
   device_type: string;
 };
 
-export async function getCurrentListing(): Promise<
-  (CurrentListingRow & { updated_at: string })[]
-> {
+export async function getCurrentListing(): Promise<(CurrentListingRow & { updated_at: string })[]> {
   if (isLocalDb()) {
     const { rows } = await pool().query(
       `SELECT source_type, type_approval_number, raw_type_approval, manufacturer, card_name,

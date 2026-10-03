@@ -11,6 +11,8 @@ import {
   getCardHistory,
   insertFieldHistory,
   uuidOrNull,
+  applyCardEdit,
+  EDITABLE_FIELDS,
 } from "@/lib/db.server";
 import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
 import { emitEvent, logActionFailure } from "@/lib/events.server";
@@ -41,53 +43,91 @@ export const getCardChangeHistory = createServerFn({ method: "GET" })
 
 // ---- writes (optional auth) ---------------------------------------------
 
+function stringMap(v: unknown, allowed: Set<string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!v || typeof v !== "object") return out;
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (allowed.has(k)) out[k] = String(val ?? "").slice(0, 20000);
+  }
+  return out;
+}
+
 export const saveCardOverride = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
-  .inputValidator((data: { cardId: string; patch: Record<string, string> }) => ({
-    cardId: String(data?.cardId ?? ""),
-    patch: (data?.patch ?? {}) as Record<string, string>,
-  }))
+  .inputValidator(
+    (data: {
+      cardId: string;
+      patch?: Record<string, string>;
+      changes?: Record<string, string>;
+      expected?: Record<string, string>;
+    }) => ({
+      cardId: String(data?.cardId ?? ""),
+      patch: stringMap(data?.patch, EDITABLE_FIELDS),
+      // v2.54 (code review 18/20): only the fields the editor changed, plus
+      // what they saw when they started; unknown fields are dropped.
+      changes: data?.changes ? stringMap(data.changes, EDITABLE_FIELDS) : null,
+      expected: stringMap(data?.expected, EDITABLE_FIELDS),
+    }),
+  )
   .handler(async ({ data, context }) =>
     logActionFailure(
       "Save card edit",
-      { cardId: data.cardId, details: { fields: Object.keys(data.patch) } },
+      {
+        cardId: data.cardId,
+        details: { fields: Object.keys(data.changes ?? data.patch) },
+      },
       async () => {
-    if (!data.cardId) throw new Error("Missing card id");
+        if (!data.cardId) throw new Error("Missing card id");
+        if (data.changes) {
+          return await applyCardEdit(
+            data.cardId,
+            data.changes,
+            data.expected,
+            context?.userId ?? null,
+            (apply) => {
+              // Editing the country also moves the flag (see the note below).
+              if (typeof apply["country"] === "string") {
+                apply["country"] = normalizeCountry(apply["country"]);
+                apply["country_flag"] = flagEmoji(apply["country"]);
+              }
+            },
+          );
+        }
 
-    const existing = await getOverridePatch(data.cardId);
-    const merged = { ...(existing ?? {}), ...data.patch };
+        const existing = await getOverridePatch(data.cardId);
+        const merged = { ...(existing ?? {}), ...data.patch };
 
-    // Editing the country must also move the flag. Without this the override
-    // changes the country while the card row keeps its old country_flag, and
-    // the record shows the previous country's flag whenever the ISO lookup
-    // misses (e.g. on a value with trailing whitespace).
-    if (typeof merged["country"] === "string") {
-      merged["country"] = normalizeCountry(merged["country"]);
-      merged["country_flag"] = flagEmoji(merged["country"]);
-    }
+        // Editing the country must also move the flag. Without this the override
+        // changes the country while the card row keeps its old country_flag, and
+        // the record shows the previous country's flag whenever the ISO lookup
+        // misses (e.g. on a value with trailing whitespace).
+        if (typeof merged["country"] === "string") {
+          merged["country"] = normalizeCountry(merged["country"]);
+          merged["country_flag"] = flagEmoji(merged["country"]);
+        }
 
-    // Record what actually changed, before the write. The value a reader saw
-    // before is base row + previous override, so that is what "old" means.
-    const base = await getCardById(data.cardId);
-    const before = { ...(base ?? {}), ...(existing ?? {}) } as Record<string, unknown>;
-    const history = Object.keys(merged)
-      .filter((field) => String(before[field] ?? "") !== String(merged[field] ?? ""))
-      .map((field) => ({
-        card_id: data.cardId,
-        field,
-        old_value: String(before[field] ?? ""),
-        new_value: String(merged[field] ?? ""),
-        origin: "manual",
-        changed_by: context?.userId ?? null,
-      }));
+        // Record what actually changed, before the write. The value a reader saw
+        // before is base row + previous override, so that is what "old" means.
+        const base = await getCardById(data.cardId);
+        const before = { ...(base ?? {}), ...(existing ?? {}) } as Record<string, unknown>;
+        const history = Object.keys(merged)
+          .filter((field) => String(before[field] ?? "") !== String(merged[field] ?? ""))
+          .map((field) => ({
+            card_id: data.cardId,
+            field,
+            old_value: String(before[field] ?? ""),
+            new_value: String(merged[field] ?? ""),
+            origin: "manual",
+            changed_by: context?.userId ?? null,
+          }));
 
-    if (Object.keys(merged).length === 0) {
-      await deleteOverride(data.cardId);
-      return { ok: true, cleared: true };
-    }
-    await saveOverride(data.cardId, merged, context?.userId ?? null);
-    await insertFieldHistory(history);
-    return { ok: true, cleared: false };
+        if (Object.keys(merged).length === 0) {
+          await deleteOverride(data.cardId);
+          return { ok: true, cleared: true };
+        }
+        await saveOverride(data.cardId, merged, context?.userId ?? null);
+        await insertFieldHistory(history);
+        return { ok: true, cleared: false };
       },
     ),
   );
@@ -97,26 +137,26 @@ export const resetCardOverride = createServerFn({ method: "POST" })
   .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
   .handler(async ({ data, context }) =>
     logActionFailure("Reset card edits", { cardId: data.cardId }, async () => {
-    // Removing the manual edits is itself a change worth recording: the fields
-    // fall back to the base row, and without an entry the history would show
-    // an edit that silently disappeared again.
-    const existing = await getOverridePatch(data.cardId);
-    const base = await getCardById(data.cardId);
-    const history = Object.entries(existing ?? {})
-      .filter(([field, value]) => String(value ?? "") !== String(base?.[field] ?? ""))
-      .map(([field, value]) => ({
-        card_id: data.cardId,
-        field,
-        old_value: String(value ?? ""),
-        new_value: String(base?.[field] ?? ""),
-        origin: "reset",
-        source_label: "Manual edits removed",
-        changed_by: context?.userId ?? null,
-      }));
+      // Removing the manual edits is itself a change worth recording: the fields
+      // fall back to the base row, and without an entry the history would show
+      // an edit that silently disappeared again.
+      const existing = await getOverridePatch(data.cardId);
+      const base = await getCardById(data.cardId);
+      const history = Object.entries(existing ?? {})
+        .filter(([field, value]) => String(value ?? "") !== String(base?.[field] ?? ""))
+        .map(([field, value]) => ({
+          card_id: data.cardId,
+          field,
+          old_value: String(value ?? ""),
+          new_value: String(base?.[field] ?? ""),
+          origin: "reset",
+          source_label: "Manual edits removed",
+          changed_by: context?.userId ?? null,
+        }));
 
-    await deleteOverride(data.cardId);
-    await insertFieldHistory(history);
-    return { ok: true };
+      await deleteOverride(data.cardId);
+      await insertFieldHistory(history);
+      return { ok: true };
     }),
   );
 
@@ -184,109 +224,115 @@ export const importCards = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }) =>
     logActionFailure("CSV import", { details: { rows: data.rows.length } }, async () => {
-    const started = Date.now();
-    const cards = (await getAllCards()) as Record<string, unknown>[];
-    const byId = new Map(cards.map((c) => [String(c["id"]), c]));
-    const byKey = new Map(cards.map((c) => [matchKey(c), c]));
-    const overrides = await getAllOverrides();
-    const patchById = new Map(
-      overrides.map((o) => [o.card_id, (o.patch ?? {}) as Record<string, string>]),
-    );
+      const started = Date.now();
+      const cards = (await getAllCards()) as Record<string, unknown>[];
+      const byId = new Map(cards.map((c) => [String(c["id"]), c]));
+      const byKey = new Map(cards.map((c) => [matchKey(c), c]));
+      const overrides = await getAllOverrides();
+      const patchById = new Map(
+        overrides.map((o) => [o.card_id, (o.patch ?? {}) as Record<string, string>]),
+      );
 
-    let updated = 0;
-    let created = 0;
-    let unchanged = 0;
-    const errors: string[] = [];
+      let updated = 0;
+      let created = 0;
+      let unchanged = 0;
+      const errors: string[] = [];
 
-    for (const [index, raw] of data.rows.entries()) {
-      try {
-        const row: Record<string, string> = {};
-        for (const [k, v] of Object.entries(raw)) {
-          const value = String(v ?? "").trim();
-          if (k === "id" || value === "") continue;
-          row[k] = value;
+      for (const [index, raw] of data.rows.entries()) {
+        try {
+          const row: Record<string, string> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            const value = String(v ?? "").trim();
+            if (k === "id" || value === "") continue;
+            row[k] = value;
+          }
+          const target =
+            (raw["id"] && byId.get(String(raw["id"]).trim())) || byKey.get(matchKey(raw));
+
+          if (target) {
+            const id = String(target["id"]);
+            const current = { ...target, ...(patchById.get(id) ?? {}) };
+            const patch: Record<string, string> = {};
+            for (const [k, v] of Object.entries(row)) {
+              if (String(current[k] ?? "") !== v) patch[k] = v;
+            }
+            if (Object.keys(patch).length === 0) {
+              unchanged++;
+              continue;
+            }
+            const merged = { ...(patchById.get(id) ?? {}), ...patch };
+            await saveOverride(id, merged, context?.userId ?? null);
+            await insertFieldHistory(
+              Object.entries(patch).map(([field, value]) => ({
+                card_id: id,
+                field,
+                old_value: String(current[field] ?? ""),
+                new_value: value,
+                origin: "csv_import",
+                source_label: `CSV row ${index + 1}`,
+                changed_by: context?.userId ?? null,
+              })),
+            );
+            patchById.set(id, merged);
+            updated++;
+          } else {
+            const insert: Record<string, unknown> = {};
+            for (const col of DB_COLUMNS) {
+              if (row[col] != null) insert[col] = row[col];
+            }
+            for (const col of DATE_COLUMNS) {
+              const v = String(insert[col] ?? "");
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) delete insert[col];
+            }
+            if (!insert["country"]) {
+              errors.push(`Row ${index + 2}: no country — skipped.`);
+              continue;
+            }
+            // Keep the id the file carries. Exports from another instance of this
+            // app bring their own ids; dropping them meant a re-import could only
+            // match on country + type approval + generation, so the two databases
+            // drifted apart with every round trip. We only get here when no card
+            // with that id exists, so it cannot collide.
+            const csvId = uuidOrNull(raw["id"]);
+            if (csvId) insert["id"] = csvId;
+            const newId = await insertCard(insert);
+            // Register the new card in the lookup maps. They are built once
+            // before the loop, so without this a file containing two rows with
+            // the same country + type approval + generation inserted both, and
+            // a second import of the same file kept adding copies instead of
+            // matching what the first run had created.
+            if (newId) {
+              const stored = { ...insert, id: newId };
+              byId.set(newId, stored);
+              byKey.set(matchKey(stored), stored);
+            }
+            created++;
+          }
+        } catch (e) {
+          errors.push(`Row ${index + 2}: ${(e as Error).message}`);
         }
-        const target =
-          (raw["id"] && byId.get(String(raw["id"]).trim())) || byKey.get(matchKey(raw));
-
-        if (target) {
-          const id = String(target["id"]);
-          const current = { ...target, ...(patchById.get(id) ?? {}) };
-          const patch: Record<string, string> = {};
-          for (const [k, v] of Object.entries(row)) {
-            if (String(current[k] ?? "") !== v) patch[k] = v;
-          }
-          if (Object.keys(patch).length === 0) {
-            unchanged++;
-            continue;
-          }
-          const merged = { ...(patchById.get(id) ?? {}), ...patch };
-          await saveOverride(id, merged, context?.userId ?? null);
-          await insertFieldHistory(
-            Object.entries(patch).map(([field, value]) => ({
-              card_id: id,
-              field,
-              old_value: String(current[field] ?? ""),
-              new_value: value,
-              origin: "csv_import",
-              source_label: `CSV row ${index + 1}`,
-              changed_by: context?.userId ?? null,
-            })),
-          );
-          patchById.set(id, merged);
-          updated++;
-        } else {
-          const insert: Record<string, unknown> = {};
-          for (const col of DB_COLUMNS) {
-            if (row[col] != null) insert[col] = row[col];
-          }
-          for (const col of DATE_COLUMNS) {
-            const v = String(insert[col] ?? "");
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) delete insert[col];
-          }
-          if (!insert["country"]) {
-            errors.push(`Row ${index + 2}: no country — skipped.`);
-            continue;
-          }
-          // Keep the id the file carries. Exports from another instance of this
-          // app bring their own ids; dropping them meant a re-import could only
-          // match on country + type approval + generation, so the two databases
-          // drifted apart with every round trip. We only get here when no card
-          // with that id exists, so it cannot collide.
-          const csvId = uuidOrNull(raw["id"]);
-          if (csvId) insert["id"] = csvId;
-          const newId = await insertCard(insert);
-          // Register the new card in the lookup maps. They are built once
-          // before the loop, so without this a file containing two rows with
-          // the same country + type approval + generation inserted both, and
-          // a second import of the same file kept adding copies instead of
-          // matching what the first run had created.
-          if (newId) {
-            const stored = { ...insert, id: newId };
-            byId.set(newId, stored);
-            byKey.set(matchKey(stored), stored);
-          }
-          created++;
-        }
-      } catch (e) {
-        errors.push(`Row ${index + 2}: ${(e as Error).message}`);
       }
-    }
 
-    // v2.52: one summary entry per import (row errors listed, capped).
-    await emitEvent({
-      level: errors.length ? "WARN" : "INFO",
-      category: "action",
-      code: "action.import.completed",
-      status: errors.length ? "partial" : "success",
-      trigger: "manual",
-      actor: "local-admin",
-      durationMs: Date.now() - started,
-      message:
-        `CSV import: ${data.rows.length} row(s) — ${created} new, ${updated} updated, ` +
-        `${unchanged} unchanged, ${errors.length} with errors`,
-      details: { rows: data.rows.length, created, updated, unchanged, errors: errors.slice(0, 20) },
-    });
-    return { updated, created, unchanged, errors };
+      // v2.52: one summary entry per import (row errors listed, capped).
+      await emitEvent({
+        level: errors.length ? "WARN" : "INFO",
+        category: "action",
+        code: "action.import.completed",
+        status: errors.length ? "partial" : "success",
+        trigger: "manual",
+        actor: "local-admin",
+        durationMs: Date.now() - started,
+        message:
+          `CSV import: ${data.rows.length} row(s) — ${created} new, ${updated} updated, ` +
+          `${unchanged} unchanged, ${errors.length} with errors`,
+        details: {
+          rows: data.rows.length,
+          created,
+          updated,
+          unchanged,
+          errors: errors.slice(0, 20),
+        },
+      });
+      return { updated, created, unchanged, errors };
     }),
   );

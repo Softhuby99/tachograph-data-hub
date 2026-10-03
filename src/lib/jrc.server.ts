@@ -44,6 +44,10 @@ import {
   replaceCurrentListing,
   getCurrentListing as dbGetCurrentListing,
   setProposalCardId,
+  withOverrides,
+  withTransaction,
+  insertFieldHistoryTx,
+  type TxQuery,
   type ProposalRow,
   type CurrentListingRow,
 } from "./db.server";
@@ -623,7 +627,9 @@ export class ImplausibleSourceError extends Error {
 }
 
 async function assertPlausibleListing(sourceType: string, nextCount: number): Promise<void> {
-  const prevCount = (await dbGetCurrentListing()).filter((r) => r.source_type === sourceType).length;
+  const prevCount = (await dbGetCurrentListing()).filter(
+    (r) => r.source_type === sourceType,
+  ).length;
   if (nextCount === 0) {
     throw new ImplausibleSourceError(
       `${sourceType}: the page parsed to 0 rows — previous listing (${prevCount} rows) kept. Check whether the JRC page layout changed.`,
@@ -645,7 +651,11 @@ export async function runUpdateCheckForSource(
   const trigger: RunTrigger = opts.trigger ?? "manual";
   let deferredInfo = 0;
   let cappedCc = 0;
-  const cardRows = (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[];
+  // v2.54 (code review 16): compare against the values a reader sees — base
+  // row with manual edits applied — not the base row underneath them.
+  const cardRows = (await withOverrides(
+    (await dbGetCardsForJrc()) as (CardRow & { data_reference_date: string })[],
+  )) as (CardRow & { data_reference_date: string })[];
   const sinceMs = cardRows.reduce((acc, c) => {
     const t = Date.parse(c.data_reference_date ?? "");
     return Number.isNaN(t) ? acc : Math.max(acc, t);
@@ -671,7 +681,9 @@ export async function runUpdateCheckForSource(
     for (const s of snapRows) snapshot.set(s.entry_key, s.fingerprint);
     const baseline = snapshot.size === 0;
     if (entries.length === 0 && !baseline) {
-      throw new ImplausibleSourceError(`${source}: the page parsed to 0 entries — snapshot kept. Check the page layout.`);
+      throw new ImplausibleSourceError(
+        `${source}: the page parsed to 0 entries — snapshot kept. Check the page layout.`,
+      );
     }
 
     let created = 0;
@@ -708,12 +720,14 @@ export async function runUpdateCheckForSource(
     }
 
     // Chunked: a single very large upsert is silently truncated.
-    const snapRowsToWrite = entries.filter((e) => !deferred.has(e.key)).map((e) => ({
-      source_type: source,
-      entry_key: e.key,
-      fingerprint: e.fingerprint,
-      updated_at: new Date().toISOString(),
-    }));
+    const snapRowsToWrite = entries
+      .filter((e) => !deferred.has(e.key))
+      .map((e) => ({
+        source_type: source,
+        entry_key: e.key,
+        fingerprint: e.fingerprint,
+        updated_at: new Date().toISOString(),
+      }));
     await upsertSnapshots(snapRowsToWrite);
 
     return { candidates, created, baseline, deferred: deferred.size };
@@ -768,7 +782,10 @@ export async function runUpdateCheckForSource(
 
         // Persist a full mirror of the page (every component, not just cards)
         // for Market Analytics — see jrc_current_listing (migration 0006).
-        await replaceCurrentListing("other_certificates", (otherRawRows ?? []).map(otherCertToListingRow));
+        await replaceCurrentListing(
+          "other_certificates",
+          (otherRawRows ?? []).map(otherCertToListingRow),
+        );
       } else {
         await replaceCurrentListing("card_status", rows.map(cardRowToListingRow));
       }
@@ -788,7 +805,7 @@ export async function runUpdateCheckForSource(
       const { fetchCcEntries, buildCcProposals } = await import("./cc.server");
       const { getCardsForCc } = await import("./db.server");
       const entries = await fetchCcEntries();
-      const ccCards = await getCardsForCc();
+      const ccCards = await withOverrides(await getCardsForCc());
       const candidates = buildCcProposals(entries, ccCards);
       // v2.50 (code review 25): filter known fingerprints first, then cap —
       // capping first let 80 already-known entries block every new one. Sorted
@@ -809,7 +826,7 @@ export async function runUpdateCheckForSource(
     } else if (source === "ted_procurement") {
       const { fetchTedNotices, buildTedProposals } = await import("./ted.server");
       const notices = await fetchTedNotices();
-      const procCards = await dbGetCardsForTed();
+      const procCards = await withOverrides((await dbGetCardsForTed()) as { id: string }[]);
       const candidates = buildTedProposals(notices, procCards as never, sinceMs);
       const created = await insertProposals(candidates as unknown as ProposalInsert[]);
       result = {
@@ -919,7 +936,12 @@ async function logSourceEvents(r: SourceResult, runId: string, trigger: RunTrigg
       code: "update.source.deferred",
       status: "partial",
       message: `${label}: ${r.deferred} change(s) beyond the per-run limit held back — they come up again in the next run`,
-      details: { source: r.source, deferred: r.deferred, candidates: r.candidates, created: r.created },
+      details: {
+        source: r.source,
+        deferred: r.deferred,
+        candidates: r.candidates,
+        created: r.created,
+      },
       dedupKey: `update.source.deferred:${r.source}`,
     });
   }
@@ -936,7 +958,10 @@ async function logSourceEvents(r: SourceResult, runId: string, trigger: RunTrigg
   }
 }
 
-export async function runUpdateCheck(trigger: RunTrigger = "manual", opts: { runId?: string } = {}) {
+export async function runUpdateCheck(
+  trigger: RunTrigger = "manual",
+  opts: { runId?: string } = {},
+) {
   const runId = opts.runId ?? randomUUID();
   const startedAt = Date.now();
   const results: SourceResult[] = [];
@@ -954,7 +979,8 @@ export async function runUpdateCheck(trigger: RunTrigger = "manual", opts: { run
   );
 
   const failed = results.filter((r) => r.error);
-  const status = failed.length === 0 ? "success" : failed.length === results.length ? "failed" : "partial";
+  const status =
+    failed.length === 0 ? "success" : failed.length === results.length ? "failed" : "partial";
   await emitEvent({
     level: "INFO",
     category: "update",
@@ -984,7 +1010,350 @@ export async function runUpdateCheck(trigger: RunTrigger = "manual", opts: { run
   return { ...totals, runId, status, sources: results };
 }
 
-export async function approveProposal(id: string, country: string, userId?: string | null) {
+// ------------------------------------------------------------ approval (v2.54)
+//
+// Code review 10/16/17 + Restfehler B. Agreed 03.10.2026:
+//  - one transaction: proposal row locked (FOR UPDATE), card + override locked,
+//    card change, override change, history and status commit together;
+//    a second parallel approval waits and then finds the proposal handled;
+//  - 16: a field with a manual value that differs from the proposed one is a
+//    conflict — the admin chooses "source" (manual value removed) or "manual"
+//    (field left as it is);
+//  - 17: when the visible value changed since the proposal was found, the
+//    approval needs an explicit confirmation; history stores the value that
+//    was really overwritten;
+//  - creating a record and linking it to the proposal happen in the same
+//    transaction, so a failure cannot leave an unlinked copy behind.
+
+export type ApproveOptions = {
+  /** Per field with a manual value: take the source value or keep the manual one. */
+  resolutions?: Record<string, "source" | "manual">;
+  /** The admin saw that the value changed since detection and approves anyway. */
+  confirmStale?: boolean;
+};
+
+export type ApprovalFieldState = {
+  field: string;
+  label: string;
+  /** Value when the proposal was found. */
+  detected: string;
+  /** Value a reader sees now (base + manual edit). */
+  current: string;
+  proposed: string;
+  /** Manual value on top of the base row, or null. */
+  manual: string | null;
+  /** Visible value changed since detection (and is not already the proposed value). */
+  stale: boolean;
+  /** A manual value differs from the proposed one. */
+  manualConflict: boolean;
+  /** Already shows the proposed value — nothing to write. */
+  alreadyApplied: boolean;
+};
+
+export type ApproveResult =
+  | {
+      ok: true;
+      linkedExisting?: string;
+      createdId?: string;
+      alreadyApproved?: boolean;
+      keptManual?: string[];
+      applied?: string[];
+    }
+  | { ok: false; conflict: { message: string; fields: ApprovalFieldState[] } };
+
+const sv = (v: unknown) => String(v ?? "").trim();
+
+/** Live state of each proposed field change against the current record. */
+export function fieldStates(
+  changes: FieldChange[],
+  base: Record<string, unknown>,
+  overridePatch: Record<string, unknown> | null,
+): ApprovalFieldState[] {
+  const patch = overridePatch ?? {};
+  return changes.map((c) => {
+    const hasManual = Object.prototype.hasOwnProperty.call(patch, c.field);
+    const manual = hasManual ? sv(patch[c.field]) : null;
+    const current = manual ?? sv(base[c.field]);
+    const proposed = sv(c.new);
+    const alreadyApplied = current === proposed;
+    return {
+      field: c.field,
+      label: c.label,
+      detected: sv(c.old),
+      current,
+      proposed,
+      manual,
+      stale: !alreadyApplied && current !== sv(c.old),
+      manualConflict: manual !== null && manual !== proposed,
+      alreadyApplied,
+    };
+  });
+}
+
+export async function approveProposal(
+  id: string,
+  country: string,
+  userId?: string | null,
+  opts: ApproveOptions = {},
+): Promise<ApproveResult> {
+  if (!isLocalDbBackend()) {
+    return (await approveProposalLegacy(id, country, userId)) as ApproveResult;
+  }
+  return await withTransaction((q) => approveInTx(q, id, country, userId ?? null, opts));
+}
+
+function isLocalDbBackend(): boolean {
+  return !!process.env["DB_HOST"];
+}
+
+async function approveInTx(
+  q: TxQuery,
+  id: string,
+  country: string,
+  userId: string | null,
+  opts: ApproveOptions,
+): Promise<ApproveResult> {
+  const [proposal] = await q<ProposalRow & { status: string }>(
+    `SELECT * FROM public.jrc_update_proposals WHERE id = $1 FOR UPDATE`,
+    [id],
+  );
+  if (!proposal) throw new Error("Proposal not found");
+  if (proposal.status === "approved") return { ok: true, alreadyApproved: true };
+  if (proposal.status !== "pending") throw new Error("Proposal already handled");
+
+  const changes = proposal.changes?.fields ?? [];
+  const deviceType = DEVICE_TYPES.has(proposal.payload?.["Device type"] ?? "")
+    ? (proposal.payload?.["Device type"] as string)
+    : "Card";
+  const createsRecord = !proposal.card_id && (proposal.kind !== "info" || deviceType !== "Card");
+  const finish = async () => {
+    const done = await q(
+      `UPDATE public.jrc_update_proposals
+          SET status = 'approved', reviewed_at = now(), reviewed_by = $2
+        WHERE id = $1 AND status = 'pending'
+        RETURNING id`,
+      [id, uuidOrNullLocal(userId)],
+    );
+    if (done.length !== 1) throw new Error("Proposal already handled");
+  };
+
+  // ---- informational finding → verification note of the country's records
+  if (proposal.kind === "info" && !createsRecord && !proposal.card_id) {
+    const payload = proposal.payload ?? {};
+    const note = [
+      `[${proposal.source_label}] ${proposal.title}`,
+      Object.entries(payload)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("; "),
+    ]
+      .filter(Boolean)
+      .join(" — ");
+    const target = (proposal.country || country).trim();
+    if (!target) {
+      throw new Error(
+        "This finding has no country, so there is nothing to note it on. " +
+          "Enter the country it belongs to, or dismiss the proposal.",
+      );
+    }
+    const affected = await q<{ id: string; verification_note: string | null }>(
+      `SELECT id, verification_note FROM public.tachograph_cards WHERE country = $1 FOR UPDATE`,
+      [target],
+    );
+    if (affected.length === 0) {
+      throw new Error(`No records for "${target}" — the note would have nowhere to go.`);
+    }
+    const history = [];
+    for (const card of affected) {
+      const existingNote = (card.verification_note ?? "").trim();
+      if (existingNote.includes(note)) continue;
+      const next = existingNote ? `${existingNote}\n${note}` : note;
+      await q(`UPDATE public.tachograph_cards SET verification_note = $2 WHERE id = $1`, [
+        card.id,
+        next,
+      ]);
+      history.push({
+        card_id: card.id,
+        field: "verification_note",
+        old_value: existingNote,
+        new_value: next,
+        origin: "jrc_proposal",
+        source_label: proposal.source_label ?? "",
+        source_url: proposal.source_url ?? "",
+        proposal_id: id,
+        changed_by: userId,
+      });
+    }
+    await insertFieldHistoryTx(q, history);
+    await finish();
+    return { ok: true };
+  }
+
+  // ---- field changes on an existing record
+  if (proposal.card_id) {
+    const [card] = await q(`SELECT * FROM public.tachograph_cards WHERE id = $1 FOR UPDATE`, [
+      proposal.card_id,
+    ]);
+    if (!card) throw new Error("The record this proposal refers to no longer exists.");
+    const [ov] = await q<{ patch: Record<string, string> }>(
+      `SELECT patch FROM public.tachograph_card_overrides WHERE card_id = $1 FOR UPDATE`,
+      [proposal.card_id],
+    );
+    const overridePatch: Record<string, string> = { ...(ov?.patch ?? {}) };
+    const states = fieldStates(changes, card, overridePatch);
+    const resolutions = opts.resolutions ?? {};
+    const open = states.filter(
+      (s) =>
+        !s.alreadyApplied &&
+        ((s.stale && !opts.confirmStale) || (s.manualConflict && !resolutions[s.field])),
+    );
+    if (open.length > 0) {
+      const parts = [];
+      if (open.some((s) => s.manualConflict && !resolutions[s.field]))
+        parts.push("a manual value differs from the proposed one — choose which to keep");
+      if (open.some((s) => s.stale && !opts.confirmStale))
+        parts.push("the record changed since this proposal was found — confirm to apply anyway");
+      return { ok: false, conflict: { message: parts.join("; "), fields: states } };
+    }
+
+    const basePatch: Record<string, string> = {};
+    const dropFromOverride: string[] = [];
+    const keptManual: string[] = [];
+    const history = [];
+    for (const st of states) {
+      if (st.alreadyApplied) continue;
+      if (st.manualConflict && resolutions[st.field] === "manual") {
+        keptManual.push(st.field);
+        continue;
+      }
+      let value = st.proposed;
+      if (st.field === "country") value = normalizeCountry(value);
+      basePatch[st.field] = value;
+      if (st.manual !== null) dropFromOverride.push(st.field);
+      history.push({
+        card_id: proposal.card_id,
+        field: st.field,
+        old_value: st.current,
+        new_value: value,
+        origin: "jrc_proposal",
+        source_label:
+          (proposal.source_label ?? "") + (st.manual !== null ? " · replaced manual value" : ""),
+        source_url: proposal.source_url ?? "",
+        proposal_id: id,
+        changed_by: userId,
+      });
+    }
+    if (typeof basePatch["country"] === "string") {
+      basePatch["country_flag"] = flagEmoji(basePatch["country"]);
+      if (Object.prototype.hasOwnProperty.call(overridePatch, "country_flag"))
+        dropFromOverride.push("country_flag");
+    }
+    const cols = Object.keys(basePatch);
+    if (cols.length > 0) {
+      await q(
+        `UPDATE public.tachograph_cards SET ${cols.map((c, i) => `"${c}" = $${i + 2}`).join(", ")} WHERE id = $1`,
+        [proposal.card_id, ...cols.map((c) => basePatch[c])],
+      );
+    }
+    if (dropFromOverride.length > 0 && ov) {
+      for (const f of dropFromOverride) delete overridePatch[f];
+      if (Object.keys(overridePatch).length === 0) {
+        await q(`DELETE FROM public.tachograph_card_overrides WHERE card_id = $1`, [
+          proposal.card_id,
+        ]);
+      } else {
+        await q(
+          `UPDATE public.tachograph_card_overrides SET patch = $2, updated_at = now() WHERE card_id = $1`,
+          [proposal.card_id, JSON.stringify(overridePatch)],
+        );
+      }
+    }
+    await insertFieldHistoryTx(q, history);
+    await finish();
+    return { ok: true, keptManual, applied: history.map((h) => h.field) };
+  }
+
+  // ---- new record (or link to the existing one)
+  const name = normalizeCountry(country || proposal.country);
+  if (!name && deviceType === "Card") throw new Error("Country is required for a new card entry");
+  const cardsNow = await withOverrides(
+    await q<CardRow & { id: string }>(
+      `SELECT id, country, generation, type_approval_number, current_manufacturer,
+              tachograph_application_os, jrc_interoperability_status, jrc_certificate_source,
+              data_reference_date, device_type
+         FROM public.tachograph_cards`,
+    ),
+  );
+  const existing = proposal.jrc_type_approval
+    ? matchCard(
+        { typeApproval: proposal.jrc_type_approval, generation: proposal.generation } as JrcRow,
+        cardsNow.filter(
+          (c) =>
+            (c.device_type || "Card") === deviceType && normalizeCountry(c.country ?? "") === name,
+        ),
+      )
+    : undefined;
+  if (existing) {
+    await q(`UPDATE public.jrc_update_proposals SET card_id = $2 WHERE id = $1`, [id, existing.id]);
+    await finish();
+    return { ok: true, linkedExisting: existing.id };
+  }
+  const row: Record<string, string> = {
+    country: name,
+    country_flag: flagEmoji(name),
+    device_type: deviceType,
+    generation: proposal.generation,
+    current_manufacturer: proposal.jrc_manufacturer,
+    current_manufacturer_normalized: proposal.jrc_manufacturer,
+    tachograph_application_os: proposal.jrc_card_name,
+    type_approval_number: proposal.jrc_type_approval,
+    jrc_interoperability_status: [
+      proposal.jrc_certificate,
+      proposal.jrc_date ? `issued ${proposal.jrc_date}` : "",
+      proposal.jrc_eov ? `EOV ${proposal.jrc_eov}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    jrc_certificate_source: proposal.source_url,
+  };
+  const cols = Object.keys(row);
+  const [inserted] = await q<{ id: string }>(
+    `INSERT INTO public.tachograph_cards (${cols.map((c) => `"${c}"`).join(",")})
+     VALUES (${cols.map((_, i) => `$${i + 1}`).join(",")}) RETURNING id`,
+    cols.map((c) => row[c]),
+  );
+  const newId = String(inserted?.id ?? "");
+  if (!newId) throw new Error("Creating the record returned no id");
+  await q(`UPDATE public.jrc_update_proposals SET card_id = $2 WHERE id = $1`, [id, newId]);
+  // Code review 19 (partly): a created record gets history too.
+  await insertFieldHistoryTx(
+    q,
+    cols
+      .filter((c) => c !== "country_flag" && sv(row[c]) !== "")
+      .map((c) => ({
+        card_id: newId,
+        field: c,
+        old_value: "",
+        new_value: row[c]!,
+        origin: "jrc_proposal",
+        source_label: `${proposal.source_label ?? ""} · record created`,
+        source_url: proposal.source_url ?? "",
+        proposal_id: id,
+        changed_by: userId,
+      })),
+  );
+  await finish();
+  return { ok: true, createdId: newId };
+}
+
+const UUID_LOCAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function uuidOrNullLocal(v: unknown): string | null {
+  const s = sv(v);
+  return UUID_LOCAL.test(s) ? s : null;
+}
+
+/** Pre-v2.54 path, kept for the hosted (Supabase) backend without transactions. */
+async function approveProposalLegacy(id: string, country: string, userId?: string | null) {
   const proposal = await getProposal(id);
   if (!proposal) throw new Error("Proposal not found");
   if (proposal.status !== "pending") throw new Error("Proposal already handled");

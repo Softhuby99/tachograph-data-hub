@@ -16,12 +16,32 @@ export const getProposals = createServerFn({ method: "GET" }).handler(async () =
   const { documentedCountry } = await import("@/lib/ta-country");
   const { certificationCountry } = await import("@/lib/cc.server");
   const rows = await getAllProposals();
+  // v2.54 (code review 16/17): live state of each pending field change — the
+  // value a reader sees now, a manual edit on top, and whether the record
+  // changed since the proposal was found. The approval re-checks all of it.
+  const { getAllCards, getAllOverrides } = await import("@/lib/db.server");
+  const { fieldStates } = await import("@/lib/jrc.server");
+  const pendingWithCard = rows.filter((p) => p.status === "pending" && p.card_id);
+  let live = new Map<string, ReturnType<typeof fieldStates>>();
+  if (pendingWithCard.length > 0) {
+    const [cards, overrides] = await Promise.all([getAllCards(), getAllOverrides()]);
+    const cardById = new Map(cards.map((c) => [String(c["id"]), c]));
+    const ovById = new Map(overrides.map((o) => [o.card_id, o.patch]));
+    live = new Map(
+      pendingWithCard.flatMap((p) => {
+        const card = cardById.get(String(p.card_id));
+        const fields = p.changes?.fields ?? [];
+        if (!card || fields.length === 0) return [];
+        return [[p.id, fieldStates(fields, card, ovById.get(String(p.card_id)) ?? null)] as const];
+      }),
+    );
+  }
   // Older proposals were stored before country resolution existed — fill the
   // country in for display (the stored row is not modified). JRC entries
   // resolve via the e-number country list; Common Criteria entries via the
   // certification scheme / certificate prefix.
   return rows.map((p) => {
-    if (p.country) return p;
+    if (p.country) return live.has(p.id) ? { ...p, live: live.get(p.id) } : p;
     const hit = documentedCountry(p.jrc_type_approval ?? "");
     const payload = (p.payload ?? {}) as Record<string, string>;
     const fromPayload = payload["Resolved country"] || payload["Certification country"] || "";
@@ -32,7 +52,8 @@ export const getProposals = createServerFn({ method: "GET" }).handler(async () =
         certificate: payload["Security certificate"],
       });
     }
-    return country ? { ...p, country } : p;
+    const withLive = live.has(p.id) ? { ...p, live: live.get(p.id) } : p;
+    return country ? { ...withLive, country } : withLive;
   });
 });
 
@@ -87,15 +108,34 @@ export const checkUpdateSource = createServerFn({ method: "POST" })
 
 export const approveJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
-  .inputValidator((data: { id: string; country?: string }) => ({
-    id: String(data?.id ?? ""),
-    country: String(data?.country ?? ""),
-  }))
+  .inputValidator(
+    (data: {
+      id: string;
+      country?: string;
+      resolutions?: Record<string, "source" | "manual">;
+      confirmStale?: boolean;
+    }) => {
+      const resolutions: Record<string, "source" | "manual"> = {};
+      for (const [k, v] of Object.entries(data?.resolutions ?? {})) {
+        if (/^[a-z_]{1,64}$/.test(k) && (v === "source" || v === "manual")) resolutions[k] = v;
+      }
+      return {
+        id: String(data?.id ?? ""),
+        country: String(data?.country ?? ""),
+        resolutions,
+        confirmStale: data?.confirmStale === true,
+      };
+    },
+  )
   .handler(async ({ data, context }) =>
     logActionFailure(
       "Approve proposal",
       { proposalId: data.id, details: { country: data.country } },
-      () => approveProposal(data.id, data.country, context?.userId),
+      () =>
+        approveProposal(data.id, data.country, context?.userId, {
+          resolutions: data.resolutions,
+          confirmStale: data.confirmStale,
+        }),
     ),
   );
 
