@@ -17,15 +17,20 @@
 
 import { parseLooseDate } from "@/lib/expiry";
 import { COUNTRY_ISO, normalizeCountry } from "@/lib/country-flag";
+import { isPlaceholderCertificate, parseCertificate } from "@/lib/cert-family";
 
-export type QualityLevel = "error" | "warning";
+/** "info" = certificate maintenance list (v2.55); not counted as error or warning. */
+export type QualityLevel = "error" | "warning" | "info";
 
 export type QualityRule =
   | "missing_field"
   | "date_unreadable"
   | "expiry_before_issue"
   | "generation_unknown"
-  | "country_unknown";
+  | "country_unknown"
+  | "certificate_missing"
+  | "certificate_unparsed"
+  | "certificate_unassigned";
 
 export type QualityIssue = {
   cardId: string;
@@ -47,6 +52,8 @@ export type QualitySummary = {
   recordsWithWarnings: number;
   errors: number;
   warnings: number;
+  /** v2.55: certificate maintenance list entries. */
+  infos: number;
   byRule: Record<string, number>;
 };
 
@@ -60,6 +67,7 @@ export const FIELD_LABELS: Record<string, string> = {
   jrc_interoperability_status: "JRC interoperability status",
   certificate_issued_date: "Date certificate issued",
   certificate_expiry_date: "Certificate validity expiration date",
+  security_certificate: "Security certificate",
 };
 
 export const RULE_LABELS: Record<QualityRule, string> = {
@@ -68,6 +76,9 @@ export const RULE_LABELS: Record<QualityRule, string> = {
   expiry_before_issue: "Expiry not after issue",
   generation_unknown: "Generation not G1 / G2.1 / G2.2",
   country_unknown: "Country not in country list",
+  certificate_missing: "Security certificate missing (maintenance list)",
+  certificate_unparsed: "Security certificate not recognised (maintenance list)",
+  certificate_unassigned: "Certificate family not assigned to a platform line",
 };
 
 const CARD_REQUIRED = [
@@ -113,8 +124,13 @@ export function mergeOverrides(
   return cards.map((c) => ({ ...c, ...(byId.get(String(c["id"])) ?? {}) }) as QualityCard);
 }
 
-export function checkCards(cards: QualityCard[]): QualityIssue[] {
+export function checkCards(
+  cards: QualityCard[],
+  /** v2.55: platform lines — families outside every line go on the maintenance list. */
+  lines?: { families: string[] }[],
+): QualityIssue[] {
   const issues: QualityIssue[] = [];
+  const lineFamilies = lines ? new Set(lines.flatMap((l) => l.families)) : null;
   for (const c of cards) {
     const deviceType = str(c["device_type"]) || "Card";
     const isCard = deviceType === "Card";
@@ -178,6 +194,19 @@ export function checkCards(cards: QualityCard[]): QualityIssue[] {
       );
     }
 
+    // v2.55: certificate maintenance list (Platform Timeline) — cards only.
+    if (isCard) {
+      const certText = str(c["security_certificate"]);
+      const ref = parseCertificate(certText);
+      if (!ref && isPlaceholderCertificate(certText)) {
+        add("info", "certificate_missing", "security_certificate", certText ? `Placeholder "${certText.slice(0, 60)}" — no certificate number` : "No security certificate");
+      } else if (!ref) {
+        add("info", "certificate_unparsed", "security_certificate", `"${certText.slice(0, 60)}" is not a recognised certificate number`);
+      } else if (lineFamilies && !lineFamilies.has(ref.family)) {
+        add("info", "certificate_unassigned", "security_certificate", `${ref.family} belongs to no platform line`);
+      }
+    }
+
     if (!missing.has("country") && !isEmptyValue(c["country"])) {
       const unknown = unknownCountries(str(c["country"]));
       if (unknown.length > 0) {
@@ -199,7 +228,8 @@ export function summarise(cards: QualityCard[], issues: QualityIssue[]): Quality
   const warnIds = new Set<string>();
   for (const i of issues) {
     byRule[i.rule] = (byRule[i.rule] ?? 0) + 1;
-    (i.level === "error" ? errIds : warnIds).add(i.cardId);
+    if (i.level === "error") errIds.add(i.cardId);
+    else if (i.level === "warning") warnIds.add(i.cardId);
   }
   return {
     records: cards.length,
@@ -207,6 +237,7 @@ export function summarise(cards: QualityCard[], issues: QualityIssue[]): Quality
     recordsWithWarnings: warnIds.size,
     errors: issues.filter((i) => i.level === "error").length,
     warnings: issues.filter((i) => i.level === "warning").length,
+    infos: issues.filter((i) => i.level === "info").length,
     byRule,
   };
 }

@@ -83,14 +83,14 @@ const PROCUREMENT_FIELDS: Array<[keyof MapCard, string]> = [
 ];
 
 /** App country name -> name used by the world-atlas dataset. */
-const NAME_ALIASES: Record<string, string> = {
+export const NAME_ALIASES: Record<string, string> = {
   "Bosnia and Herzegovina": "Bosnia and Herz.",
   "North Macedonia": "Macedonia",
   Türkiye: "Turkey",
 };
 
 /** Micro states missing from the 110m dataset — rendered as point markers. */
-const MICRO_STATES: Record<string, [number, number]> = {
+export const MICRO_STATES: Record<string, [number, number]> = {
   Malta: [14.4, 35.9],
   Monaco: [7.42, 43.74],
   "San Marino": [12.46, 43.94],

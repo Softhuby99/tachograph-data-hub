@@ -68,7 +68,10 @@ import {
   ArrowLeft,
   Cpu,
   Layers,
+  GitBranch,
 } from "lucide-react";
+import { PlatformTimelineView, type TimelineFocus } from "@/components/PlatformTimelineView";
+import { parseCertificate } from "@/lib/cert-family";
 import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
 import { ToolsView } from "@/components/ToolsView";
@@ -269,6 +272,8 @@ function TachographTool() {
   const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
+  // v2.55: record → Platform Timeline link.
+  const [timelineFocus, setTimelineFocus] = useState<TimelineFocus>(null);
   // v2.54: a manual edit that collided with someone else's change.
   const [editConflict, setEditConflict] = useState<{
     cardId: string;
@@ -627,11 +632,15 @@ function TachographTool() {
             onReset={resetOverride}
             onFilteredChange={setFilteredIds}
             marketStatusById={marketStatus.byId}
+            onShowTimeline={(certificate) => {
+              setTimelineFocus({ family: parseCertificate(certificate)?.family, nonce: Date.now() });
+              setTab("analytics");
+            }}
           />
         )}
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} topApproval={topApprovalByCountry} />}
         {!isLoading && !error && tab === "analytics" && (
-          <AnalyticsView cards={cards} marketStatus={marketStatus} />
+          <AnalyticsView cards={cards} marketStatus={marketStatus} timelineFocus={timelineFocus} />
         )}
         {tab === "updates" && <UpdatesView />}
         {!isLoading && !error && tab === "tools" && (
@@ -684,6 +693,7 @@ function DataView({
   onReset,
   onFilteredChange,
   marketStatusById,
+  onShowTimeline,
 }: {
   cards: TachoCard[];
   overrides: Overrides;
@@ -695,6 +705,7 @@ function DataView({
   onFilteredChange?: (ids: string[]) => void;
   /** Current / superseded / delisted / unmatched per card id — see market-status.ts. */
   marketStatusById?: Map<string, MarketStatusEntry>;
+  onShowTimeline?: (certificate: string) => void;
 }) {
   const [country, setCountry] = useState("all");
   const [generation, setGeneration] = useState("all");
@@ -1005,6 +1016,7 @@ function DataView({
               onSave={(patch, original) => onSave(selected.id, patch, original)}
               onReset={() => onReset(selected.id)}
               marketStatus={marketStatusById?.get(selected.id)?.status}
+              onShowTimeline={onShowTimeline}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Select a country on the left.</p>
@@ -1172,6 +1184,7 @@ function DetailView({
   onSave,
   onReset,
   marketStatus,
+  onShowTimeline,
 }: {
   card: TachoCard;
   edited: boolean;
@@ -1180,6 +1193,7 @@ function DetailView({
   onSave: (patch: Partial<TachoCard>, original?: Record<string, string>) => void;
   onReset: () => void;
   marketStatus?: MarketStatus;
+  onShowTimeline?: (certificate: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -1323,6 +1337,17 @@ function DetailView({
                       onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
                     />
                   )}
+                  {key === "security_certificate" && (
+                    // v2.55: the Platform Timeline reads the family from this text.
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      One certificate number as on the type approval, e.g. ANSSI-CC-2022/38-M01,
+                      NSCIB-CC-22-0635023, BSI-DSZ-CC-0889. Continuations as -M01 / -R01 / -S02.
+                      {draft[key]?.trim() &&
+                        (parseCertificate(draft[key])
+                          ? ` Recognised: ${parseCertificate(draft[key])!.family}.`
+                          : " Not recognised as a certificate number.")}
+                    </p>
+                  )}
                 </div>
               );
             }
@@ -1333,6 +1358,19 @@ function DetailView({
               return (
                 <Field key={key} label={label} value={value}>
                   <ExpiryBadge expiry={expiryOf(value)} />
+                </Field>
+              );
+            }
+            if (key === "security_certificate" && onShowTimeline && parseCertificate(value)) {
+              return (
+                <Field key={key} label={label} value={value}>
+                  <button
+                    type="button"
+                    className="text-xs text-primary underline-offset-2 hover:underline"
+                    onClick={() => onShowTimeline(value)}
+                  >
+                    Platform timeline →
+                  </button>
                 </Field>
               );
             }
@@ -1506,15 +1544,33 @@ type Drill =
 function AnalyticsView({
   cards,
   marketStatus,
+  timelineFocus,
 }: {
   cards: TachoCard[];
   marketStatus: { byId: Map<string, MarketStatusEntry>; groups: MarketGroup[] };
+  /** v2.55: open the Platform Timeline at a certificate family (link from a record). */
+  timelineFocus?: TimelineFocus;
 }) {
   // One selection for every drill-down, so the same window serves generations,
   // manufacturers, security certificates and the validity buckets.
   const [drill, setDrill] = useState<Drill | null>(null);
   const [drillCard, setDrillCard] = useState<TachoCard | null>(null);
-  const [subTab, setSubTab] = useState<"overview" | "longterm" | "history">("overview");
+  const [subTab, setSubTab] = useState<"overview" | "longterm" | "history" | "timeline">(
+    timelineFocus ? "timeline" : "overview",
+  );
+  // v2.55: links into the Platform Timeline (certificate table, record view).
+  const [localFocus, setLocalFocus] = useState<TimelineFocus>(timelineFocus ?? null);
+  useEffect(() => {
+    if (timelineFocus) {
+      setLocalFocus(timelineFocus);
+      setSubTab("timeline");
+    }
+  }, [timelineFocus]);
+  const openTimeline = (certificate: string) => {
+    const ref = parseCertificate(certificate);
+    setLocalFocus({ family: ref?.family, nonce: Date.now() });
+    setSubTab("timeline");
+  };
   const total = cards.length;
 
   const genCounts = useMemo(() => {
@@ -1704,7 +1760,23 @@ function AnalyticsView({
         >
           <History className="mr-2 h-4 w-4" /> History
         </Button>
+        <Button
+          variant={subTab === "timeline" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSubTab("timeline")}
+        >
+          <GitBranch className="mr-2 h-4 w-4" /> Platform Timeline
+        </Button>
       </div>
+
+      {subTab === "timeline" && (
+        <PlatformTimelineView
+          cards={cards}
+          statusById={marketStatus.byId}
+          focus={localFocus}
+          onOpenCard={(id) => setDrillCard(cards.find((c) => c.id === id) ?? null)}
+        />
+      )}
 
       {/* v2.47: all type approvals ever recorded per manufacturer (moved here
           from Overview, which now shows the current market share). */}
@@ -1950,6 +2022,7 @@ function AnalyticsView({
                   <th className="py-2 pr-4 text-right font-medium">Type Approvals</th>
                   <th className="py-2 pr-4 text-right font-medium">Countries</th>
                   <th className="py-2 pr-4 font-medium">Validity</th>
+                  <th className="py-2 pr-1" />
                 </tr>
               </thead>
               <tbody>
@@ -1966,11 +2039,26 @@ function AnalyticsView({
                     <td className="py-2 pr-4">
                       <ExpiryBadge expiry={c.expiry} />
                     </td>
+                    <td className="py-2 pr-1 text-right">
+                      {parseCertificate(c.name) && (
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline-offset-2 hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openTimeline(c.name);
+                          }}
+                          title="Show this certificate in the Platform Timeline"
+                        >
+                          Timeline →
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {certList.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
                       No security certificates recorded.
                     </td>
                   </tr>

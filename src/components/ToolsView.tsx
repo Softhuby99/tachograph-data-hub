@@ -10,9 +10,16 @@ import {
   ScrollText,
   Database,
   ShieldAlert,
+  GitBranch,
 } from "lucide-react";
 import { EventLogView } from "@/components/EventLogView";
 import { DataQualityView } from "@/components/DataQualityView";
+import { PlatformLinesView } from "@/components/PlatformLinesView";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getPlatformLines } from "@/lib/platform.functions";
+import { parseCertificate } from "@/lib/cert-family";
+import type { PlatformLine } from "@/lib/platform-timeline";
 import { toast } from "sonner";
 import { documentedCountry, countryConflict, approvalAuthorityLabel } from "@/lib/ta-country";
 import { flagEmoji, isoForCountry, normalizeCountry } from "@/lib/country-flag";
@@ -72,12 +79,17 @@ const sqlText = (v: unknown) => `'${String(v ?? "").replace(/'/g, "''")}'`;
  * country here rather than copied through: a value frozen at export time is
  * exactly what made a corrected record keep its old flag.
  */
-function buildOfflineData(cards: ExportRow[]): string {
+function buildOfflineData(cards: ExportRow[], lines: PlatformLine[] = []): string {
   const rows = cards.map((c) => {
     const country = normalizeCountry(String(c["country"] ?? ""));
     const row: Record<string, unknown> = { ...c, country };
     row["iso"] = isoForCountry(country);
     row["country_flag"] = flagEmoji(country);
+    // v2.55: platform line assignment, so a later offline timeline needs only
+    // the view (agreed 02.10.2026, point 14).
+    const ref = parseCertificate(c["security_certificate"]);
+    row["cert_family"] = ref?.family ?? "";
+    row["platform_line"] = ref ? (lines.find((l) => l.families.includes(ref.family))?.name ?? "") : "";
     delete row["created_at"];
     delete row["updated_at"];
     return row;
@@ -272,6 +284,11 @@ function DataToolsPanel({
     rows: Record<string, string>[],
   ) => Promise<{ updated: number; created: number; unchanged: number; errors: string[] }>;
 }) {
+  const fetchLines = useServerFn(getPlatformLines);
+  const platformLines = useQuery({
+    queryKey: ["platform_lines"],
+    queryFn: async () => (await fetchLines()) as PlatformLine[],
+  });
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
@@ -463,7 +480,11 @@ function DataToolsPanel({
                   toast.error("Nothing to export.");
                   return;
                 }
-                download(buildOfflineData(cards), "data.json", "application/json;charset=utf-8");
+                download(
+                  buildOfflineData(cards, platformLines.data ?? []),
+                  "data.json",
+                  "application/json;charset=utf-8",
+                );
                 toast.success(`data.json written with ${cards.length} record(s).`);
               }}
             >
@@ -657,7 +678,7 @@ export function ToolsView({
   isAdmin?: boolean;
   onOpenCard?: (cardId: string) => void;
 }) {
-  const [sub, setSub] = useState<"log" | "quality" | "data">(isAdmin ? "log" : "data");
+  const [sub, setSub] = useState<"log" | "quality" | "lines" | "data">(isAdmin ? "log" : "data");
   const active = isAdmin ? sub : "data";
   return (
     <div className="space-y-4">
@@ -679,6 +700,13 @@ export function ToolsView({
           </Button>
           <Button
             size="sm"
+            variant={active === "lines" ? "default" : "outline"}
+            onClick={() => setSub("lines")}
+          >
+            <GitBranch className="mr-2 h-4 w-4" /> Platform lines
+          </Button>
+          <Button
+            size="sm"
             variant={active === "data" ? "default" : "outline"}
             onClick={() => setSub("data")}
           >
@@ -690,6 +718,8 @@ export function ToolsView({
         <EventLogView />
       ) : active === "quality" ? (
         <DataQualityView onOpenCard={onOpenCard} />
+      ) : active === "lines" ? (
+        <PlatformLinesView cards={cards} />
       ) : (
         <DataToolsPanel cards={cards} filteredCards={filteredCards} onImport={onImport} />
       )}

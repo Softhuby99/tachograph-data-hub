@@ -18,9 +18,16 @@ export async function computeDataQuality(): Promise<{
   summary: QualitySummary;
   issues: QualityIssue[];
 }> {
-  const [cards, overrides] = await Promise.all([getAllCards(), getAllOverrides()]);
+  const { listPlatformLines } = await import("@/lib/platform-lines.server");
+  const [cards, overrides, lines] = await Promise.all([
+    getAllCards(),
+    getAllOverrides(),
+    listPlatformLines(),
+  ]);
   const merged = mergeOverrides(cards, overrides);
-  const issues = checkCards(merged);
+  // Without platform lines (hosted backend / table missing) the "not assigned"
+  // rule would flag every certificate — skip it then.
+  const issues = checkCards(merged, lines.length > 0 ? lines : undefined);
   return { computedAt: new Date().toISOString(), summary: summarise(merged, issues), issues };
 }
 

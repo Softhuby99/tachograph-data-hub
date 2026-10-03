@@ -4,7 +4,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Download, Loader2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  FileQuestion,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  XCircle,
+} from "lucide-react";
 import { getDataQuality } from "@/lib/quality.functions";
 import { RULE_LABELS, type QualityIssue, type QualityRule } from "@/lib/data-quality";
 
@@ -27,7 +35,8 @@ export function DataQualityView({ onOpenCard }: { onOpenCard?: (cardId: string) 
     retry: false,
   });
 
-  const [level, setLevel] = useState<"all" | "error" | "warning">("all");
+  // v2.55: "info" = certificate maintenance list; hidden unless chosen.
+  const [level, setLevel] = useState<"all" | "error" | "warning" | "info">("all");
   const [rule, setRule] = useState<"" | QualityRule>("");
   const [device, setDevice] = useState("");
   const [search, setSearch] = useState("");
@@ -38,7 +47,7 @@ export function DataQualityView({ onOpenCard }: { onOpenCard?: (cardId: string) 
     const s = search.trim().toLowerCase();
     return issues.filter(
       (i) =>
-        (level === "all" || i.level === level) &&
+        (level === "all" ? i.level !== "info" : i.level === level) &&
         (!rule || i.rule === rule) &&
         (!device || i.deviceType === device) &&
         (!s ||
@@ -134,6 +143,15 @@ export function DataQualityView({ onOpenCard }: { onOpenCard?: (cardId: string) 
             <strong>{sum?.warnings ?? "…"}</strong> warning(s) in {sum?.recordsWithWarnings ?? "…"}{" "}
             record(s)
           </button>
+          <button
+            type="button"
+            onClick={() => setLevel(level === "info" ? "all" : "info")}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${level === "info" ? "border-sky-400 bg-sky-50 dark:bg-sky-950" : ""}`}
+            title="Card approvals without a usable security certificate, or with a certificate family outside every platform line (Platform Timeline)"
+          >
+            <FileQuestion className="h-4 w-4 text-sky-600" />
+            <strong>{sum?.infos ?? "…"}</strong> on the certificate maintenance list
+          </button>
           <span className="text-muted-foreground">
             {sum ? `${sum.records} records checked` : ""}
           </span>
@@ -226,6 +244,10 @@ export function DataQualityView({ onOpenCard }: { onOpenCard?: (cardId: string) 
                     {i.level === "error" ? (
                       <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
                         <XCircle className="h-3 w-3" /> ERROR
+                      </span>
+                    ) : i.level === "info" ? (
+                      <span className="inline-flex items-center gap-1 rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                        <FileQuestion className="h-3 w-3" /> TODO
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">

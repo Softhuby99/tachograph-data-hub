@@ -37,7 +37,9 @@ const MANUAL_LOCK_TTL_S = 3 * 60;
 const CATCH_UP_DELAY_MS = Number(process.env["SCHEDULER_CATCHUP_DELAY_MS"]) || 10 * 60 * 1000;
 const MISSED_AFTER_MS = 24 * 60 * 60 * 1000;
 /** A slot is skipped when an automatic run already started this recently. */
-const RECENT_RUN_MS = 12 * 60 * 60 * 1000;
+// v2.55: 3 h (was 12 h, which let a late-evening catch-up swallow the next
+// morning's regular run).
+const RECENT_RUN_MS = 3 * 60 * 60 * 1000;
 /** A slot that passed more than this long ago is left to the next day. */
 const SLOT_WINDOW_MIN = 120;
 const TICK_MS = 30 * 1000;
