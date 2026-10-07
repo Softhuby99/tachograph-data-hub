@@ -684,6 +684,23 @@ function TachographTool() {
   );
 }
 
+// v2.56: approval-status views of the Data list (market status per record,
+// see market-status.ts). Records whose status cannot be decided stay in the
+// default view so the open cases are not hidden.
+type StatusView = "active" | "current" | "history" | "all";
+const STATUS_VIEW_LABEL: Record<StatusView, string> = {
+  active: "Active + unclear",
+  current: "Active only",
+  history: "History (superseded / delisted)",
+  all: "All records",
+};
+function inStatusView(view: StatusView, status: MarketStatus | undefined): boolean {
+  if (view === "all") return true;
+  if (view === "current") return status === "current";
+  if (view === "history") return status === "superseded" || status === "delisted";
+  return status !== "superseded" && status !== "delisted";
+}
+
 function DataView({
   cards,
   overrides,
@@ -713,6 +730,25 @@ function DataView({
   const [manufacturer, setManufacturer] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // v2.56: the list starts with the approvals in force (plus those whose
+  // status cannot be decided); history is one click away. Remembered per browser.
+  const [statusView, setStatusView] = useState<StatusView>("active");
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem("tdh.dataStatusView");
+      if (v && v in STATUS_VIEW_LABEL) setStatusView(v as StatusView);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const chooseStatusView = (v: StatusView) => {
+    setStatusView(v);
+    try {
+      window.localStorage.setItem("tdh.dataStatusView", v);
+    } catch {
+      /* storage unavailable — choice just isn't remembered */
+    }
+  };
 
   // v2.46: the list / detail split is draggable. Dragging the divider widens
   // the list; the detail pane keeps (at least) the width it has in the default
@@ -783,7 +819,8 @@ function DataView({
     [cards],
   );
 
-  const filtered = useMemo(() => {
+  // Everything the other filters let through, before the status view.
+  const matching = useMemo(() => {
     const q = search.toLowerCase();
     return cards.filter((c) => {
       if (country !== "all" && c.country !== country) return false;
@@ -799,6 +836,21 @@ function DataView({
       );
     });
   }, [cards, country, generation, deviceType, manufacturer, search]);
+  const statusOf = (c: TachoCard) => marketStatusById?.get(c.id)?.status;
+  const statusCounts = useMemo(() => {
+    const n: Record<StatusView, number> = { active: 0, current: 0, history: 0, all: matching.length };
+    for (const c of matching) {
+      for (const v of ["active", "current", "history"] as const) if (inStatusView(v, statusOf(c))) n[v]++;
+    }
+    return n;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matching, marketStatusById]);
+  const filtered = useMemo(
+    () => matching.filter((c) => inStatusView(statusView, statusOf(c))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matching, statusView, marketStatusById],
+  );
+  const hiddenByStatus = matching.length - filtered.length;
 
   useEffect(() => {
     onFilteredChange?.(filtered.map((c) => c.id));
@@ -894,6 +946,23 @@ function DataView({
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Approval status
+            </label>
+            <Select value={statusView} onValueChange={(v) => chooseStatusView(v as StatusView)}>
+              <SelectTrigger title="Market status — same rule as in Market Analytics">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(STATUS_VIEW_LABEL) as StatusView[]).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {STATUS_VIEW_LABEL[v]} ({statusCounts[v]})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -912,10 +981,21 @@ function DataView({
         }
       >
         <div className="min-w-0 lg:w-[var(--list-w)] lg:shrink-0">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <p className="text-sm text-muted-foreground">
-              {filtered.length} result{filtered.length === 1 ? "" : "s"}
+              {statusView === "all"
+                ? `${filtered.length} result${filtered.length === 1 ? "" : "s"}`
+                : `${filtered.length} of ${matching.length} · ${STATUS_VIEW_LABEL[statusView].toLowerCase()}`}
             </p>
+            {hiddenByStatus > 0 && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={() => chooseStatusView("all")}
+              >
+                + {hiddenByStatus} more in history — show all
+              </button>
+            )}
           </div>
           <ScrollArea className="h-[70vh] rounded-lg border bg-card">
             <div className="divide-y">
@@ -982,7 +1062,11 @@ function DataView({
                 );
               })}
               {filtered.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">No matches.</p>
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  {hiddenByStatus > 0
+                    ? `No ${STATUS_VIEW_LABEL[statusView].toLowerCase()} records match — ${hiddenByStatus} in the history.`
+                    : "No matches."}
+                </p>
               )}
             </div>
           </ScrollArea>
@@ -2780,7 +2864,10 @@ const LAB_PATTERNS: Array<{ name: string; role: LabRole; note: string; re: RegEx
 ];
 
 function LabsCard({ cards }: { cards: TachoCard[] }) {
+  // v2.56: the selected lab's countries & evidence show in a panel to the right
+  // of the table (scrolls on its own) instead of below it.
   const [open, setOpen] = useState<string | null>(null);
+  const [detailCard, setDetailCard] = useState<TachoCard | null>(null);
 
   const labs = useMemo(() => {
     const map: Record<
@@ -2788,7 +2875,7 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
       {
         role: LabRole;
         note: string;
-        entries: Array<{ country: string; generation: string; evidence: string }>;
+        entries: Array<{ card: TachoCard; country: string; generation: string; evidence: string }>;
       }
     > = {};
     for (const c of cards) {
@@ -2804,6 +2891,7 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
         if (!hit) continue;
         if (!map[lab.name]) map[lab.name] = { role: lab.role, note: lab.note, entries: [] };
         map[lab.name].entries.push({
+          card: c,
           country: c.country,
           generation: c.generation,
           evidence: String(hit),
@@ -2811,7 +2899,16 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
       }
     }
     return Object.entries(map)
-      .map(([name, v]) => ({ name, ...v, count: v.entries.length }))
+      .map(([name, v]) => ({
+        name,
+        ...v,
+        entries: [...v.entries].sort(
+          (a, b) =>
+            (a.country || "").localeCompare(b.country || "") ||
+            (a.generation || "").localeCompare(b.generation || ""),
+        ),
+        count: v.entries.length,
+      }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [cards]);
 
@@ -2828,6 +2925,9 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
     [cards],
   );
 
+  // The largest lab is shown until another one is chosen.
+  const current = labs.find((l) => l.name === open) ?? labs[0] ?? null;
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -2837,79 +2937,88 @@ function LabsCard({ cards }: { cards: TachoCard[] }) {
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           Derived from the JRC / certificate fields of each record (security certificate, functional
-          certificate, issuing authority). {unmatched} record(s) contain no identifiable lab.
+          certificate, issuing authority). {unmatched} record(s) contain no identifiable lab. Click a
+          row to see its countries and evidence.
         </p>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Lab / Body</th>
-                <th className="py-2 pr-3 font-medium">Used for</th>
-                <th className="py-2 pr-3 text-right font-medium">Records</th>
-                <th className="py-2 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {labs.map((l) => (
-                <tr key={l.name} className="border-b align-top last:border-0">
-                  <td className="py-2 pr-3 font-medium">{l.name}</td>
-                  <td className="py-2 pr-3">
-                    <Badge variant="secondary" className="mb-1">
-                      {l.role}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground">{l.note}</p>
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{l.count}</td>
-                  <td className="py-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setOpen(open === l.name ? null : l.name)}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Lab / Body</th>
+                  <th className="py-2 pr-3 font-medium">Used for</th>
+                  <th className="py-2 pr-3 text-right font-medium">Records</th>
+                </tr>
+              </thead>
+              <tbody>
+                {labs.map((l) => {
+                  const active = current?.name === l.name;
+                  return (
+                    <tr
+                      key={l.name}
+                      onClick={() => setOpen(l.name)}
+                      aria-selected={active}
+                      className={
+                        "cursor-pointer border-b align-top transition-colors last:border-0 hover:bg-accent/60 " +
+                        (active ? "bg-accent" : "")
+                      }
                     >
-                      {open === l.name ? "Hide" : "Details"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {labs.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                    No laboratory information found in the current data.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {open && (
-          <div className="mt-4 rounded-md border bg-muted/30 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide">
-                {open} — countries &amp; evidence
-              </span>
-              <Button size="sm" variant="ghost" onClick={() => setOpen(null)}>
-                Close
-              </Button>
-            </div>
-            <ul className="space-y-1 text-sm">
-              {labs
-                .find((l) => l.name === open)
-                ?.entries.sort((a, b) => a.country.localeCompare(b.country))
-                .map((e, i) => (
-                  <li key={`${e.country}-${i}`} className="flex flex-wrap items-baseline gap-2">
-                    <span className="font-medium">{e.country}</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {e.generation}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{e.evidence}</span>
+                      <td className="py-2 pl-2 pr-3 font-medium">{l.name}</td>
+                      <td className="py-2 pr-3">
+                        <Badge variant="secondary" className="mb-1">
+                          {l.role}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground">{l.note}</p>
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{l.count}</td>
+                    </tr>
+                  );
+                })}
+                {labs.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="py-6 text-center text-sm text-muted-foreground">
+                      No laboratory information found in the current data.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {current && (
+            <div className="rounded-md border bg-muted/30 lg:sticky lg:top-4">
+              <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  {current.name} — countries &amp; evidence
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {current.entries.length} record{current.entries.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <ul className="max-h-[60vh] space-y-1 overflow-y-auto p-3 text-sm lg:max-h-[70vh]">
+                {current.entries.map((e, i) => (
+                  <li key={`${e.card.id}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => setDetailCard(e.card)}
+                      title="Open record"
+                      className="flex w-full flex-wrap items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-accent"
+                    >
+                      <span className="font-medium">{e.country || "—"}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {e.generation || "—"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{e.evidence}</span>
+                    </button>
                   </li>
                 ))}
-            </ul>
-          </div>
-        )}
+              </ul>
+            </div>
+          )}
+        </div>
       </CardContent>
+      <RecordDetailDialog card={detailCard} onClose={() => setDetailCard(null)} />
     </Card>
   );
 }
