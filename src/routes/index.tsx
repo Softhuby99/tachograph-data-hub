@@ -443,6 +443,12 @@ function TachographTool() {
 
   // v2.52: open errors / warnings of the operations log, admins only.
   const isLogAdmin = adminRequired && !!adminToken;
+  // v2.57: the Tools tab is shown to admins only (whoever may edit); leaving
+  // admin mode while on it returns to the data list.
+  const showTools = !!authMode.data && canEdit;
+  useEffect(() => {
+    if (!showTools && tab === "tools") setTab("data");
+  }, [showTools, tab]);
   const overviewFn = useServerFn(getEventOverview);
   const logOverview = useQuery({
     queryKey: ["event_overview"],
@@ -543,6 +549,7 @@ function TachographTool() {
             >
               <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
+            {showTools && (
             <Button
               variant={tab === "tools" ? "default" : "outline"}
               size="sm"
@@ -565,6 +572,7 @@ function TachographTool() {
                 </span>
               ) : null}
             </Button>
+            )}
             <span className="mx-1 h-8 w-px bg-border" />
             {authEnabled &&
               (auth.session ? (
@@ -643,7 +651,7 @@ function TachographTool() {
           <AnalyticsView cards={cards} marketStatus={marketStatus} timelineFocus={timelineFocus} />
         )}
         {tab === "updates" && <UpdatesView />}
-        {!isLoading && !error && tab === "tools" && (
+        {!isLoading && !error && tab === "tools" && showTools && (
           <ToolsView
             cards={cards}
             filteredCards={filteredCards}
@@ -1657,6 +1665,31 @@ function AnalyticsView({
   };
   const total = cards.length;
 
+  // v2.57: one filter bar above the Overview (product group, group by,
+  // history). By default every figure on the Overview counts the approvals in
+  // force today (market status "current"); with "include history" it counts
+  // every record, as the Overview did up to v2.56.
+  const [ovDevice, setOvDevice] = useState("all");
+  const [ovGroupBy, setOvGroupBy] = useState<"holder" | "platform">("holder");
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const ovDeviceTypes = useMemo(
+    () => uniq([...DEVICE_TYPES, ...cards.map((c) => c.device_type || "Card")]),
+    [cards],
+  );
+  const ovScoped = useMemo(
+    () => cards.filter((c) => ovDevice === "all" || (c.device_type || "Card") === ovDevice),
+    [cards, ovDevice],
+  );
+  const ovCards = useMemo(
+    () =>
+      includeHistory
+        ? ovScoped
+        : ovScoped.filter((c) => marketStatus.byId.get(c.id)?.status === "current"),
+    [ovScoped, includeHistory, marketStatus],
+  );
+  // Generations are a card property; another product group shows its own.
+  const genDevice = ovDevice === "all" ? "Card" : ovDevice;
+
   const genCounts = useMemo(() => {
     const m: Record<string, number> = {};
     cards.forEach((c) => {
@@ -1678,8 +1711,29 @@ function AnalyticsView({
     const ids: Record<string, Set<string>> = {};
     const countries: Record<string, Set<string>> = {};
     const notActive: string[] = [];
+    const share: Record<string, number> = {};
+    if (includeHistory) {
+      // Long term: every country that ever had an approval of the generation;
+      // the share is the generation's part of all approvals (records).
+      const records: Record<string, number> = {};
+      let all = 0;
+      for (const c of cards) {
+        if ((c.device_type || "Card") !== genDevice) continue;
+        if (!String(c.country ?? "").trim()) continue;
+        const gen = c.generation || "—";
+        (ids[gen] ??= new Set()).add(c.id);
+        (countries[gen] ??= new Set()).add(c.country);
+        records[gen] = (records[gen] ?? 0) + 1;
+        all++;
+      }
+      for (const [gen, n] of Object.entries(records)) share[gen] = (n / (all || 1)) * 100;
+      const counts: Record<string, number> = {};
+      for (const [gen, set] of Object.entries(countries)) counts[gen] = set.size;
+      const totalCountries = new Set(Object.values(countries).flatMap((x) => [...x])).size;
+      return { ids, counts, total: totalCountries, notActive, share, records: all };
+    }
     for (const g of marketStatus.groups) {
-      if (g.deviceType !== "Card") continue;
+      if (g.deviceType !== genDevice) continue;
       // Rows without a country cannot be a country (open data issue).
       if (!String(g.country ?? "").trim()) continue;
       const top = g.entries[0];
@@ -1695,8 +1749,9 @@ function AnalyticsView({
     const counts: Record<string, number> = {};
     for (const [gen, set] of Object.entries(countries)) counts[gen] = set.size;
     const totalCountries = Object.values(counts).reduce((a, b) => a + b, 0);
-    return { ids, counts, total: totalCountries, notActive: notActive.sort() };
-  }, [marketStatus]);
+    for (const [gen, n] of Object.entries(counts)) share[gen] = (n / (totalCountries || 1)) * 100;
+    return { ids, counts, total: totalCountries, notActive: notActive.sort(), share, records: 0 };
+  }, [marketStatus, cards, genDevice, includeHistory]);
   const activeGens = ["G1", "G2.1", "G2.2"].filter((g) => activeGen.counts[g]);
   const activeMax = Math.max(1, ...activeGens.map((g) => activeGen.counts[g]));
 
@@ -1724,19 +1779,19 @@ function AnalyticsView({
   // vehicle unit can still carry its own generation.
   const deviceCounts = useMemo(() => {
     const m: Record<string, number> = Object.fromEntries(DEVICE_TYPES.map((d) => [d, 0]));
-    for (const c of cards) {
+    for (const c of ovCards) {
       const d = c.device_type || "Card";
       m[d] = (m[d] ?? 0) + 1;
     }
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
-  }, [cards]);
+  }, [ovCards]);
 
   // Security certificates, from the other direction: which type approvals rest
   // on a given certificate. The data carried the link all along, but only ever
   // card -> certificate; "what hangs on ANSSI-CC-2022/38?" had no answer here.
   const certList = useMemo(() => {
     const map = new Map<string, { approvals: number; countries: Set<string>; expiry: Expiry }>();
-    for (const c of cards) {
+    for (const c of ovCards) {
       const name = String(c.security_certificate ?? "").trim();
       if (!name || name === "—") continue;
       let entry = map.get(name);
@@ -1758,7 +1813,7 @@ function AnalyticsView({
         expiry: v.expiry,
       }))
       .sort((a, b) => b.approvals - a.approvals || a.name.localeCompare(b.name));
-  }, [cards]);
+  }, [ovCards]);
 
   // Validity buckets. The expiry dates were already stored but never evaluated.
   const expiryBuckets = useMemo(() => {
@@ -1769,9 +1824,9 @@ function AnalyticsView({
       ok: [],
       unknown: [],
     };
-    for (const c of cards) buckets[expiryOf(c.certificate_expiry_date).state].push(c);
+    for (const c of ovCards) buckets[expiryOf(c.certificate_expiry_date).state].push(c);
     return buckets;
-  }, [cards]);
+  }, [ovCards]);
 
   // Drill-down opens as a window in the same style as the map view, instead of
   // pushing a list below the chart where it is easy to miss on a long page.
@@ -1790,22 +1845,22 @@ function AnalyticsView({
       drill.kind === "activeGeneration"
         ? cards.filter((c) => activeGen.ids[drill.value]?.has(c.id))
         : drill.kind === "generation"
-        ? cards.filter((c) => c.generation === drill.value)
+        ? ovCards.filter((c) => c.generation === drill.value)
         : drill.kind === "manufacturer"
           ? cards.filter(
               (c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drill.value,
             )
           : drill.kind === "certificate"
-            ? cards.filter((c) => String(c.security_certificate ?? "").trim() === drill.value)
+            ? ovCards.filter((c) => String(c.security_certificate ?? "").trim() === drill.value)
             : drill.kind === "device"
-              ? cards.filter((c) => (c.device_type || "Card") === drill.value)
-              : cards.filter((c) => expiryOf(c.certificate_expiry_date).state === drill.value);
+              ? ovCards.filter((c) => (c.device_type || "Card") === drill.value)
+              : ovCards.filter((c) => expiryOf(c.certificate_expiry_date).state === drill.value);
     return [...source].sort(
       (a, b) =>
         a.country.localeCompare(b.country) ||
         String(a.type_approval_number).localeCompare(String(b.type_approval_number)),
     );
-  }, [cards, drill, activeGen]);
+  }, [cards, ovCards, drill, activeGen]);
   const closeDrill = () => {
     setDrill(null);
     setDrillCard(null);
@@ -1937,12 +1992,71 @@ function AnalyticsView({
 
       {subTab === "overview" && (
       <>
+      <Card>
+        <CardContent className="grid items-end gap-3 pt-6 sm:grid-cols-2 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Product group
+            </label>
+            <Select value={ovDevice} onValueChange={setOvDevice}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All product groups</SelectItem>
+                {ovDeviceTypes.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Group by
+            </label>
+            <Select value={ovGroupBy} onValueChange={(v) => setOvGroupBy(v as "holder" | "platform")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="holder">Approval holder</SelectItem>
+                <SelectItem value="platform">Chip platform</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <label
+            className="flex h-10 cursor-pointer items-center gap-2 text-sm"
+            title="Off: only the approvals in force today (market status “current”). On: every record, including superseded and delisted approvals."
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={includeHistory}
+              onChange={(e) => setIncludeHistory(e.target.checked)}
+            />
+            Include history (long term, all approvals)
+          </label>
+          <p className="text-xs text-muted-foreground sm:col-span-2 md:col-span-3">
+            {includeHistory
+              ? `Long term: all ${ovCards.length} record${ovCards.length === 1 ? "" : "s"} in scope, including superseded and delisted approvals.`
+              : `Active approvals only: ${ovCards.length} of ${ovScoped.length} record${ovScoped.length === 1 ? "" : "s"} in scope are in force today (newest in their lane, still listed on JRC).`}
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Countries per Generation</CardTitle>
+            <CardTitle className="text-base">
+              Countries per Generation
+              {genDevice !== "Card" ? ` — ${genDevice}` : ""}
+            </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Active card approval per country only (newest in its lane, still listed on JRC)
+              {includeHistory
+                ? `Countries that ever had a ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval of the generation (incl. history)`
+                : `Active ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval per country only (newest in its lane, still listed on JRC)`}
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -1965,6 +2079,9 @@ function AnalyticsView({
                 </span>
               </button>
             ))}
+            {activeGens.length === 0 && (
+              <p className="py-2 text-sm text-muted-foreground">No approvals with a country in scope.</p>
+            )}
             {activeGen.notActive.length > 0 && (
               <p
                 className="pt-1 text-xs text-muted-foreground"
@@ -1981,14 +2098,16 @@ function AnalyticsView({
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Market Share by Generation</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Share of the {activeGen.total} countries with an active card approval
+              {includeHistory
+                ? `Share of all ${activeGen.records} ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approvals with a country (incl. history)`
+                : `Share of the ${activeGen.total} countries with an active ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval`}
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
             {activeGens.map((g) => {
               // Same basis as "Countries per Generation" (v2.44): active card
               // approval per country, not the number of records.
-              const pct = (activeGen.counts[g] / (activeGen.total || 1)) * 100;
+              const pct = activeGen.share[g] ?? 0;
               return (
                 <button
                   key={g}
@@ -2013,7 +2132,13 @@ function AnalyticsView({
       </div>
 
       {/* v2.47: current market share (formerly the Current Status tab) */}
-      <CurrentStatusView cards={cards} marketStatus={marketStatus} />
+      <CurrentStatusView
+        cards={cards}
+        marketStatus={marketStatus}
+        deviceType={ovDevice}
+        groupBy={ovGroupBy}
+        includeHistory={includeHistory}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -2153,7 +2278,7 @@ function AnalyticsView({
         </CardContent>
       </Card>
 
-      <LabsCard cards={cards} />
+      <LabsCard cards={ovCards} />
       </>
       )}
 
@@ -2302,16 +2427,22 @@ function RecordDetailDialog({ card, onClose }: { card: TachoCard | null; onClose
 function CurrentStatusView({
   cards,
   marketStatus,
+  deviceType,
+  groupBy,
+  includeHistory,
 }: {
   cards: TachoCard[];
   marketStatus: { byId: Map<string, MarketStatusEntry>; groups: MarketGroup[] };
-}) {
-  const [deviceType, setDeviceType] = useState("all");
+  /** v2.57: product group / group by / history come from the Overview filter bar. */
+  deviceType: string;
   // "holder" = who holds the type approval; "platform" = whose chip platform
   // is inside the card (derived from the security certificate, see
   // src/lib/chip-platform.ts), whoever holds the approval.
-  const [groupBy, setGroupBy] = useState<"holder" | "platform">("holder");
+  groupBy: "holder" | "platform";
+  includeHistory: boolean;
+}) {
   const [selectedMfg, setSelectedMfg] = useState<string | null>(null);
+  useEffect(() => setSelectedMfg(null), [groupBy]);
   const [detailCard, setDetailCard] = useState<TachoCard | null>(null);
 
   const byId = marketStatus.byId;
@@ -2320,20 +2451,17 @@ function CurrentStatusView({
     groupBy === "holder"
       ? c.current_manufacturer_normalized || c.current_manufacturer || "—"
       : chipPlatformOf(c).vendor || UNKNOWN_PLATFORM;
-  const deviceTypes = useMemo(
-    () => uniq([...DEVICE_TYPES, ...cards.map((c) => c.device_type || "Card")]),
-    [cards],
-  );
-
   const scoped = useMemo(
     () => cards.filter((c) => deviceType === "all" || (c.device_type || "Card") === deviceType),
     [cards, deviceType],
   );
 
-  const current = useMemo(
+  const activeOnly = useMemo(
     () => scoped.filter((c) => byId.get(c.id)?.status === "current"),
     [scoped, byId],
   );
+  // With "include history" the table counts every record (long-term share).
+  const current = includeHistory ? scoped : activeOnly;
   const delisted = useMemo(
     () => scoped.filter((c) => byId.get(c.id)?.status === "delisted"),
     [scoped, byId],
@@ -2385,61 +2513,28 @@ function CurrentStatusView({
   return (
     <div className="space-y-6">
       <Card>
-        <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Product group
-            </label>
-            <Select value={deviceType} onValueChange={setDeviceType}>
-              <SelectTrigger>
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All product groups</SelectItem>
-                {deviceTypes.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Group by
-            </label>
-            <Select
-              value={groupBy}
-              onValueChange={(v) => {
-                setGroupBy(v as "holder" | "platform");
-                setSelectedMfg(null);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="holder">Approval holder</SelectItem>
-                <SelectItem value="platform">Chip platform</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">
-            {groupBy === "platform" ? "Current market share by chip platform" : "Current market share"}{" "}
+            {includeHistory ? "Long-term share" : "Current market share"}
+            {groupBy === "platform" ? " by chip platform" : ""}{" "}
             {deviceType !== "all" ? `— ${deviceType}` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
-            One type approval per country/product-group lane, whichever manufacturer holds it:
-            the newest generation (G2.2 before G2.1 before G1), within it the most recent type
-            approval date, still listed on JRC today. {current.length} of{" "}
-            {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
+            {includeHistory ? (
+              <>
+                Every type approval on record, including superseded and delisted ones (
+                {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope).
+              </>
+            ) : (
+              <>
+                One type approval per country/product-group lane, whichever manufacturer holds it:
+                the newest generation (G2.2 before G2.1 before G1), within it the most recent type
+                approval date, still listed on JRC today. {current.length} of{" "}
+                {scoped.length} record{scoped.length === 1 ? "" : "s"} in scope count as current.
+              </>
+            )}
             {groupBy === "platform" &&
               " Grouped by the vendor of the secure chip platform, taken from the security certificate number (field 7.2 of the type approval); “own” means the platform vendor also holds the approval, “via partner” means another card manufacturer does."}{" "}
             Click a row to list its countries.
@@ -2451,7 +2546,9 @@ function CurrentStatusView({
                   <th className="py-2 pr-3 font-medium">
                     {groupBy === "platform" ? "Chip platform" : "Manufacturer"}
                   </th>
-                  <th className="py-2 pr-3 text-right font-medium">Current approvals</th>
+                  <th className="py-2 pr-3 text-right font-medium">
+                    {includeHistory ? "Approvals" : "Current approvals"}
+                  </th>
                   {groupBy === "platform" && (
                     <th className="py-2 pr-3 text-right font-medium">Own / via partner</th>
                   )}
@@ -2553,7 +2650,7 @@ function CurrentStatusView({
         <DialogContent className={`max-h-[80vh] ${groupBy === "platform" ? "max-w-5xl" : "max-w-2xl"}`}>
           <DialogHeader>
             <DialogTitle>
-              {selectedMfg} · {mfgCountries.length} current approval
+              {selectedMfg} · {mfgCountries.length} {includeHistory ? "" : "current "}approval
               {mfgCountries.length === 1 ? "" : "s"}
             </DialogTitle>
           </DialogHeader>
