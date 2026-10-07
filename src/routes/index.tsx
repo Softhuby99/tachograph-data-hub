@@ -1687,8 +1687,6 @@ function AnalyticsView({
         : ovScoped.filter((c) => marketStatus.byId.get(c.id)?.status === "current"),
     [ovScoped, includeHistory, marketStatus],
   );
-  // Generations are a card property; another product group shows its own.
-  const genDevice = ovDevice === "all" ? "Card" : ovDevice;
 
   const genCounts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -1700,58 +1698,47 @@ function AnalyticsView({
   const gens = ["G1", "G2.1", "G2.2"].filter((g) => genCounts[g]);
   const genMax = Math.max(1, ...Object.values(genCounts));
 
-  // Countries per generation counts only what is in force today (v2.43): per
-  // country the top-ranked CARD approval of its lane (computeMarketStatus —
-  // generation first, then approval date), and only while JRC still lists it
-  // (status "current"). A country that moved from G1 to G2.2 counts once,
-  // under G2.2; superseded, delisted and unmatched approvals are left out.
-  // Vehicle units / motion sensors are not counted: they carry no card
-  // generation and would count a country twice.
+  // v2.58: the generation bars use exactly the records of the market share
+  // table below (ovCards: product group + active / history), split by
+  // generation — so G1 + G2.1 + G2.2 add up to the table's approvals.
   const activeGen = useMemo(() => {
     const ids: Record<string, Set<string>> = {};
-    const countries: Record<string, Set<string>> = {};
-    const notActive: string[] = [];
-    const share: Record<string, number> = {};
-    if (includeHistory) {
-      // Long term: every country that ever had an approval of the generation;
-      // the share is the generation's part of all approvals (records).
-      const records: Record<string, number> = {};
-      let all = 0;
-      for (const c of cards) {
-        if ((c.device_type || "Card") !== genDevice) continue;
-        if (!String(c.country ?? "").trim()) continue;
-        const gen = c.generation || "—";
-        (ids[gen] ??= new Set()).add(c.id);
-        (countries[gen] ??= new Set()).add(c.country);
-        records[gen] = (records[gen] ?? 0) + 1;
-        all++;
-      }
-      for (const [gen, n] of Object.entries(records)) share[gen] = (n / (all || 1)) * 100;
-      const counts: Record<string, number> = {};
-      for (const [gen, set] of Object.entries(countries)) counts[gen] = set.size;
-      const totalCountries = new Set(Object.values(countries).flatMap((x) => [...x])).size;
-      return { ids, counts, total: totalCountries, notActive, share, records: all };
-    }
-    for (const g of marketStatus.groups) {
-      if (g.deviceType !== genDevice) continue;
-      // Rows without a country cannot be a country (open data issue).
-      if (!String(g.country ?? "").trim()) continue;
-      const top = g.entries[0];
-      if (!top) continue;
-      if (top.status !== "current") {
-        notActive.push(g.country || "—");
-        continue;
-      }
-      const gen = top.generation || "—";
-      (ids[gen] ??= new Set()).add(top.id);
-      (countries[gen] ??= new Set()).add(g.country);
-    }
     const counts: Record<string, number> = {};
-    for (const [gen, set] of Object.entries(countries)) counts[gen] = set.size;
-    const totalCountries = Object.values(counts).reduce((a, b) => a + b, 0);
-    for (const [gen, n] of Object.entries(counts)) share[gen] = (n / (totalCountries || 1)) * 100;
-    return { ids, counts, total: totalCountries, notActive: notActive.sort(), share, records: 0 };
-  }, [marketStatus, cards, genDevice, includeHistory]);
+    const countries: Record<string, Set<string>> = {};
+    for (const c of ovCards) {
+      const gen = c.generation || "—";
+      (ids[gen] ??= new Set()).add(c.id);
+      counts[gen] = (counts[gen] ?? 0) + 1;
+      if (String(c.country ?? "").trim()) (countries[gen] ??= new Set()).add(c.country);
+    }
+    const share: Record<string, number> = {};
+    for (const [gen, n] of Object.entries(counts)) share[gen] = (n / (ovCards.length || 1)) * 100;
+    const countryCounts: Record<string, number> = {};
+    for (const [gen, set] of Object.entries(countries)) countryCounts[gen] = set.size;
+    const otherGen = Object.entries(counts)
+      .filter(([g]) => !["G1", "G2.1", "G2.2"].includes(g))
+      .reduce((a, [, n]) => a + n, 0);
+    // Countries whose newest approval in scope is not in force (delisted or
+    // status unclear) — they do not appear in the active figures.
+    const notActive: string[] = [];
+    if (!includeHistory) {
+      for (const g of marketStatus.groups) {
+        if (ovDevice !== "all" && g.deviceType !== ovDevice) continue;
+        if (!String(g.country ?? "").trim()) continue;
+        const top = g.entries[0];
+        if (top && top.status !== "current") notActive.push(g.country);
+      }
+    }
+    return {
+      ids,
+      counts,
+      countryCounts,
+      share,
+      total: ovCards.length,
+      otherGen,
+      notActive: [...new Set(notActive)].sort(),
+    };
+  }, [ovCards, includeHistory, marketStatus, ovDevice]);
   const activeGens = ["G1", "G2.1", "G2.2"].filter((g) => activeGen.counts[g]);
   const activeMax = Math.max(1, ...activeGens.map((g) => activeGen.counts[g]));
 
@@ -2050,13 +2037,13 @@ function AnalyticsView({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              Countries per Generation
-              {genDevice !== "Card" ? ` — ${genDevice}` : ""}
+              {includeHistory ? "Approvals per Generation" : "Active approvals per Generation"}
+              {ovDevice !== "all" ? ` — ${ovDevice}` : ""}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               {includeHistory
-                ? `Countries that ever had a ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval of the generation (incl. history)`
-                : `Active ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval per country only (newest in its lane, still listed on JRC)`}
+                ? `All ${activeGen.total} approvals in scope, including superseded and delisted ones`
+                : `The ${activeGen.total} approvals in force today (newest in their lane, still listed on JRC) — same records as the market share table below`}
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -2064,7 +2051,8 @@ function AnalyticsView({
               <button
                 key={g}
                 onClick={() => toggleDrill({ kind: "activeGeneration", value: g })}
-                className="grid w-full grid-cols-[60px_1fr_90px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
+                className="grid w-full grid-cols-[60px_1fr_140px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
+                title={`${activeGen.counts[g]} approval(s) in ${activeGen.countryCounts[g] ?? 0} country(ies) — click to list them`}
               >
                 <span className="font-semibold">{g}</span>
                 <div className="h-5 overflow-hidden rounded bg-muted">
@@ -2074,20 +2062,27 @@ function AnalyticsView({
                   />
                 </div>
                 <span className="text-right text-xs text-muted-foreground tabular-nums">
-                  {activeGen.counts[g]} (
-                  {((activeGen.counts[g] / (activeGen.total || 1)) * 100).toFixed(1)}%)
+                  {activeGen.counts[g]} approval{activeGen.counts[g] === 1 ? "" : "s"} ·{" "}
+                  {activeGen.countryCounts[g] ?? 0} countr
+                  {(activeGen.countryCounts[g] ?? 0) === 1 ? "y" : "ies"}
                 </span>
               </button>
             ))}
             {activeGens.length === 0 && (
-              <p className="py-2 text-sm text-muted-foreground">No approvals with a country in scope.</p>
+              <p className="py-2 text-sm text-muted-foreground">No approvals in scope.</p>
+            )}
+            {activeGen.otherGen > 0 && (
+              <p className="pt-1 text-xs text-muted-foreground">
+                {activeGen.otherGen} approval{activeGen.otherGen === 1 ? "" : "s"} without a
+                G1 / G2.1 / G2.2 generation.
+              </p>
             )}
             {activeGen.notActive.length > 0 && (
               <p
                 className="pt-1 text-xs text-muted-foreground"
                 title={activeGen.notActive.join(", ")}
               >
-                Not counted (newest approval delisted or not matched):{" "}
+                Not in the figures (newest approval delisted or status unclear):{" "}
                 {activeGen.notActive.join(", ")}
               </p>
             )}
@@ -2099,14 +2094,13 @@ function AnalyticsView({
             <CardTitle className="text-base">Market Share by Generation</CardTitle>
             <p className="text-xs text-muted-foreground">
               {includeHistory
-                ? `Share of all ${activeGen.records} ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approvals with a country (incl. history)`
-                : `Share of the ${activeGen.total} countries with an active ${genDevice === "Card" ? "card" : genDevice.toLowerCase()} approval`}
+                ? `Share of all ${activeGen.total} approvals in scope (incl. history)`
+                : `Share of the ${activeGen.total} approvals in force today`}
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
             {activeGens.map((g) => {
-              // Same basis as "Countries per Generation" (v2.44): active card
-              // approval per country, not the number of records.
+              // Same records as the market share table (v2.58).
               const pct = activeGen.share[g] ?? 0;
               return (
                 <button
@@ -2468,12 +2462,17 @@ function CurrentStatusView({
   );
 
   const shareList = useMemo(() => {
-    const map: Record<string, { holders: number; countries: Set<string>; own: number; partner: number }> =
-      {};
+    const map: Record<
+      string,
+      { holders: number; countries: Set<string>; own: number; partner: number; gens: Record<string, number> }
+    > = {};
     for (const c of current) {
       const m = groupKeyOf(c);
-      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0 };
+      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0, gens: {} };
       map[m].holders++;
+      // v2.58: split by generation, same split as the bars above.
+      const gen = c.generation || "—";
+      map[m].gens[gen] = (map[m].gens[gen] ?? 0) + 1;
       map[m].countries.add(c.country);
       if (groupBy === "platform") {
         const vendor = chipPlatformOf(c).vendor;
@@ -2489,6 +2488,7 @@ function CurrentStatusView({
         countries: v.countries.size,
         own: v.own,
         partner: v.partner,
+        gens: v.gens,
         share: (v.holders / total) * 100,
       }))
       .sort(
@@ -2549,6 +2549,12 @@ function CurrentStatusView({
                   <th className="py-2 pr-3 text-right font-medium">
                     {includeHistory ? "Approvals" : "Current approvals"}
                   </th>
+                  <th
+                    className="py-2 pr-3 text-right font-medium"
+                    title="Approvals per generation: G1 / G2.1 / G2.2"
+                  >
+                    G1 / G2.1 / G2.2
+                  </th>
                   {groupBy === "platform" && (
                     <th className="py-2 pr-3 text-right font-medium">Own / via partner</th>
                   )}
@@ -2567,6 +2573,9 @@ function CurrentStatusView({
                   >
                     <td className="py-2 pr-3 font-medium">{m.name}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.holders}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                      {m.gens["G1"] ?? 0} / {m.gens["G2.1"] ?? 0} / {m.gens["G2.2"] ?? 0}
+                    </td>
                     {groupBy === "platform" && (
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {m.name === UNKNOWN_PLATFORM ? "—" : `${m.own} / ${m.partner}`}
@@ -2586,7 +2595,7 @@ function CurrentStatusView({
                 ))}
                 {shareList.length === 0 && (
                   <tr>
-                    <td colSpan={groupBy === "platform" ? 6 : 5} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={groupBy === "platform" ? 7 : 6} className="py-6 text-center text-muted-foreground">
                       No current entries in scope.
                     </td>
                   </tr>
