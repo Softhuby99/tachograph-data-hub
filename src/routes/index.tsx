@@ -1705,10 +1705,17 @@ function AnalyticsView({
     const ids: Record<string, Set<string>> = {};
     const counts: Record<string, number> = {};
     const countries: Record<string, Set<string>> = {};
+    // v2.59: own approval of the chip platform vendor vs. via partner (another
+    // card manufacturer on that platform) vs. platform unknown — per generation.
+    const parts: Record<string, Record<PartKind, number>> = {};
     for (const c of ovCards) {
       const gen = c.generation || "—";
       (ids[gen] ??= new Set()).add(c.id);
       counts[gen] = (counts[gen] ?? 0) + 1;
+      const vendor = chipPlatformOf(c).vendor;
+      const kind: PartKind = !vendor ? "unknown" : isOwnApproval(c, vendor) ? "own" : "partner";
+      const p = (parts[gen] ??= { own: 0, partner: 0, unknown: 0 });
+      p[kind]++;
       if (String(c.country ?? "").trim()) (countries[gen] ??= new Set()).add(c.country);
     }
     const share: Record<string, number> = {};
@@ -1734,6 +1741,7 @@ function AnalyticsView({
       counts,
       countryCounts,
       share,
+      parts,
       total: ovCards.length,
       otherGen,
       notActive: [...new Set(notActive)].sort(),
@@ -2045,20 +2053,22 @@ function AnalyticsView({
                 ? `All ${activeGen.total} approvals in scope, including superseded and delisted ones`
                 : `The ${activeGen.total} approvals in force today (newest in their lane, still listed on JRC) — same records as the market share table below`}
             </p>
+            <GenSplitLegend tone="dark" />
           </CardHeader>
           <CardContent className="space-y-2">
             {activeGens.map((g) => (
               <button
                 key={g}
                 onClick={() => toggleDrill({ kind: "activeGeneration", value: g })}
-                className="grid w-full grid-cols-[60px_1fr_140px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
-                title={`${activeGen.counts[g]} approval(s) in ${activeGen.countryCounts[g] ?? 0} country(ies) — click to list them`}
+                className="grid w-full grid-cols-[60px_1fr_170px] items-center gap-3 rounded p-1 text-left hover:bg-accent"
+                title={`${activeGen.counts[g]} approval(s) in ${activeGen.countryCounts[g] ?? 0} country(ies): own ${activeGen.parts[g]?.own ?? 0} · via partner ${activeGen.parts[g]?.partner ?? 0} · platform unknown ${activeGen.parts[g]?.unknown ?? 0} — click to list them`}
               >
                 <span className="font-semibold">{g}</span>
                 <div className="h-5 overflow-hidden rounded bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{ width: `${(activeGen.counts[g] / activeMax) * 100}%` }}
+                  <GenSplitBar
+                    parts={activeGen.parts[g]}
+                    width={(activeGen.counts[g] / activeMax) * 100}
+                    tone="dark"
                   />
                 </div>
                 <span className="text-right text-xs text-muted-foreground tabular-nums">
@@ -2097,6 +2107,7 @@ function AnalyticsView({
                 ? `Share of all ${activeGen.total} approvals in scope (incl. history)`
                 : `Share of the ${activeGen.total} approvals in force today`}
             </p>
+            <GenSplitLegend tone="purple" />
           </CardHeader>
           <CardContent className="space-y-2">
             {activeGens.map((g) => {
@@ -2110,10 +2121,7 @@ function AnalyticsView({
                 >
                   <span className="font-semibold">{g}</span>
                   <div className="h-5 overflow-hidden rounded bg-muted">
-                    <div
-                      className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-400"
-                      style={{ width: `${pct}%` }}
-                    />
+                    <GenSplitBar parts={activeGen.parts[g]} width={pct} tone="purple" />
                   </div>
                   <span className="text-right text-xs text-muted-foreground tabular-nums">
                     {pct.toFixed(1)}%
@@ -2418,6 +2426,77 @@ function RecordDetailDialog({ card, onClose }: { card: TachoCard | null; onClose
   );
 }
 
+// v2.59: generation bar split own (chip platform vendor holds the approval) /
+// via partner / platform unknown — dark vs. light shades of the bar colour.
+const GEN_SPLIT_TONES: Record<"dark" | "purple", Record<PartKind, string>> = {
+  dark: { own: "bg-primary", partner: "bg-slate-300 dark:bg-slate-500", unknown: "" },
+  purple: { own: "bg-purple-600", partner: "bg-purple-300", unknown: "" },
+};
+const UNKNOWN_HATCH: CSSProperties = {
+  backgroundImage:
+    "repeating-linear-gradient(135deg, rgba(148,163,184,0.55) 0 3px, rgba(148,163,184,0.15) 3px 6px)",
+};
+function GenSplitBar({
+  parts,
+  width,
+  tone,
+}: {
+  parts?: Record<PartKind, number>;
+  width: number;
+  tone: "dark" | "purple";
+}) {
+  const p = parts ?? { own: 0, partner: 0, unknown: 0 };
+  const sum = p.own + p.partner + p.unknown || 1;
+  return (
+    <div className="flex h-full transition-all" style={{ width: `${width}%` }}>
+      {(["own", "partner", "unknown"] as PartKind[]).map((k) =>
+        p[k] ? (
+          <div
+            key={k}
+            className={`h-full ${GEN_SPLIT_TONES[tone][k]}`}
+            style={{ width: `${(p[k] / sum) * 100}%`, ...(k === "unknown" ? UNKNOWN_HATCH : {}) }}
+            title={`${PART_LABEL[k]}: ${p[k]}`}
+          />
+        ) : null,
+      )}
+    </div>
+  );
+}
+function GenSplitLegend({ tone }: { tone: "dark" | "purple" }) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+      {(["own", "partner", "unknown"] as PartKind[]).map((k) => (
+        <span key={k} className="inline-flex items-center gap-1">
+          <span
+            className={`inline-block h-2.5 w-4 rounded-sm ${GEN_SPLIT_TONES[tone][k]}`}
+            style={k === "unknown" ? UNKNOWN_HATCH : undefined}
+          />
+          {k === "own" ? "own approval" : k === "partner" ? "via partner" : "platform unknown"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// v2.59: own / partner colouring in the market share table.
+type PartKind = "own" | "partner" | "unknown";
+const PART_ORDER: Record<PartKind, number> = { own: 0, partner: 1, unknown: 2 };
+const PART_LABEL: Record<PartKind, string> = {
+  own: "own approval (platform vendor holds it)",
+  partner: "via partner (another card manufacturer holds it)",
+  unknown: "platform unknown",
+};
+const PART_CLASS: Record<PartKind, string> = {
+  own: "border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  partner: "border-sky-500/60 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  unknown: "border-border bg-muted text-muted-foreground",
+};
+const PART_BAR: Record<PartKind, string> = {
+  own: "bg-emerald-500",
+  partner: "bg-sky-500",
+  unknown: "bg-slate-400",
+};
+
 function CurrentStatusView({
   cards,
   marketStatus,
@@ -2464,12 +2543,31 @@ function CurrentStatusView({
   const shareList = useMemo(() => {
     const map: Record<
       string,
-      { holders: number; countries: Set<string>; own: number; partner: number; gens: Record<string, number> }
+      {
+        holders: number;
+        countries: Set<string>;
+        own: number;
+        partner: number;
+        gens: Record<string, number>;
+        // v2.59: who is behind the row — by platform: the approval holders;
+        // by holder: the chip platforms used. kind = own / partner / unknown.
+        parts: Record<string, { n: number; kind: PartKind }>;
+      }
     > = {};
     for (const c of current) {
       const m = groupKeyOf(c);
-      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0, gens: {} };
+      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0, gens: {}, parts: {} };
       map[m].holders++;
+      {
+        const vendor = chipPlatformOf(c).vendor;
+        const kind: PartKind = !vendor ? "unknown" : isOwnApproval(c, vendor) ? "own" : "partner";
+        const key =
+          groupBy === "platform"
+            ? c.current_manufacturer_normalized || c.current_manufacturer || "—"
+            : vendor || "platform unknown";
+        const part = (map[m].parts[key] ??= { n: 0, kind });
+        part.n++;
+      }
       // v2.58: split by generation, same split as the bars above.
       const gen = c.generation || "—";
       map[m].gens[gen] = (map[m].gens[gen] ?? 0) + 1;
@@ -2489,6 +2587,12 @@ function CurrentStatusView({
         own: v.own,
         partner: v.partner,
         gens: v.gens,
+        parts: Object.entries(v.parts)
+          .map(([label, p]) => ({ label, ...p }))
+          .sort(
+            (a, b) =>
+              PART_ORDER[a.kind] - PART_ORDER[b.kind] || b.n - a.n || a.label.localeCompare(b.label),
+          ),
         share: (v.holders / total) * 100,
       }))
       .sort(
@@ -2539,6 +2643,20 @@ function CurrentStatusView({
               " Grouped by the vendor of the secure chip platform, taken from the security certificate number (field 7.2 of the type approval); “own” means the platform vendor also holds the approval, “via partner” means another card manufacturer does."}{" "}
             Click a row to list its countries.
           </p>
+          <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            {(["own", "partner", "unknown"] as PartKind[]).map((k) => (
+              <span key={k} className="inline-flex items-center gap-1.5">
+                <span className={`inline-block h-2.5 w-4 rounded-sm ${PART_BAR[k]}`} />
+                {groupBy === "platform"
+                  ? PART_LABEL[k]
+                  : k === "own"
+                    ? "own chip platform"
+                    : k === "partner"
+                      ? "chip platform of another vendor"
+                      : "platform unknown"}
+              </span>
+            ))}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -2550,7 +2668,7 @@ function CurrentStatusView({
                     {includeHistory ? "Approvals" : "Current approvals"}
                   </th>
                   <th
-                    className="py-2 pr-3 text-right font-medium"
+                    className="whitespace-nowrap py-2 pr-3 text-right font-medium"
                     title="Approvals per generation: G1 / G2.1 / G2.2"
                   >
                     G1 / G2.1 / G2.2
@@ -2560,7 +2678,7 @@ function CurrentStatusView({
                   )}
                   <th className="py-2 pr-3 text-right font-medium">Countries</th>
                   <th className="py-2 pr-3 text-right font-medium">Market share</th>
-                  <th className="hidden py-2 pr-3 font-medium lg:table-cell"></th>
+                  <th className="hidden w-40 py-2 pr-3 font-medium lg:table-cell"></th>
                 </tr>
               </thead>
               <tbody>
@@ -2571,24 +2689,59 @@ function CurrentStatusView({
                     className="cursor-pointer border-b last:border-0 hover:bg-accent/60"
                     title="Click to list the countries"
                   >
-                    <td className="py-2 pr-3 font-medium">{m.name}</td>
+                    <td className="py-2 pr-3">
+                      <div className="font-medium">{m.name}</div>
+                      {m.parts.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {m.parts.map((p) => (
+                            <span
+                              key={p.label}
+                              className={`rounded border px-1.5 py-0.5 text-[11px] leading-4 ${PART_CLASS[p.kind]}`}
+                              title={
+                                groupBy === "platform"
+                                  ? `${p.label}: ${p.n} approval(s) — ${PART_LABEL[p.kind]}`
+                                  : `${p.label} chip: ${p.n} approval(s) — ${PART_LABEL[p.kind]}`
+                              }
+                            >
+                              {groupBy === "holder" && p.kind !== "unknown" ? `${p.label} chip` : p.label} {p.n}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.holders}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                    <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums text-muted-foreground">
                       {m.gens["G1"] ?? 0} / {m.gens["G2.1"] ?? 0} / {m.gens["G2.2"] ?? 0}
                     </td>
                     {groupBy === "platform" && (
                       <td className="py-2 pr-3 text-right tabular-nums">
-                        {m.name === UNKNOWN_PLATFORM ? "—" : `${m.own} / ${m.partner}`}
+                        {m.name === UNKNOWN_PLATFORM ? (
+                          "—"
+                        ) : (
+                          <>
+                            <span className="text-emerald-600 dark:text-emerald-400">{m.own}</span>
+                            {" / "}
+                            <span className="text-sky-600 dark:text-sky-400">{m.partner}</span>
+                          </>
+                        )}
                       </td>
                     )}
                     <td className="py-2 pr-3 text-right tabular-nums">{m.countries}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{m.share.toFixed(1)}%</td>
                     <td className="hidden py-2 pr-3 lg:table-cell">
-                      <div className="h-3 overflow-hidden rounded bg-muted">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
-                          style={{ width: `${(m.holders / shareMax) * 100}%` }}
-                        />
+                      {/* v2.59: bar split own (green) / partner (blue) / unknown (grey) */}
+                      <div className="flex h-3 overflow-hidden rounded bg-muted">
+                        {(["own", "partner", "unknown"] as PartKind[]).map((k) => {
+                          const n = m.parts.filter((p) => p.kind === k).reduce((a, p) => a + p.n, 0);
+                          return n ? (
+                            <div
+                              key={k}
+                              className={`h-full ${PART_BAR[k]}`}
+                              style={{ width: `${(n / shareMax) * 100}%` }}
+                              title={`${PART_LABEL[k]}: ${n}`}
+                            />
+                          ) : null;
+                        })}
                       </div>
                     </td>
                   </tr>

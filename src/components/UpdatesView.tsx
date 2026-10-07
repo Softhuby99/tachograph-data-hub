@@ -72,6 +72,12 @@ const SOURCE_LABELS: Record<string, string> = {
   ted_procurement: "TED procurement",
 };
 
+// v2.60: sources that only exist as proposals (no automatic check) — shown as
+// filters, never run by "Check now".
+const FILTER_ONLY_LABELS: Record<string, string> = {
+  research: "Research (evidence)",
+};
+
 const SOURCE_URLS: Record<string, string> = {
   card_status: "https://dtc.jrc.ec.europa.eu/dtc_card_status.php.html",
   other_certificates: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
@@ -530,7 +536,7 @@ export function UpdatesView() {
         >
           All sources
         </Button>
-        {Object.entries(SOURCE_LABELS).map(([key, label]) => (
+        {Object.entries({ ...SOURCE_LABELS, ...FILTER_ONLY_LABELS }).map(([key, label]) => (
           <Button
             key={key}
             size="sm"
@@ -681,6 +687,9 @@ export function UpdatesView() {
         {list.map((p) => {
           const fields = p.changes?.fields ?? [];
           const isInfo = p.kind === "info";
+          // v2.60: research proposals carry their evidence in the payload.
+          const isResearch = p.source_type === "research";
+          const confidence = isResearch ? (p.payload ?? {})["Confidence"] : "";
           const payload = p.payload ?? {};
           return (
             <Card key={p.id}>
@@ -701,7 +710,9 @@ export function UpdatesView() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">
-                      {p.source_label || SOURCE_LABELS[p.source_type ?? "card_status"]}
+                      {p.source_label ||
+                        SOURCE_LABELS[p.source_type ?? "card_status"] ||
+                        FILTER_ONLY_LABELS[p.source_type ?? ""]}
                     </Badge>
                     {(p.country ||
                       (p.payload ?? {})["Resolved country"] ||
@@ -716,6 +727,23 @@ export function UpdatesView() {
                       <Badge variant="secondary">{(p.payload ?? {})["Device type"]}</Badge>
                     )}
                     {p.generation && <Badge variant="secondary">{p.generation}</Badge>}
+                    {confidence && (
+                      <Badge
+                        variant="outline"
+                        className={
+                          confidence === "exact"
+                            ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
+                            : "border-amber-500 text-amber-700 dark:text-amber-300"
+                        }
+                        title={
+                          confidence === "exact"
+                            ? "The approval document or the certified product name matches"
+                            : "Derived from the product name / product family — check the basis"
+                        }
+                      >
+                        {confidence}
+                      </Badge>
+                    )}
 
                     <Badge variant={p.kind === "new" ? "default" : "outline"}>
                       {isInfo ? "Info" : p.kind === "new" ? "New entry" : "Changed"}
@@ -745,11 +773,14 @@ export function UpdatesView() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                {isInfo ? (
+                {isInfo || isResearch ? (
                   <div className="grid gap-1 text-sm sm:grid-cols-2">
-                    {Object.entries(payload).map(([k, v]) => (
-                      <Detail key={k} label={k} value={v} />
-                    ))}
+                    {Object.entries(payload)
+                      .filter(([k]) => !(isResearch && (k === "Device type" || k === "Confidence")))
+                      .sort(([a], [b]) => (isResearch ? researchOrder(a) - researchOrder(b) : 0))
+                      .map(([k, v]) => (
+                        <Detail key={k} label={k} value={v} />
+                      ))}
                   </div>
                 ) : (
                   <div className="grid gap-1 text-sm sm:grid-cols-2">
@@ -941,11 +972,59 @@ function fmtStamp(value?: string | null): string {
   });
 }
 
+// v2.60: jsonb does not keep key order — research evidence is shown in a fixed one.
+const RESEARCH_ORDER = [
+  "Basis",
+  "Security certificate",
+  "Certified product (TOE)",
+  "Developer",
+  "Scheme",
+  "Certificate issued",
+  "Validity",
+  "Certificate note",
+  "Note",
+  "Approval document",
+  "Certificate / report",
+  "Researched",
+];
+function researchOrder(key: string): number {
+  const i = RESEARCH_ORDER.indexOf(key);
+  return i === -1 ? RESEARCH_ORDER.length : i;
+}
+
 function Detail({ label, value }: { label: string; value: string }) {
+  // v2.60: evidence links (research proposals) are clickable; several are
+  // separated by " ; ". Only http(s) URLs become links.
+  const parts = String(value ?? "").split(" ; ");
+  const isUrl = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
   return (
-    <div>
+    <div className="min-w-0 break-words">
       <span className="text-muted-foreground">{label}: </span>
-      <span>{value || "—"}</span>
+      {value ? (
+        parts.map((v, i) => (
+          <span key={i}>
+            {i > 0 && " · "}
+            {isUrl(v) ? (
+              <a
+                href={v.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                {v
+                  .trim()
+                  .replace(/^https?:\/\//, "")
+                  .slice(0, 70)}
+                {v.trim().replace(/^https?:\/\//, "").length > 70 ? "…" : ""}
+              </a>
+            ) : (
+              v
+            )}
+          </span>
+        ))
+      ) : (
+        <span>—</span>
+      )}
     </div>
   );
 }

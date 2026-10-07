@@ -16,7 +16,7 @@ export type CertRef = {
   suffix: string;
   /** Re-issue marker of the base certificate, e.g. "v2" for ANSSI-CC-2022/36v2. */
   variant: string;
-  scheme: "ANSSI" | "NSCIB" | "BSI" | "OTHER";
+  scheme: "ANSSI" | "DCSSI" | "NSCIB" | "BSI" | "OTHER";
 };
 
 const PLACEHOLDER =
@@ -52,12 +52,27 @@ export function parseCertificate(text: unknown): CertRef | null {
     };
   }
 
-  const bsi = /BSI-DSZ-CC-(\d{4})(?:-V(\d+))?/i.exec(t);
+  // v2.60: DCSSI (French scheme before ANSSI, until ~2009), e.g. "DCSSI-2007/20".
+  const dcssi = /DCSSI[-\s]*(?:CC[-\s]*)?(\d{4})\/(\d{1,3})/i.exec(t);
+  if (dcssi) {
+    const rest = t.slice(dcssi.index + dcssi[0].length);
+    const suf = SUFFIX_RE.exec(rest);
+    return {
+      family: `DCSSI-${dcssi[1]}/${dcssi[2]!.padStart(2, "0")}`,
+      suffix: suf ? `${suf[1]!.toUpperCase()}${suf[2]}` : "",
+      variant: "",
+      scheme: "DCSSI",
+    };
+  }
+
+  // BSI: CC ("BSI-DSZ-CC-0889-2013", "-V3") and, v2.60, ITSEC ("BSI-DSZ-ITSEC-0287-2005");
+  // a maintenance "-MA-01" counts as continuation M01.
+  const bsi = /BSI-DSZ-(CC|ITSEC)-(\d{4})(?:-(?:\d{4}))?(?:-V(\d+))?(?:-MA-?(\d{1,2}))?/i.exec(t);
   if (bsi) {
     return {
-      family: `BSI-DSZ-CC-${bsi[1]}`,
-      suffix: "",
-      variant: bsi[2] ? `V${bsi[2]}` : "",
+      family: `BSI-DSZ-${bsi[1]!.toUpperCase()}-${bsi[2]}`,
+      suffix: bsi[4] ? `M${bsi[4].padStart(2, "0")}` : "",
+      variant: bsi[3] ? `V${bsi[3]}` : "",
       scheme: "BSI",
     };
   }
