@@ -250,3 +250,49 @@ an Authentik reverse proxy and let it handle auth at the edge.
 | `DB_HOST` set but no data | First boot runs `db/init.sql`; verify with the `psql count` above. |
 | Flags missing | Container/client needs egress to `flagcdn.com`; emoji fallback otherwise. |
 | Want HTTP only / behind proxy | Set `PORT=3000`, unset `NITRO_SSL_CERT`/`NITRO_SSL_KEY`, and reverse-proxy in front. |
+
+## Database bootstrap and upgrades (v2.61)
+
+The entrypoint runs `docker/bootstrap-db.sh` as the PostgreSQL administrator
+before starting the web app. A fresh snapshot activates `pgcrypto` and commits
+schema, card/snapshot seeds and `public.bootstrap_state` together. SQL errors or
+missing seed files roll back the entire snapshot; a corrected image can retry
+against that empty database.
+
+Existing databases are never seeded again. Installations without the new marker
+are adopted only after checking snapshot tables/columns, the cron singleton,
+required triggers, and applying/checking the incremental migrations. An unmarked
+database with empty card or source-snapshot tables requires manual review, since
+it cannot be distinguished safely from a failed legacy import. This check does
+not prove the historical completeness of every individual legacy seed row.
+A marker records successful initialization/validation, not continued data integrity.
+
+Each migration and its `schema_migrations` entry commit in the same transaction.
+Migration SQL files must therefore support transactional execution and must not
+contain their own transaction commands. Migrated table columns are checked even
+when migration filenames are already recorded. Validation/migration errors stop
+the container startup before the web process starts. Inspect the reported error
+and restore or repair the database; do not delete a production volume or replay
+the initial snapshot to silence the error.
+
+Back up an existing database before deploying a changed image. The marker and
+schema checks do not replace backups. The v2.61 code does not automatically
+repair an already damaged legacy database.
+
+### Bootstrap integration tests
+
+Use PostgreSQL with the `pgcrypto` extension files installed and a **disposable
+local test cluster**. Put `psql`, `createdb` and `dropdb` on PATH. The selected
+role needs permission to create test databases and install the extension.
+The suite creates and drops only randomly named `tdh_bootstrap_test_*` databases;
+it never runs the helper against the app database. For example:
+
+```bash
+PGHOST=/path/to/test/socket PGPORT=55461 python3 tools/test_bootstrap.py
+```
+
+The tests cover fresh initialization, repeated startup, legacy adoption (including
+pending migrations), broken/empty legacy schemas, rollback after seeds have been
+inserted, missing seed files, failed migrations and failed migration-marker
+insertion. They also verify rejection of missing columns/tables despite existing
+completion/migration markers. A full container smoke test remains separate.

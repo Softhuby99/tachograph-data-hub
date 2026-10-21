@@ -5,6 +5,12 @@
 -- SCHEMA
 -- ============================================================
 
+-- Snapshot, seeds and completion marker must commit together, including when
+-- this file is invoked directly with psql rather than through the entrypoint.
+\set ON_ERROR_STOP on
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
 CREATE TABLE IF NOT EXISTS public.tachograph_cards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   country text NOT NULL,
@@ -1473,3 +1479,11 @@ INSERT INTO public.jrc_source_snapshots (id, source_type, entry_key, fingerprint
 INSERT INTO public.jrc_source_snapshots (id, source_type, entry_key, fingerprint, created_at, updated_at) VALUES ('bdbb8ea9-e2b5-428e-bfe5-2a4272508e4c', 'security_updates', 'Stoneridge Electronics AB|SE5000-8.1', 'Revision B Revision C Revision D Revision E|e5-0002_08 e5-0002_09 e5-0002-10 e5-0002-11|1214 1214 1619 1619|2424 2525 2424, 2525 2626|Revision F Revision G Revision H Revision I|e5-0002-12 e5-0002_13 e5-0002-14 e5-0002-15|01/09/2026|Latest at the next periodic inspection or at first installation', '2026-08-11 09:35:18.920591+00', '2026-08-11 14:38:22.098+00');
 
 -- Done.
+
+CREATE TABLE public.bootstrap_state (
+  id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
+  origin text NOT NULL CHECK (origin IN ('snapshot', 'legacy_validated')),
+  completed_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.bootstrap_state (id, origin) VALUES (true, 'snapshot');
+COMMIT;

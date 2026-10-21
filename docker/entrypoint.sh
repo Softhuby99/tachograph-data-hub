@@ -96,57 +96,12 @@ if ! su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NA
   su postgres -c "createdb -O \"$DB_USER\" \"$DB_NAME\""
 fi
 
-# The bundled SQL is a complete initial snapshot, not a recurring migration.
-# Only load it into a new/empty database so container replacements do not try
-# to insert the same fixed UUIDs into a persistent volume again.
-HAS_SCHEMA="$(su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT to_regclass('public.tachograph_cards') IS NOT NULL\"")"
-if [ "$HAS_SCHEMA" != "t" ] && [ -f /app/db/init.sql ]; then
-  echo "[entrypoint] Applying initial database snapshot…"
-  su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f /app/db/init.sql"
-else
-  echo "[entrypoint] Existing database detected; skipping initial snapshot."
-fi
-
-# --- 2b. Apply incremental schema migrations (idempotent, tracked) ---
-su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"CREATE TABLE IF NOT EXISTS public.schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());\""
-
-# v2.52: migration results go to the operations log (app_events) once that
-# table exists. Values reach psql as variables, never via shell strings.
-log_migration_event() { # level code message migrations
-  runuser -u postgres -- psql -d "$DB_NAME" -q -v lvl="$1" -v code="$2" -v msg="$3" -v names="$4" \
-    >/dev/null 2>&1 <<'SQL' || true
-SELECT to_regclass('public.app_events') IS NOT NULL AS has_events \gset
-\if :has_events
-INSERT INTO public.app_events (level, category, code, status, message, details)
-VALUES (:'lvl', 'system', :'code', CASE WHEN :'lvl' = 'ERROR' THEN 'failed' ELSE 'success' END,
-        :'msg', jsonb_build_object('migrations', :'names'));
-\endif
-SQL
-}
-
-APPLIED_NOW=""
-if [ -d /app/db/migrations ]; then
-  for f in $(ls /app/db/migrations/*.sql 2>/dev/null | sort); do
-    name="$(basename "$f")"
-    applied="$(su postgres -c "psql -d \"$DB_NAME\" -tAc \"SELECT 1 FROM public.schema_migrations WHERE filename='$name'\"")"
-    if [ "$applied" = "1" ]; then
-      echo "[entrypoint] Migration $name already applied."
-      continue
-    fi
-    echo "[entrypoint] Applying migration $name…"
-    if ! su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -f \"$f\""; then
-      echo "[entrypoint] FATAL: migration $name failed — container start aborted" >&2
-      log_migration_event ERROR system.migration.failed \
-        "Schema migration $name failed — container start aborted" "$name"
-      su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
-      exit 1
-    fi
-    su postgres -c "psql -v ON_ERROR_STOP=1 -d \"$DB_NAME\" -c \"INSERT INTO public.schema_migrations (filename) VALUES ('$name') ON CONFLICT DO NOTHING;\""
-    APPLIED_NOW="${APPLIED_NOW:+$APPLIED_NOW, }$name"
-  done
-fi
-if [ -n "$APPLIED_NOW" ]; then
-  log_migration_event INFO system.migration.applied "Schema migrations applied: $APPLIED_NOW" "$APPLIED_NOW"
+# Snapshot/bootstrap and each migration fail closed. Stop the temporary server
+# on failure; supervisord (and therefore the web app) must not start.
+if ! runuser -u postgres -- env DB_NAME="$DB_NAME" bash /app/docker/bootstrap-db.sh; then
+  echo "[entrypoint] FATAL: database bootstrap/validation failed — web app will not start" >&2
+  su postgres -c "$PG_BIN/pg_ctl -D \"$PG_DATA\" stop -w -m fast" || true
+  exit 1
 fi
 
 # Ensure ownership of everything in the app schema stays with the app user.
