@@ -261,7 +261,10 @@ against that empty database.
 
 Existing databases are never seeded again. Installations without the new marker
 are adopted only after checking snapshot tables/columns, the cron singleton,
-required triggers, and applying/checking the incremental migrations. An unmarked
+required triggers, and applying/checking the incremental migrations. Since v2.63,
+a missing legacy `cron_config` table is added by migration 0010 before the cron
+checks. Existing cron tokens/settings are preserved; a new row is disabled and
+has an empty endpoint. The `CRON_SECRET` environment setting is unchanged. An unmarked
 database with empty card or source-snapshot tables requires manual review, since
 it cannot be distinguished safely from a failed legacy import. This check does
 not prove the historical completeness of every individual legacy seed row.
@@ -296,3 +299,7 @@ pending migrations), broken/empty legacy schemas, rollback after seeds have been
 inserted, missing seed files, failed migrations and failed migration-marker
 insertion. They also verify rejection of missing columns/tables despite existing
 completion/migration markers. A full container smoke test remains separate.
+
+The GitHub Docker build now requires the bootstrap integration suite to pass
+against PostgreSQL 15 before publishing an image, including legacy databases
+without cron_config/pgcrypto and rollback/retry of that migration.

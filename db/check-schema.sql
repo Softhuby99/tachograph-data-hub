@@ -15,3 +15,18 @@ SELECT id, name, vendor, families, patterns, note, sort, updated_at FROM public.
 SELECT certificate_issued_date, certificate_expiry_date, device_type FROM public.tachograph_cards LIMIT 0;
 SELECT reviewed_at, reviewed_by FROM public.jrc_update_proposals LIMIT 0;
 SELECT run_id, triggered_by, duration_ms FROM public.jrc_check_runs LIMIT 0;
+
+-- The optional legacy cron configuration is required only AFTER migration 0010.
+SELECT id, token, endpoint, enabled, created_at, updated_at FROM public.cron_config LIMIT 0;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.cron_config WHERE id = true AND length(token) > 0) THEN
+    RAISE EXCEPTION 'Incomplete bootstrap: cron_config singleton/token missing; restore or repair the database';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.cron_config'::regclass
+      AND tgname = 'update_cron_config_updated_at' AND NOT tgisinternal AND tgenabled <> 'D'
+  ) THEN
+    RAISE EXCEPTION 'Required cron_config updated_at trigger missing or disabled';
+  END IF;
+END $$;

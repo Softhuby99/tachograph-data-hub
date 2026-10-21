@@ -20,7 +20,8 @@ else
 fi
 
 # A legacy install has no completion marker. Check core snapshot columns,
-# essential triggers and the cron singleton BEFORE applying migrations.
+# essential triggers BEFORE applying migrations. Optional legacy cron metadata
+# is added by migration 0010 and checked afterwards.
 psql_db -q -o /dev/null -f "$TDH_DB_DIR/check-bootstrap.sql"
 
 psql_db -c "CREATE TABLE IF NOT EXISTS public.schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());"

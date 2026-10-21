@@ -42,6 +42,7 @@ class BootstrapTests(unittest.TestCase):
     def legacy(self):
         self.bootstrap()
         self.sql('DROP TABLE public.bootstrap_state')
+        self.sql("DELETE FROM public.schema_migrations WHERE filename='0010_legacy_cron_config.sql'")
 
     def data_digest(self):
         # Include actual data plus manual edits/history/settings; exclude lifecycle log.
@@ -55,7 +56,7 @@ class BootstrapTests(unittest.TestCase):
     def test_fresh_database(self):
         self.bootstrap()
         self.assertEqual(self.sql('SELECT origin FROM public.bootstrap_state'), 'snapshot')
-        self.assertEqual(self.sql('SELECT count(*) FROM public.schema_migrations'), '9')
+        self.assertEqual(self.sql('SELECT count(*) FROM public.schema_migrations'), '10')
         self.assertEqual(self.sql('SELECT length(token) FROM public.cron_config'), '64')
         self.assertGreater(int(self.sql('SELECT count(*) FROM public.tachograph_cards')), 0)
         self.assertGreater(int(self.sql('SELECT count(*) FROM public.jrc_source_snapshots')), 0)
@@ -112,14 +113,49 @@ class BootstrapTests(unittest.TestCase):
         cards = self.sql("SELECT md5(string_agg(row_to_json(t)::text, '' ORDER BY id)) "
                          "FROM public.tachograph_cards t")
         self.bootstrap()
-        self.assertEqual(self.sql('SELECT count(*) FROM public.schema_migrations'), '9')
+        self.assertEqual(self.sql('SELECT count(*) FROM public.schema_migrations'), '10')
         self.assertEqual(self.sql("SELECT md5(string_agg(row_to_json(t)::text, '' ORDER BY id)) "
                                   "FROM public.tachograph_cards t"), cards)
         self.assertEqual(self.sql('SELECT origin FROM public.bootstrap_state'), 'legacy_validated')
 
-    def test_partial_legacy_schema_is_rejected_without_seed_replay(self):
+    def test_legacy_without_cron_config_is_upgraded(self):
         self.legacy()
         self.sql('DROP TABLE public.cron_config')
+        self.sql('DROP EXTENSION pgcrypto')
+        before = self.sql("SELECT md5(string_agg(row_to_json(t)::text, '' ORDER BY id)) "
+                          "FROM public.tachograph_cards t")
+        self.bootstrap()
+        self.assertEqual(self.sql('SELECT length(token) FROM public.cron_config'), '64')
+        self.assertEqual(self.sql('SELECT enabled FROM public.cron_config'), 'f')
+        self.assertEqual(self.sql("SELECT md5(string_agg(row_to_json(t)::text, '' ORDER BY id)) "
+                                  "FROM public.tachograph_cards t"), before)
+
+    def test_cron_repair_failure_rolls_back_and_retries(self):
+        self.legacy()
+        self.sql('DROP TABLE public.cron_config')
+        self.sql('DROP EXTENSION pgcrypto')
+        f = self.dbdir / 'migrations/0010_legacy_cron_config.sql'
+        original = f.read_text()
+        f.write_text(original + '\nSELECT 1/0;\n')
+        self.bootstrap(False)
+        self.assertEqual(self.sql("SELECT to_regclass('public.cron_config') IS NULL"), 't')
+        self.assertEqual(self.sql("SELECT count(*) FROM pg_extension WHERE extname='pgcrypto'"), '0')
+        self.assertEqual(self.sql("SELECT count(*) FROM public.schema_migrations "
+                                  "WHERE filename='0010_legacy_cron_config.sql'"), '0')
+        f.write_text(original)
+        self.bootstrap()
+        token = self.sql('SELECT token FROM public.cron_config')
+        self.bootstrap()
+        self.assertEqual(self.sql('SELECT token FROM public.cron_config'), token)
+
+    def test_missing_cron_after_recorded_migration_is_not_silently_recreated(self):
+        self.bootstrap()
+        self.sql('DROP TABLE public.cron_config')
+        self.bootstrap(False)
+
+    def test_partial_legacy_schema_is_rejected_without_seed_replay(self):
+        self.legacy()
+        self.sql('DROP TABLE public.jrc_check_runs')
         before = self.sql('SELECT count(*) FROM public.tachograph_cards')
         self.bootstrap(False)
         self.assertEqual(self.sql('SELECT count(*) FROM public.tachograph_cards'), before)
@@ -143,15 +179,15 @@ class BootstrapTests(unittest.TestCase):
 
     def test_migration_error_rolls_back_and_can_retry(self):
         self.bootstrap()
-        f = self.dbdir / 'migrations/0010_test.sql'
+        f = self.dbdir / 'migrations/9999_test.sql'
         f.write_text('CREATE TABLE public.test_migration(id integer); SELECT 1/0;')
         self.bootstrap(False)
         self.assertEqual(self.sql("SELECT to_regclass('public.test_migration') IS NULL"), 't')
-        self.assertEqual(self.sql("SELECT count(*) FROM public.schema_migrations WHERE filename='0010_test.sql'"), '0')
+        self.assertEqual(self.sql("SELECT count(*) FROM public.schema_migrations WHERE filename='9999_test.sql'"), '0')
         f.write_text('CREATE TABLE public.test_migration(id integer);')
         self.bootstrap()
         self.assertEqual(self.sql("SELECT to_regclass('public.test_migration') IS NOT NULL"), 't')
-        self.assertEqual(self.sql("SELECT count(*) FROM public.schema_migrations WHERE filename='0010_test.sql'"), '1')
+        self.assertEqual(self.sql("SELECT count(*) FROM public.schema_migrations WHERE filename='9999_test.sql'"), '1')
 
     def test_marker_insert_failure_rolls_back_migration_too(self):
         self.bootstrap()
@@ -159,7 +195,7 @@ class BootstrapTests(unittest.TestCase):
                  "BEGIN RAISE EXCEPTION 'injected marker failure'; END $$; "
                  "CREATE TRIGGER reject_marker BEFORE INSERT ON public.schema_migrations "
                  "FOR EACH ROW EXECUTE FUNCTION public.reject_marker()")
-        (self.dbdir / 'migrations/0010_test.sql').write_text('CREATE TABLE public.test_migration(id integer);')
+        (self.dbdir / 'migrations/9999_test.sql').write_text('CREATE TABLE public.test_migration(id integer);')
         self.bootstrap(False)
         self.assertEqual(self.sql("SELECT to_regclass('public.test_migration') IS NULL"), 't')
 

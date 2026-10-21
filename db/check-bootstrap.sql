@@ -1,4 +1,5 @@
--- v2.61: fail closed on an incomplete legacy snapshot. No seed replay.
+-- Core data must exist before migrations. Optional legacy cron configuration
+-- is created by migration 0010 and checked afterwards. No seed replay.
 \set ON_ERROR_STOP on
 SELECT id, country, country_flag, generation, application, current_manufacturer,
   current_manufacturer_normalized, chip_platform_vendor, security_certificate, chip_certificate,
@@ -18,19 +19,14 @@ SELECT id, source_type, entry_key, fingerprint, created_at, updated_at FROM
 SELECT id, card_id, patch, edited_by, created_at, updated_at FROM public.tachograph_card_overrides LIMIT 0;
 SELECT id, card_id, field, old_value, new_value, origin, source_label, source_url, proposal_id,
   changed_by, created_at FROM public.card_field_history LIMIT 0;
-SELECT id, token, endpoint, enabled, created_at, updated_at FROM public.cron_config LIMIT 0;
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.cron_config WHERE id = true AND length(token) > 0) THEN
-    RAISE EXCEPTION 'Incomplete bootstrap: cron_config singleton/token missing; restore or repair the database';
-  END IF;
   IF to_regprocedure('public.update_updated_at_column()') IS NULL THEN
     RAISE EXCEPTION 'Incomplete bootstrap: update_updated_at_column function missing';
   END IF;
   IF EXISTS (
     SELECT 1 FROM (VALUES
       ('tachograph_card_overrides', 'update_tachograph_card_overrides_updated_at'),
-      ('cron_config', 'update_cron_config_updated_at'),
       ('jrc_update_proposals', 'update_jrc_update_proposals_updated_at')
     ) AS expected(tbl, trigger_name)
     WHERE NOT EXISTS (
