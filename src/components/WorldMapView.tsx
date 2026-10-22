@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Minus, Plus, RotateCcw, Globe2, ArrowLeft } from "lucide-react";
 import { formatQuantities } from "@/lib/utils";
+import { chipPlatformOf, isOwnApproval, type PlatformVendor } from "@/lib/chip-platform";
 import type { CountryTopApproval } from "@/lib/market-status";
 
 export type MapCard = {
@@ -102,7 +103,7 @@ const LABEL_COORDINATES: Record<string, [number, number]> = {
   France: [2.2, 46.2],
 };
 
-// Palette of the offline (standalone) map, so both versions look the same.
+// Web map palette. Generation colours remain unchanged.
 const MAP = {
   bg: "#0b1224",
   border: "#334155",
@@ -122,6 +123,45 @@ const GEN_COLOR: Record<string, string> = {
   "G2.1": "#c084fc",
   "G2.2": "#34d399",
 };
+const PLATFORM_COLORS: Record<PlatformVendor, string> = {
+  Thales: "#38bdf8",
+  IDEMIA: "#fb7185",
+  STMicroelectronics: "#f8fafc",
+};
+
+function platformDisplay(card?: MapCard) {
+  const platform = card ? chipPlatformOf(card) : null;
+  // Text-only guesses are not presented as confirmed platform assignments.
+  const vendor = platform?.source === "certificate" ? platform.vendor : null;
+  const holder = card?.current_manufacturer_normalized || card?.current_manufacturer;
+  return {
+    vendor,
+    color: vendor ? PLATFORM_COLORS[vendor] : MAP.none,
+    relation:
+      vendor && holder?.trim()
+        ? isOwnApproval(card!, vendor)
+          ? "In-house platform"
+          : "Sourced platform"
+        : "Platform unverified",
+    evidence: platform?.evidence || "No certificate-based platform assignment",
+  };
+}
+
+function PlatformDetail({ card }: { card?: MapCard }) {
+  const platform = platformDisplay(card);
+  return (
+    <div className="mt-1 text-xs">
+      <span>{platform.vendor || "Platform unverified"}</span>
+      {platform.vendor && <span className="opacity-75"> · {platform.relation}</span>}
+      <div className="mt-0.5 text-[10px] opacity-70">
+        {platform.vendor
+          ? `Based on stored certificate: ${platform.evidence}`
+          : "Certificate evidence missing or conflicting"}
+      </div>
+    </div>
+  );
+}
+
 const GEN_LEGEND: Array<[string, string]> = [
   ["G1", GEN_COLOR.G1],
   ["G2.1", GEN_COLOR["G2.1"]],
@@ -395,6 +435,9 @@ export function WorldMapView({
                   const active = l.country === selected;
                   const top = topApproval?.get(l.country);
                   const color = activeColor(top);
+                  const platform = platformDisplay(
+                    top?.status === "current" ? l.cards.find((c) => c.id === top.id) : undefined,
+                  );
                   return (
                     <g
                       key={l.country}
@@ -410,6 +453,15 @@ export function WorldMapView({
                         setCountryModal(l.country);
                       }}
                     >
+                      <title>{`${l.country}: ${top?.generation || "Generation unknown"}; ${platform.vendor || "Platform unverified"}; ${platform.relation}`}</title>
+                      {active && <circle r={17} fill="none" stroke="#ffffff" strokeWidth={1} />}
+                      <circle
+                        r={14}
+                        fill="none"
+                        stroke={platform.color}
+                        strokeWidth={2}
+                        strokeDasharray={platform.vendor ? undefined : "3 3"}
+                      />
                       <circle
                         r={11}
                         fill={color ?? MAP.dark}
@@ -462,7 +514,7 @@ export function WorldMapView({
                 color: MAP.text,
               }}
             >
-              <div className="font-semibold">Active card approval</div>
+              <div className="font-semibold">Fill · Generation</div>
               {GEN_LEGEND.map(([g, c]) => (
                 <div key={g} className="flex items-center gap-2">
                   <span className="inline-block h-3 w-3 rounded-full" style={{ background: c }} />
@@ -476,6 +528,25 @@ export function WorldMapView({
                 />
                 none confirmed
               </div>
+              <div className="mt-2 border-t pt-1 font-semibold" style={{ borderColor: MAP.border }}>
+                Ring · Security platform
+              </div>
+              {Object.entries(PLATFORM_COLORS).map(([vendor, color]) => (
+                <div key={vendor} className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3 w-3 rounded-full border-2"
+                    style={{ borderColor: color }}
+                  />
+                  {vendor}
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded-full border-2 border-dashed"
+                  style={{ borderColor: MAP.none }}
+                />
+                Platform unverified
+              </div>
               <div className="mt-1 text-[10px]" style={{ color: MAP.muted }}>
                 Number = type approvals in DB
               </div>
@@ -487,6 +558,7 @@ export function WorldMapView({
                 hover={hover}
                 width={containerRef.current?.clientWidth ?? 0}
                 top={topApproval?.get(hover.country)}
+                card={cards.find((c) => c.id === topApproval?.get(hover.country)?.id)}
                 total={counts.get(hover.country)?.length ?? 0}
               />
             )}
@@ -601,6 +673,7 @@ export function WorldMapView({
                   <td className="py-2 pr-4">{c.date_status || "—"}</td>
                   <td className="py-2 pr-4">
                     {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
+                    <PlatformDetail card={c} />
                   </td>
                 </tr>
               ))}
@@ -676,11 +749,13 @@ function MapTooltip({
   hover,
   width,
   top,
+  card,
   total,
 }: {
   hover: { country: string; x: number; y: number };
   width: number;
   top?: CountryTopApproval;
+  card?: MapCard;
   total: number;
 }) {
   const color = activeColor(top);
@@ -711,6 +786,7 @@ function MapTooltip({
             <span style={{ color: MAP.muted }}>Manufacturer: </span>
             {top.manufacturer || "—"}
           </div>
+          <PlatformDetail card={card} />
         </>
       ) : top ? (
         <div style={{ color: MAP.muted }}>

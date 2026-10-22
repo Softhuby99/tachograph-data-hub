@@ -1,5 +1,10 @@
 # Tachograph Cards Info Tool — Local Docker Deployment
 
+> Offline / Windows portable development is suspended as of 2026-10-22.
+> The standalone app, `/offline` route, Windows workflow and legacy static nginx deployment have been archived outside the repository. Only `Dockerfile.web` is maintained.
+> A future offline release must first be updated and validated against the then-current web version and data.
+
+
 Single-container deployment of the **full web version**: TanStack Start (Nitro
 node-server) + PostgreSQL, with native HTTPS. No Lovable/Supabase backend, no
 nginx, no login (by default). Runs entirely in one Docker container.
@@ -173,7 +178,7 @@ detected"). What does age are the two files a *fresh* deployment starts from:
 | File | Used by |
 |---|---|
 | `db/seed_cards.sql` | a new database on first boot |
-| `standalone/data.json` | the offline app, baked in at build time |
+
 
 Both are regenerated from a running instance under **Tools → Deployment
 snapshot**: download the two files, replace them in the repository and commit.

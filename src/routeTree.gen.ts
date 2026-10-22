@@ -9,18 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as OfflineRouteImport } from './routes/offline'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicJrcCheckRouteImport } from './routes/api/public/jrc-check'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicFetchRouteImport } from './routes/api/public/fetch'
 
-const OfflineRoute = OfflineRouteImport.update({
-  id: '/offline',
-  path: '/offline',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -50,7 +44,6 @@ const ApiPublicFetchRoute = ApiPublicFetchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/offline': typeof OfflineRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
@@ -58,7 +51,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/offline': typeof OfflineRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
@@ -67,7 +59,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/offline': typeof OfflineRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
@@ -77,7 +68,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/offline'
     | '/api/public/fetch'
     | '/api/public/health'
     | '/api/public/jrc-check'
@@ -85,7 +75,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
-    | '/offline'
     | '/api/public/fetch'
     | '/api/public/health'
     | '/api/public/jrc-check'
@@ -93,7 +82,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
-    | '/offline'
     | '/api/public/fetch'
     | '/api/public/health'
     | '/api/public/jrc-check'
@@ -102,7 +90,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
-  OfflineRoute: typeof OfflineRoute
   ApiPublicFetchRoute: typeof ApiPublicFetchRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicJrcCheckRoute: typeof ApiPublicJrcCheckRoute
@@ -110,13 +97,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/offline': {
-      id: '/offline'
-      path: '/offline'
-      fullPath: '/offline'
-      preLoaderRoute: typeof OfflineRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -158,7 +138,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
-  OfflineRoute: OfflineRoute,
   ApiPublicFetchRoute: ApiPublicFetchRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicJrcCheckRoute: ApiPublicJrcCheckRoute,
