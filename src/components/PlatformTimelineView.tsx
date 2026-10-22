@@ -31,7 +31,7 @@ import { NAME_ALIASES, MICRO_STATES } from "@/components/WorldMapView";
 
 const W = 980;
 const H = 540;
-const LANE_H = 38;
+const LANE_H = 46;
 const LANE_LABEL = 200;
 
 /** Point positions that differ from the atlas centroid (remote territories). */
@@ -181,8 +181,11 @@ export function PlatformTimelineView({
 
       {line ? (
         <LineDetail
-          key={line.key}
           line={line}
+          onSelectLine={(key) => {
+            setLineKey(key);
+            setHighlight(null);
+          }}
           allLines={timeline}
           missing={withoutCert}
           highlight={highlight}
@@ -200,6 +203,7 @@ export function PlatformTimelineView({
 
 function LineDetail({
   line,
+  onSelectLine,
   allLines,
   missing,
   highlight,
@@ -207,6 +211,7 @@ function LineDetail({
   onOpenCard,
 }: {
   line: TimelineLine;
+  onSelectLine: (key: string) => void;
   allLines: TimelineLine[];
   missing: number;
   highlight: string | null;
@@ -311,7 +316,45 @@ function LineDetail({
       </Card>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Certificates over time</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-base">Certificates over time</CardTitle>
+            <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              Platform provider / line
+              <select
+                aria-label="Certificate timeline platform provider and line"
+                value={line.key}
+                onChange={(event) => {
+                  setPlaying(false);
+                  onSelectLine(event.target.value);
+                }}
+                className="max-w-full rounded-md border bg-background px-2 py-1.5 text-sm text-foreground"
+              >
+                {allLines.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.vendor ? `${option.vendor} · ` : "Unassigned · "}
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground"
+            aria-label="Approval generation colours"
+          >
+            <span>Approval dots:</span>
+            {Object.entries(GEN_COLORS).map(([generation, color]) => (
+              <span key={generation} className="inline-flex items-center gap-1.5">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+                {generation}
+              </span>
+            ))}
+            <span>Bar colours distinguish certificate families.</span>
+          </div>
         </CardHeader>
         <CardContent>
           <SwimLanes
@@ -751,12 +794,20 @@ function SwimLanes({
             <g key={lane.key} opacity={dim ? 0.4 : 1}>
               <text
                 x={4}
-                y={cy + 4}
+                y={cy - 3}
                 fontSize={11}
                 fontWeight={highlight === lane.key ? 700 : 500}
                 fill="currentColor"
               >
                 {lane.label}
+              </text>
+              <text x={4} y={cy + 12} fontSize={10} fill="currentColor" fillOpacity={0.65}>
+                <title>{`Platform provider: ${line.vendor?.trim() || "Not assigned"}${f ? "" : " (inferred from platform text)"}`}</title>
+                {(() => {
+                  const provider = line.vendor?.trim() || "Provider not assigned";
+                  return provider.length > 28 ? `${provider.slice(0, 27)}…` : provider;
+                })()}
+                {!f && line.vendor?.trim() ? " (inferred)" : ""}
               </text>
               {f && start && (
                 <>
