@@ -157,6 +157,7 @@ export function PlatformTimelineView({
                 <option value="">Not assigned to a line ({unassigned.length})…</option>
                 {unassigned.map((l) => (
                   <option key={l.key} value={l.key}>
+                    {l.vendor ? `${l.vendor} · ` : ""}
                     {l.name} ({l.all.length})
                   </option>
                 ))}
@@ -263,7 +264,7 @@ function LineDetail({
               )}
               {!line.assigned && (
                 <Badge variant="outline" className="ml-2 text-[10px]">
-                  not assigned to a line
+                  No platform line assigned
                 </Badge>
               )}
             </CardTitle>
@@ -331,8 +332,9 @@ function LineDetail({
               >
                 {allLines.map((option) => (
                   <option key={option.key} value={option.key}>
-                    {option.vendor ? `${option.vendor} · ` : "Unassigned · "}
+                    {option.vendor ? `${option.vendor} · ` : "Provider unknown · "}
                     {option.name}
+                    {!option.assigned ? " · No platform line assigned" : ""}
                   </option>
                 ))}
               </select>

@@ -1,3 +1,4 @@
+import { chipPlatformOf } from "./chip-platform";
 // v2.55: Platform Timeline — model (pure, shared by view and export).
 //
 // Agreed 02.10.2026 (claude/platform-timeline-plan-2026-10-02.md):
@@ -258,10 +259,24 @@ export function buildPlatformTimeline(
       .filter((d): d is Date => !!d)
       .map((d) => d.getUTCFullYear());
     const allYears = [...years, ...certYears];
+    // A known certificate provider does not imply an administered platform line.
+    // Require every record to agree; never infer this from the card manufacturer.
+    const certificateProviders = all.map((approval) =>
+      chipPlatformOf({ security_certificate: approval.certText }),
+    );
+    const providers = new Set(certificateProviders.map((provider) => provider.vendor));
+    const certificateVendor =
+      certificateProviders.length > 0 &&
+      certificateProviders.every(
+        (provider) => provider.source === "certificate" && provider.vendor,
+      ) &&
+      providers.size === 1
+        ? (certificateProviders[0].vendor ?? "")
+        : "";
     out.push({
       key: a.key,
       name: a.line?.name ?? families[0]?.family ?? "—",
-      vendor: a.line?.vendor ?? "",
+      vendor: a.line?.vendor.trim() || certificateVendor,
       note: a.line?.note ?? "",
       assigned: !!a.line,
       families,
