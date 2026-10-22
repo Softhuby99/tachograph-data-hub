@@ -80,6 +80,9 @@ export function buildPlatformTrends(lines: TimelineLine[]) {
       row[`coverage${i}`] = new Set(past.map((e) => e.country)).size;
       row[`total${i}`] = past.length;
       RELATIONS.forEach((r) => {
+        row[`coverage${i}-${r}`] = new Set(
+          past.filter((e) => e.relation === r).map((e) => e.country),
+        ).size;
         row[`new${i}-${r}`] = past.filter((e) => e.year === year && e.relation === r).length;
       });
     });

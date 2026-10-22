@@ -323,7 +323,19 @@ function LineDetail({
           />
         </CardContent>
       </Card>
-      <PlatformTrends lines={allLines} year={year} missing={missing} />
+      <PlatformTrends
+        lines={allLines}
+        year={year}
+        missing={missing}
+        playing={playing}
+        onPlay={() => (playing ? setPlaying(false) : play())}
+        onYearChange={(y) => {
+          setPlaying(false);
+          setYear(y);
+        }}
+        minYear={minYear}
+        maxYear={maxYear}
+      />
       <ApprovalTable line={line} visible={visible} onOpenCard={onOpenCard} />
     </>
   );
