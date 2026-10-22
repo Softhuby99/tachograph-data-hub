@@ -1,3 +1,5 @@
+import { PlatformTrends } from "./PlatformTrends";
+import { buildPlatformTrends } from "@/lib/platform-trends";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -181,6 +183,8 @@ export function PlatformTimelineView({
         <LineDetail
           key={line.key}
           line={line}
+          allLines={timeline}
+          missing={withoutCert}
           highlight={highlight}
           onlyActive={onlyActive}
           onOpenCard={onOpenCard}
@@ -196,11 +200,15 @@ export function PlatformTimelineView({
 
 function LineDetail({
   line,
+  allLines,
+  missing,
   highlight,
   onlyActive,
   onOpenCard,
 }: {
   line: TimelineLine;
+  allLines: TimelineLine[];
+  missing: number;
   highlight: string | null;
   onlyActive: boolean;
   onOpenCard?: (id: string) => void;
@@ -211,9 +219,10 @@ function LineDetail({
   highlight = picked ?? highlight;
   const visible = (a: TimelineApproval) => !onlyActive || a.status === "current";
   const dated = line.all.filter((a) => a.date && visible(a));
+  const trends = useMemo(() => buildPlatformTrends(allLines), [allLines]);
   const years = dated.map((a) => a.date!.getUTCFullYear());
-  const minYear = years.length ? Math.min(...years) : new Date().getUTCFullYear();
-  const maxYear = years.length ? Math.max(...years) : new Date().getUTCFullYear();
+  const minYear = years.length ? Math.min(...years, trends.minYear) : trends.minYear;
+  const maxYear = years.length ? Math.max(...years, trends.maxYear) : trends.maxYear;
   const [year, setYear] = useState(maxYear);
   const [playing, setPlaying] = useState(false);
   useEffect(() => setYear(maxYear), [maxYear, line.key]);
@@ -314,6 +323,7 @@ function LineDetail({
           />
         </CardContent>
       </Card>
+      <PlatformTrends lines={allLines} year={year} missing={missing} />
       <ApprovalTable line={line} visible={visible} onOpenCard={onOpenCard} />
     </>
   );
