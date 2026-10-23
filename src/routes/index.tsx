@@ -72,7 +72,6 @@ import {
 } from "lucide-react";
 import { PlatformTimelineView, type TimelineFocus } from "@/components/PlatformTimelineView";
 import { parseCertificate } from "@/lib/cert-family";
-import { thalesLogoUrl } from "@/assets/thales-logo";
 import { WorldMapView } from "@/components/WorldMapView";
 import { ToolsView } from "@/components/ToolsView";
 import { getEventOverview, verifyAdminLogin } from "@/lib/events.functions";
@@ -491,9 +490,6 @@ function TachographTool() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="shrink-0 rounded-md bg-white px-2 py-1.5 shadow-sm ring-1 ring-border">
-              <img src={thalesLogoUrl} alt="Thales logo" className="h-7 w-auto object-contain" />
-            </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Tachograph Cards Info Tool</h1>
               <p className="text-sm text-muted-foreground">

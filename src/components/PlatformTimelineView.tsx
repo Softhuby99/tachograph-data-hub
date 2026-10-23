@@ -31,8 +31,8 @@ import { NAME_ALIASES, MICRO_STATES } from "@/components/WorldMapView";
 
 const W = 980;
 const H = 540;
-const LANE_H = 46;
-const LANE_LABEL = 200;
+const LANE_H = 78;
+const LANE_LABEL = 280;
 
 /** Point positions that differ from the atlas centroid (remote territories). */
 const POINT_OVERRIDES: Record<string, [number, number]> = {
@@ -785,10 +785,21 @@ function SwimLanes({
           </g>
         ))}
         {lanes.map((lane, i) => {
-          const cy = i * LANE_H + LANE_H / 2 + 4;
+          const cy = i * LANE_H + 22;
           const f = lane.f;
           const color = f ? FAMILY_COLORS[f.colorIndex] : "#94a3b8";
           const approvals = (f ? f.approvals : line.derived).filter((a) => a.date && visible(a));
+          const platforms = [
+            ...new Set(
+              (f ? f.approvals : line.derived)
+                .map((a) => a.certifiedSecurityPlatform?.trim())
+                .filter((value): value is string => !!value),
+            ),
+          ];
+          const platformLabel =
+            platforms.length > 1
+              ? `${platforms[0]} (+${platforms.length - 1} variants)`
+              : platforms[0] || "Certified platform not recorded";
           const start = f?.issued ?? approvals[0]?.date ?? null;
           const end = f?.expiry ?? null;
           const dim = highlight && f && highlight !== f.family;
@@ -811,6 +822,18 @@ function SwimLanes({
                 })()}
                 {!f && line.vendor?.trim() ? " (inferred)" : ""}
               </text>
+              <foreignObject x={4} y={cy + 17} width={LANE_LABEL - 12} height={30}>
+                <div
+                  className="line-clamp-2 text-[10px] leading-[13px] text-muted-foreground"
+                  title={
+                    platforms.length
+                      ? `Certified Security Platform: ${platforms.join("; ")}`
+                      : platformLabel
+                  }
+                >
+                  {platformLabel}
+                </div>
+              </foreignObject>
               {f && start && (
                 <>
                   <rect

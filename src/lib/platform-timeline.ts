@@ -56,6 +56,7 @@ export type TimelineApproval = {
   generation: string;
   typeApproval: string;
   manufacturer: string;
+  certifiedSecurityPlatform?: string;
   certText: string;
   cert: CertRef | null;
   certLabel: string;
@@ -159,6 +160,7 @@ export function buildPlatformTimeline(
       generation: s(c.generation),
       typeApproval: s(c.type_approval_number),
       manufacturer: s(c.current_manufacturer),
+      certifiedSecurityPlatform: s(c.certified_security_platform),
       certText,
       cert,
       certLabel: cert ? certLabel(cert) : "",

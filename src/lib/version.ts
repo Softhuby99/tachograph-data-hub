@@ -4,4 +4,4 @@
  *  - big features / releases -> increment the major part (1.x -> 2.0)
  * Offline releases are archived and versioned separately when resumed.
  */
-export const APP_VERSION = "2.69";
+export const APP_VERSION = "2.70";
