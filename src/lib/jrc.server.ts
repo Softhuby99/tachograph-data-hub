@@ -30,6 +30,7 @@ import {
   type ApprovalDoc,
 } from "./approval-doc";
 import { extractPdfText } from "./cc.server";
+import { isPlaceholderCertificate } from "./cert-family";
 import { randomUUID } from "crypto";
 import { emitEvent } from "./events.server";
 
@@ -588,6 +589,158 @@ export function newRecordExtras(proposal: {
   return out;
 }
 
+// ---------------------------------------------- approval certificate: backfill
+//
+// v2.75: the same reading for records that already exist without a security
+// certificate (the approval was entered before the reader existed, or by hand).
+// Per run at most BACKFILL_PER_RUN records are tried; the outcome is remembered
+// in jrc_source_snapshots ("approval_pdf") so a record without a readable PDF is
+// not fetched again every day.
+
+const BACKFILL_PER_RUN = 8;
+const BACKFILL_RETRY_DAYS = 30;
+const BACKFILL_SNAPSHOT = "approval_pdf";
+const CHIP_FIELDS = new Set([
+  "chip_platform_vendor",
+  "certified_security_platform",
+  "certificate_expiry_date",
+]);
+
+function fingerprintKey(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export async function backfillApprovalProposals(
+  rows: JrcRow[],
+  source: SourceKey,
+): Promise<ProposalInsert[]> {
+  const peers = (await withOverrides(
+    (await dbGetAllCards()) as { id: string }[],
+  )) as unknown as Array<Record<string, unknown> & { id: string }>;
+  const cards = peers.filter((c) => String(c["device_type"] || "Card") === "Card");
+  const tried = new Map(
+    (await getSnapshots(BACKFILL_SNAPSHOT)).map((s) => [s.entry_key, s.fingerprint]),
+  );
+  const now = Date.now();
+  const recentlyTried = (id: string) => {
+    const fp = tried.get(id);
+    if (!fp) return false;
+    const [day, result] = fp.split("|");
+    if (result === "ok") return true;
+    const t = Date.parse(day ?? "");
+    return !Number.isNaN(t) && now - t < BACKFILL_RETRY_DAYS * 86_400_000;
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const todayDe = today.split("-").reverse().join(".");
+  const meta = JRC_SOURCES[source];
+  const out: ProposalInsert[] = [];
+  const marks: {
+    source_type: string;
+    entry_key: string;
+    fingerprint: string;
+    updated_at: string;
+  }[] = [];
+  const seen = new Set<string>();
+  let attempts = 0;
+
+  for (const row of latestPerApproval(rows)) {
+    if (attempts >= BACKFILL_PER_RUN) break;
+    const card = matchCard(row, cards as unknown as CardRow[]) as unknown as
+      | (Record<string, unknown> & { id: string })
+      | undefined;
+    if (!card || seen.has(card.id)) continue;
+    const cert = String(card["security_certificate"] ?? "");
+    if (!isPlaceholderCertificate(cert)) continue; // has a certificate already
+    if (recentlyTried(card.id)) continue;
+    seen.add(card.id);
+    attempts += 1;
+
+    const urls = approvalPdfCandidates(row.typeApproval, row.pdfUrl ?? "", "Card");
+    const got =
+      urls.length > 0 ? await readApprovalPdf(urls) : { doc: null, url: "", note: "no link" };
+    const e = buildEnrichment({
+      typeApproval: row.typeApproval,
+      jrcCardName: row.cardName,
+      generation: String(card["generation"] ?? row.generation ?? ""),
+      deviceType: "Card",
+      doc: got.doc,
+      docUrl: got.url,
+      cards: peers as never,
+      today: todayDe,
+    });
+    // Only fields the record has no value for; nothing is overwritten.
+    const empty = (f: string) => {
+      const v = String(card[f] ?? "").trim();
+      return v === "" || (f === "security_certificate" && isPlaceholderCertificate(v));
+    };
+    const fresh = e.fields.filter((f) => empty(f.field));
+    const sec = got.doc?.certificates.security?.number ?? "";
+    if (!got.doc || !sec || fresh.length === 0) {
+      marks.push({
+        source_type: BACKFILL_SNAPSHOT,
+        entry_key: card.id,
+        fingerprint: `${today}|${got.doc ? "nocert" : "nopdf"}`,
+        updated_at: new Date().toISOString(),
+      });
+      continue;
+    }
+    marks.push({
+      source_type: BACKFILL_SNAPSHOT,
+      entry_key: card.id,
+      fingerprint: `${today}|ok`,
+      updated_at: new Date().toISOString(),
+    });
+
+    const country = String(card["country"] ?? "");
+    const make = (group: "exact" | "likely") => {
+      const fields = fresh.filter((f) => (group === "likely") === CHIP_FIELDS.has(f.field));
+      if (fields.length === 0) return;
+      const payload: Record<string, string> = {
+        ...e.payload,
+        Confidence: group,
+        "Device type": "Card",
+      };
+      if (group === "exact") {
+        delete payload["Chip"];
+        delete payload["Chip basis"];
+      } else {
+        payload["Basis"] = e.payload["Chip basis"] ?? payload["Basis"] ?? "";
+        delete payload["Chip basis"];
+      }
+      out.push({
+        fingerprint: `research:card:${card.id}:${fingerprintKey(sec)}${group === "likely" ? "chip" : ""}`,
+        kind: "changed",
+        card_id: card.id,
+        country,
+        generation: String(card["generation"] ?? ""),
+        jrc_manufacturer: row.manufacturer,
+        jrc_card_name: row.cardName,
+        jrc_certificate: sec,
+        jrc_date: got.doc?.certificates.security?.date ?? "",
+        jrc_eov:
+          group === "likely"
+            ? (fields.find((f) => f.field === "certificate_expiry_date")?.new ?? "")
+            : "",
+        jrc_type_approval: row.typeApproval,
+        source_url: got.url || meta.url,
+        source_type: "research",
+        source_label: "Research · approval certificate",
+        title:
+          group === "exact"
+            ? `Card · ${country} · ${row.typeApproval} — security certificate ${sec} (exact)`
+            : `Card · ${country} · ${row.typeApproval} — chip platform from ${sec} (likely)`,
+        payload,
+        changes: { fields },
+        status: "pending",
+      });
+    };
+    make("exact");
+    make("likely");
+  }
+  if (marks.length > 0) await upsertSnapshots(marks);
+  return out;
+}
+
 // --------------------------------------------------------- info-only sources
 // Pages without a direct card-field mapping (country key certificates, key
 // management status, mandatory VU security updates). They are diffed against a
@@ -978,6 +1131,10 @@ export async function runUpdateCheckForSource(
         () => "Card",
       ).catch(() => undefined);
       let created = await insertProposals(candidates);
+      // v2.75: records that exist without a security certificate get the same reading.
+      created += await insertProposals(
+        await backfillApprovalProposals(rows, source).catch(() => []),
+      );
       let extraCandidates = 0;
       let extraRows = 0;
       let baseline = false;
