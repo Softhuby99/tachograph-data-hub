@@ -89,7 +89,24 @@ export function cellText(html: string): string {
     .trim();
 }
 
-export type RawRow = { values: string[]; attrs: string[] };
+export type RawRow = {
+  values: string[];
+  attrs: string[];
+  /** v2.74: first link of every cell ("" when none), resolved against the JRC site. */
+  links: string[];
+};
+
+const JRC_BASE = "https://dtc.jrc.ec.europa.eu/";
+
+function firstHref(cellHtml: string): string {
+  const m = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/i.exec(cellHtml);
+  if (!m) return "";
+  try {
+    return new URL(decodeEntities(m[1]!).trim(), JRC_BASE).toString();
+  } catch {
+    return "";
+  }
+}
 
 /** Extract every table row of a JRC page as plain cell text + cell attributes. */
 export function extractRows(html: string): RawRow[] {
@@ -102,6 +119,7 @@ export function extractRows(html: string): RawRow[] {
     out.push({
       values: cells.map((c) => cellText(c[2] ?? "")),
       attrs: cells.map((c) => c[1] ?? ""),
+      links: cells.map((c) => firstHref(c[2] ?? "")),
     });
   }
   return out;
@@ -133,6 +151,8 @@ export type OtherCertRow = {
   date: string;
   mandatoryUpdates: string;
   generation: string;
+  /** v2.74: link of the type approval cell (the approval certificate PDF), "" when none. */
+  pdfUrl: string;
 };
 
 export function parseOtherCertificates(html: string): OtherCertRow[] {
@@ -147,6 +167,8 @@ export function parseOtherCertificates(html: string): OtherCertRow[] {
     const rawAttrs = width >= 7 ? row.attrs.slice(-7) : row.attrs.slice(-6);
     const v = width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], "", raw[5]];
     const annexAttr = width >= 7 ? rawAttrs[6] : rawAttrs[5];
+    const rawLinks = width >= 7 ? row.links.slice(-7) : row.links.slice(-6);
+    const taLink = rawLinks[3] ?? "";
     if (v[0].toLowerCase().startsWith("manufacturer")) continue;
     if (!v[0] && !v[1]) continue;
     const sep = v[1].indexOf(" - ");
@@ -162,6 +184,7 @@ export function parseOtherCertificates(html: string): OtherCertRow[] {
       date: v[4],
       mandatoryUpdates: v[5],
       generation: generationFromAttrs(annexAttr),
+      pdfUrl: taLink,
     });
   }
   return out;

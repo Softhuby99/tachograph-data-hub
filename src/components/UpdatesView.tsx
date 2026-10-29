@@ -783,12 +783,32 @@ export function UpdatesView() {
                       ))}
                   </div>
                 ) : (
-                  <div className="grid gap-1 text-sm sm:grid-cols-2">
-                    <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
-                    <Detail label="Card (JRC)" value={p.jrc_card_name} />
-                    <Detail label="Certificate" value={p.jrc_certificate} />
-                    <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
-                  </div>
+                  <>
+                    <div className="grid gap-1 text-sm sm:grid-cols-2">
+                      <Detail label="Manufacturer (JRC)" value={p.jrc_manufacturer} />
+                      <Detail label="Card (JRC)" value={p.jrc_card_name} />
+                      <Detail label="Certificate" value={p.jrc_certificate} />
+                      <Detail label="Date / EOV" value={`${p.jrc_date} / ${p.jrc_eov}`} />
+                    </div>
+                    {/* v2.74: what the approval certificate said (applicant country,
+                        security certificate, laboratories, chip basis) */}
+                    {p.kind === "new" && Object.keys(payload).some((k) => k !== "Device type") && (
+                      <div className="grid gap-1 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-2">
+                        {Object.entries(payload)
+                          .filter(([k]) => k !== "Device type")
+                          .sort(([a], [b]) => newOrder(a) - newOrder(b))
+                          .map(([k, v]) => (
+                            <Detail key={k} label={k} value={v} />
+                          ))}
+                      </div>
+                    )}
+                    {p.kind === "new" && fields.length > 0 && p.status === "pending" && (
+                      <p className="text-xs text-muted-foreground">
+                        The fields below are written into the new record when you approve. The chip
+                        is derived from the security certificate and generation — check it first.
+                      </p>
+                    )}
+                  </>
                 )}
 
                 {p.status === "pending" && (p.live?.length ?? 0) > 0 && (
@@ -973,6 +993,28 @@ function fmtStamp(value?: string | null): string {
 }
 
 // v2.60: jsonb does not keep key order — research evidence is shown in a fixed one.
+/** v2.74: reading order of the evidence on a new entry (applicant country first). */
+const NEW_ORDER = [
+  "Applicant country",
+  "Approval issued by",
+  "Country source",
+  "Country evidence",
+  "Security certificate",
+  "Certificate issued",
+  "Security lab",
+  "Chip",
+  "Chip basis",
+  "Basis",
+  "Approval date (document)",
+  "Model name (document)",
+  "Approval document",
+  "Approval document read",
+];
+function newOrder(key: string): number {
+  const i = NEW_ORDER.indexOf(key);
+  return i === -1 ? NEW_ORDER.length : i;
+}
+
 const RESEARCH_ORDER = [
   "Basis",
   "Security certificate",

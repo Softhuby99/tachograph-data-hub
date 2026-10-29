@@ -23,10 +23,18 @@ import {
 } from "./ta-country";
 import { flagEmoji, normalizeCountry } from "./country-flag";
 import { approvalKeys, keysMatchStrict } from "./market-status";
+import {
+  buildEnrichment,
+  parseApprovalText,
+  ENRICHMENT_COLUMNS,
+  type ApprovalDoc,
+} from "./approval-doc";
+import { extractPdfText } from "./cc.server";
 import { randomUUID } from "crypto";
 import { emitEvent } from "./events.server";
 
 import {
+  getAllCards as dbGetAllCards,
   getCardsForJrc as dbGetCardsForJrc,
   getCardsForTed as dbGetCardsForTed,
   getKnownFingerprints,
@@ -68,6 +76,8 @@ export type JrcRow = {
   eov: string;
   typeApproval: string;
   generation: string;
+  /** v2.74: link of the type approval cell (the approval certificate PDF). */
+  pdfUrl?: string;
 };
 
 export function parseJrcCardStatus(html: string): JrcRow[] {
@@ -79,6 +89,7 @@ export function parseJrcCardStatus(html: string): JrcRow[] {
     // data row; always take the last 8 cells of the block.
     const values = row.values.slice(-8);
     const attrs = row.attrs.slice(-8);
+    const links = row.links.slice(-8);
     if (values[0].toLowerCase() === "manufacturer") continue;
 
     const typeApproval = values[5];
@@ -92,6 +103,7 @@ export function parseJrcCardStatus(html: string): JrcRow[] {
       eov: values[4],
       typeApproval,
       generation: generationFromAttrs(attrs[7]),
+      pdfUrl: links[5] ?? "",
     });
   }
   return rows;
@@ -123,6 +135,7 @@ export async function fetchOtherCertificateCardRows(rows?: OtherCertRow[]): Prom
       eov: "",
       typeApproval: r.typeApproval,
       generation: r.generation,
+      pdfUrl: r.pdfUrl,
     }));
 }
 
@@ -156,6 +169,7 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
             certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
             date: r.date,
             typeApproval: r.typeApproval,
+            pdfUrl: r.pdfUrl,
           }
         : undefined,
       payload: {
@@ -432,6 +446,148 @@ export function buildProposals(
   return out;
 }
 
+// ------------------------------------------------- approval certificate (PDF)
+//
+// v2.74: a NEW entry gets what the approval certificate behind its JRC row
+// says: the security certificate (item 7, found by keyword), the laboratories,
+// the country the approval was applied for (model name "…G1KZ" -> Kazakhstan,
+// even though the e26 mark is Slovenia's) and — derived from the security
+// certificate and the generation — the chip platform. Reading is best effort:
+// a PDF that cannot be fetched or read leaves the proposal as it was.
+
+const APPROVAL_PDF_MAX_BYTES = 8_000_000;
+const APPROVAL_PDF_TIMEOUT_MS = 20_000;
+/** PDFs read per update run — the rest is picked up by the next run's re-check. */
+const MAX_APPROVAL_PDFS_PER_RUN = 12;
+
+export function approvalPdfCandidates(
+  typeApproval: string,
+  linked: string,
+  device: string,
+): string[] {
+  const out: string[] = [];
+  if (linked) out.push(linked);
+  const ta =
+    String(typeApproval ?? "")
+      .trim()
+      .split(/\s*[;/]\s*/)[0] ?? "";
+  if (/^e\d/i.test(ta)) {
+    const file = `${encodeURIComponent(ta.replace(/\s+/g, "-"))}.pdf`;
+    const dirs =
+      device === "Card"
+        ? ["PDF_Card", "PDF_OtherCertificates"]
+        : ["PDF_OtherCertificates", "PDF_Card"];
+    for (const d of dirs) out.push(`https://dtc.jrc.ec.europa.eu/${d}/${file}`);
+  }
+  return [...new Set(out)];
+}
+
+async function readApprovalPdf(
+  urls: string[],
+): Promise<{ doc: ApprovalDoc | null; url: string; note: string }> {
+  let note = "no PDF found for this approval";
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: { "user-agent": "TachographCardsInfoTool/1.0" },
+        signal: AbortSignal.timeout(APPROVAL_PDF_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        note = `HTTP ${res.status}`;
+        continue;
+      }
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > APPROVAL_PDF_MAX_BYTES) {
+        note = "PDF too large";
+        continue;
+      }
+      if (new TextDecoder().decode(buf.slice(0, 5)) !== "%PDF-") {
+        note = "not a PDF";
+        continue;
+      }
+      const text = await extractPdfText(buf);
+      if (text.replace(/\s/g, "").length < 200) {
+        return { doc: null, url, note: "no readable text (scanned PDF)" };
+      }
+      return { doc: parseApprovalText(text), url, note: "" };
+    } catch (err) {
+      note = err instanceof Error ? err.message.slice(0, 120) : "read failed";
+    }
+  }
+  return { doc: null, url: "", note };
+}
+
+/**
+ * Adds the approval-certificate findings to NEW proposals in place. `urlOf`
+ * returns the linked PDF (if the JRC row has one) for a proposal.
+ */
+export async function enrichNewProposals(
+  items: ProposalInsert[],
+  urlOf: (p: ProposalInsert) => string,
+  deviceOf: (p: ProposalInsert) => string,
+): Promise<{ read: number; failed: number }> {
+  const targets = items.filter((p) => p.kind === "new" && !p.card_id);
+  if (targets.length === 0) return { read: 0, failed: 0 };
+  let peers: Record<string, unknown>[] = [];
+  try {
+    peers = (await withOverrides((await dbGetAllCards()) as { id: string }[])) as unknown as Record<
+      string,
+      unknown
+    >[];
+  } catch {
+    peers = [];
+  }
+  const today = new Date().toISOString().slice(0, 10).split("-").reverse().join(".");
+  let read = 0;
+  let failed = 0;
+  for (const [index, p] of targets.entries()) {
+    const device = deviceOf(p);
+    // Beyond the cap only the country (JRC card name) is resolved; the PDF is read
+    // when the entry comes up again.
+    const urls =
+      index < MAX_APPROVAL_PDFS_PER_RUN
+        ? approvalPdfCandidates(p.jrc_type_approval, urlOf(p), device)
+        : [];
+    const got = urls.length > 0 ? await readApprovalPdf(urls) : { doc: null, url: "", note: "" };
+    if (got.doc) read += 1;
+    else if (urls.length > 0) failed += 1;
+    const e = buildEnrichment({
+      typeApproval: p.jrc_type_approval,
+      jrcCardName: p.jrc_card_name,
+      generation: p.generation,
+      deviceType: device,
+      doc: got.doc,
+      docUrl: got.url,
+      cards: peers as never,
+      today,
+    });
+    if (!got.doc && got.note && urls.length > 0) {
+      e.payload["Approval document read"] =
+        `not readable (${got.note}) — security certificate and chip not checked`;
+    }
+    p.payload = { ...p.payload, ...e.payload };
+    p.changes = { fields: [...(p.changes?.fields ?? []), ...e.fields] };
+    if (!p.country && e.country) {
+      p.country = e.country;
+      p.payload["Resolved country"] = e.country;
+      p.payload["Country confidence"] = "documented";
+      p.title = p.title.replace("New entry · ", `New entry · ${e.country} · `);
+    }
+  }
+  return { read, failed };
+}
+
+/** Fields an approved NEW proposal writes into the record it creates (whitelisted columns only). */
+export function newRecordExtras(proposal: {
+  changes?: { fields?: FieldChange[] } | null;
+}): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of proposal.changes?.fields ?? []) {
+    if (ENRICHMENT_COLUMNS.has(f.field) && String(f.new ?? "").trim()) out[f.field] = f.new;
+  }
+  return out;
+}
+
 // --------------------------------------------------------- info-only sources
 // Pages without a direct card-field mapping (country key certificates, key
 // management status, mandatory VU security updates). They are diffed against a
@@ -452,6 +608,7 @@ type SnapshotEntry = {
     certificate: string;
     date: string;
     typeApproval: string;
+    pdfUrl: string;
   };
 };
 
@@ -754,6 +911,15 @@ export async function runUpdateCheckForSource(
           status: "pending",
         };
       });
+      // v2.74: new VU / MS entries: approval certificate -> security certificate, labs, chip.
+      const pdfByFingerprint = new Map(
+        changed.map((e) => [`${source}:${e.key}:${e.fingerprint}`, e.jrc?.pdfUrl ?? ""]),
+      );
+      await enrichNewProposals(
+        items,
+        (p) => pdfByFingerprint.get(p.fingerprint) ?? "",
+        (p) => p.payload["Device type"] || "Card",
+      ).catch(() => undefined);
       created = await insertProposals(items);
     }
 
@@ -802,6 +968,15 @@ export async function runUpdateCheckForSource(
       // Card rows only ever match card records (v2.51).
       const cardRecords = cardRows.filter((c) => (c.device_type || "Card") === "Card");
       const candidates = buildProposals(rows, cardRecords, sinceMs, source);
+      // v2.74: new card entries: approval certificate -> security certificate, labs,
+      // applicant country, chip (derived). Best effort — never fails the run.
+      await enrichNewProposals(
+        candidates,
+        (p) =>
+          rows.find((r) => r.typeApproval === p.jrc_type_approval && r.generation === p.generation)
+            ?.pdfUrl ?? "",
+        () => "Card",
+      ).catch(() => undefined);
       let created = await insertProposals(candidates);
       let extraCandidates = 0;
       let extraRows = 0;
@@ -1357,6 +1532,8 @@ async function approveInTx(
       .filter(Boolean)
       .join(" · "),
     jrc_certificate_source: proposal.source_url,
+    // v2.74: what the approval certificate said (security certificate, labs, chip, …)
+    ...newRecordExtras(proposal),
   };
   const cols = Object.keys(row);
   const [inserted] = await q<{ id: string }>(
@@ -1528,6 +1705,8 @@ async function approveProposalLegacy(id: string, country: string, userId?: strin
         .filter(Boolean)
         .join(" · "),
       jrc_certificate_source: proposal.source_url,
+      // v2.74: what the approval certificate said (security certificate, labs, chip, …)
+      ...newRecordExtras(proposal),
     });
     if (newId) await setProposalCardId(id, newId);
   }
