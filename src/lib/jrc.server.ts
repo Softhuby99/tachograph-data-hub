@@ -1340,6 +1340,8 @@ async function approveInTx(
     country: name,
     country_flag: flagEmoji(name),
     device_type: deviceType,
+    // v2.72: a VU / MS approval date ranks the record in its lane (market status).
+    ...(deviceType !== "Card" && proposal.jrc_date ? { date_status: proposal.jrc_date } : {}),
     generation: proposal.generation,
     current_manufacturer: proposal.jrc_manufacturer,
     current_manufacturer_normalized: proposal.jrc_manufacturer,
@@ -1507,6 +1509,8 @@ async function approveProposalLegacy(id: string, country: string, userId?: strin
       // Cards, vehicle units and motion sensors share the table; the source
       // reports which one this is. Anything else stays a card.
       device_type: deviceType,
+      // v2.72: a VU / MS approval date ranks the record in its lane (market status).
+      ...(deviceType !== "Card" && proposal.jrc_date ? { date_status: proposal.jrc_date } : {}),
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,
       current_manufacturer_normalized: proposal.jrc_manufacturer,

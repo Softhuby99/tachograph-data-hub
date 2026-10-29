@@ -39,6 +39,7 @@ export type MarketCard = {
   current_manufacturer?: string | null;
   current_manufacturer_normalized?: string | null;
   device_type?: string | null;
+  tachograph_application_os?: string | null;
   generation?: string | null;
   type_approval_number?: string | null;
   certificate_issued_date?: string | null;
@@ -182,7 +183,11 @@ function groupKeyFor(card: MarketCard): string {
   const deviceType = String(card.device_type || "Card")
     .trim()
     .toLowerCase();
-  return `${country}|${deviceType}`;
+  // v2.72: an analogue tachograph is not part of the digital lane — it neither
+  // supersedes nor is superseded by a DTCO / SE5000 of the same country.
+  const analogue =
+    deviceType !== "card" && /analog/i.test(String(card.tachograph_application_os ?? ""));
+  return `${country}|${deviceType}${analogue ? "|analogue" : ""}`;
 }
 
 /** G2.2 = 3, G2.1 / G2 = 2, G1 = 1, anything else 0. */
@@ -241,7 +246,10 @@ function isListed(
   const own = approvalKeys(typeApproval);
   // Keyed comparison first: it handles long vs short form and knows the AETR
   // and EU series apart.
-  if (own.length > 0 && listingKeys.some((keys) => keys.some((k) => own.some((o) => keysMatch(o, k))))) {
+  if (
+    own.length > 0 &&
+    listingKeys.some((keys) => keys.some((k) => own.some((o) => keysMatch(o, k))))
+  ) {
     return true;
   }
   // Then the older substring test (either direction, separators stripped),
@@ -303,7 +311,10 @@ export function computeMarketStatus(
         if (diffDays <= CLOSE_DATE_WARNING_DAYS) {
           closeWarningDays.set(r.card.id, diffDays);
           const prev = closeWarningDays.get(top.card.id);
-          closeWarningDays.set(top.card.id, prev === undefined ? diffDays : Math.min(prev, diffDays));
+          closeWarningDays.set(
+            top.card.id,
+            prev === undefined ? diffDays : Math.min(prev, diffDays),
+          );
         }
       }
     }
