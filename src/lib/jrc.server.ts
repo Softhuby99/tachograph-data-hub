@@ -147,7 +147,21 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
       title: `${r.component} · ${r.name || r.typeApproval} — ${r.manufacturer}${
         r.generation ? ` (${r.generation})` : ""
       }`,
+      // v2.71: the approval reads "Device type" (Component was never looked at),
+      // so VU / MS entries were treated as card findings and never created.
+      jrc: ["vu", "ms"].includes(r.component.trim().toLowerCase())
+        ? {
+            manufacturer: r.manufacturer,
+            cardName: r.name,
+            certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
+            date: r.date,
+            typeApproval: r.typeApproval,
+          }
+        : undefined,
       payload: {
+        ...(["vu", "ms"].includes(r.component.trim().toLowerCase())
+          ? { "Device type": otherCertDeviceType(r.component) }
+          : {}),
         Component: r.component,
         Manufacturer: r.manufacturer,
         Name: r.name,
@@ -431,6 +445,14 @@ type SnapshotEntry = {
   title: string;
   payload: Record<string, string>;
   generation?: string;
+  /** v2.71: JRC values for entries that can become a record (VU / MS). */
+  jrc?: {
+    manufacturer: string;
+    cardName: string;
+    certificate: string;
+    date: string;
+    typeApproval: string;
+  };
 };
 
 const MAX_INFO_PER_SOURCE = 40;
@@ -696,26 +718,42 @@ export async function runUpdateCheckForSource(
       const changed = entries.filter((e) => snapshot.get(e.key) !== e.fingerprint);
       candidates = changed.length;
       deferred = new Set(changed.slice(MAX_INFO_PER_SOURCE).map((e) => e.key));
-      const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => ({
-        fingerprint: `${source}:${e.key}:${e.fingerprint}`,
-        kind: "info",
-        card_id: null,
-        country: e.country,
-        generation: e.generation ?? "",
-        jrc_manufacturer: "",
-        jrc_card_name: "",
-        jrc_certificate: "",
-        jrc_date: "",
-        jrc_eov: "",
-        jrc_type_approval: "",
-        source_url: meta.url,
-        source_type: source,
-        source_label: meta.label,
-        title: e.title,
-        payload: e.payload,
-        changes: { fields: [] },
-        status: "pending",
-      }));
+      const items: ProposalInsert[] = changed.slice(0, MAX_INFO_PER_SOURCE).map((e) => {
+        // v2.71: a VU / MS entry without a record becomes a "new" proposal that
+        // creates it (device type from the payload); one that already has a
+        // record stays informational.
+        const deviceType = e.payload["Device type"] ?? "";
+        const known = e.jrc
+          ? cardRows.some(
+              (c) =>
+                (c.device_type || "Card") === deviceType &&
+                !!matchCard(
+                  { typeApproval: e.jrc!.typeApproval, generation: e.generation } as JrcRow,
+                  [c],
+                ),
+            )
+          : true;
+        return {
+          fingerprint: `${source}:${e.key}:${e.fingerprint}`,
+          kind: e.jrc && !known ? "new" : "info",
+          card_id: null,
+          country: e.country,
+          generation: e.generation ?? "",
+          jrc_manufacturer: e.jrc?.manufacturer ?? "",
+          jrc_card_name: e.jrc?.cardName ?? "",
+          jrc_certificate: e.jrc?.certificate ?? "",
+          jrc_date: e.jrc?.date ?? "",
+          jrc_eov: "",
+          jrc_type_approval: e.jrc?.typeApproval ?? "",
+          source_url: meta.url,
+          source_type: source,
+          source_label: meta.label,
+          title: e.title,
+          payload: e.payload,
+          changes: { fields: [] },
+          status: "pending",
+        };
+      });
       created = await insertProposals(items);
     }
 
