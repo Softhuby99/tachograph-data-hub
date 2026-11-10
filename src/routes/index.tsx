@@ -62,6 +62,7 @@ import {
   RefreshCw,
   Globe2,
   Wrench,
+  BookOpen,
   History,
   CalendarClock,
   AlertTriangle,
@@ -74,6 +75,7 @@ import { PlatformTimelineView, type TimelineFocus } from "@/components/PlatformT
 import { parseCertificate } from "@/lib/cert-family";
 import { WorldMapView } from "@/components/WorldMapView";
 import { ToolsView } from "@/components/ToolsView";
+import { InfoView } from "@/components/InfoView";
 import { getEventOverview, verifyAdminLogin } from "@/lib/events.functions";
 
 export const Route = createFileRoute("/")({
@@ -270,7 +272,7 @@ function TachographTool() {
   const adminUnlocked = !adminRequired || !!adminToken;
   const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "tools">("data");
+  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "info" | "tools">("data");
   // v2.55: record → Platform Timeline link.
   const [timelineFocus, setTimelineFocus] = useState<TimelineFocus>(null);
   // v2.54: a manual edit that collided with someone else's change.
@@ -533,6 +535,13 @@ function TachographTool() {
             >
               <RefreshCw className="mr-2 h-4 w-4" /> Update Monitor
             </Button>
+            <Button
+              variant={tab === "info" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("info")}
+            >
+              <BookOpen className="mr-2 h-4 w-4" /> Info
+            </Button>
             {showTools && (
             <Button
               variant={tab === "tools" ? "default" : "outline"}
@@ -635,6 +644,7 @@ function TachographTool() {
           <AnalyticsView cards={cards} marketStatus={marketStatus} timelineFocus={timelineFocus} />
         )}
         {tab === "updates" && <UpdatesView />}
+        {tab === "info" && <InfoView />}
         {!isLoading && !error && tab === "tools" && showTools && (
           <ToolsView
             cards={cards}
