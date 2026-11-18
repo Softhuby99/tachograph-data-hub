@@ -309,35 +309,34 @@ The GitHub Docker build now requires the bootstrap integration suite to pass
 against PostgreSQL 15 before publishing an image, including legacy databases
 without cron_config/pgcrypto and rollback/retry of that migration.
 
-## E-mail notifications (v2.77)
+## E-mail notifications (v2.77, set up in the app since v2.79)
 
 After a full update run (the daily automatic run or "Check for updates") that
 found new or changed entries, the app sends one e-mail listing them. Nothing is
 sent when a run finds nothing.
 
-1. Add the mail server to `/opt/TDH/.env` (see `.env.example`):
+Everything is set up in the app under Tools → Notifications (admin):
 
-   ```
-   SMTP_HOST=mail.example.org
-   SMTP_PORT=587
-   SMTP_SECURITY=starttls
-   SMTP_USER=tdh@example.org
-   SMTP_PASS=...
-   SMTP_FROM=Tachograph Data Hub <tdh@example.org>
-   ```
+1. **Mail server**: server, port, encryption (STARTTLS 587, TLS 465, or none for
+   an internal relay on port 25), user name and password (leave both empty for
+   a relay without login), sender. Save.
+2. **E-mail notifications**: recipients, sources, switch on. Save, then
+   "Send test e-mail".
 
-   `SMTP_SECURITY`: `starttls` (port 587), `tls` (port 465) or `none` (port 25,
-   an internal relay without login — leave `SMTP_USER` empty). For an internal
-   server with a self-signed certificate set `SMTP_TLS_VERIFY=false`.
-   `PUBLIC_BASE_URL` is used for the link in the mail.
-2. Recreate the container so it reads the new values.
-3. In the app: Tools → Notifications. Enter the recipients, switch it on, save,
-   then "Send test e-mail".
+The password is write-only: it is stored encrypted (AES-256-GCM, key derived
+from `ADMIN_TOKEN`) in `app_settings` and never sent back to the browser. A
+database dump or a read-only database login does not reveal it. If
+`ADMIN_TOKEN` changes, the stored password can no longer be read — the app says
+so, and it has to be entered again. `PUBLIC_BASE_URL` is used for the link in
+the mail.
 
-The mail server and its password are read from the environment only; they are
-never stored in the database or sent to the browser. A failed delivery does not
-fail the update run — it is written to the operations log (`notify.mail.failed`)
-and shown under Tools → Notifications as the last attempt.
+The `SMTP_*` variables in `/opt/TDH/.env` still work as a fallback for an
+instance without a mail server saved in the app (see `.env.example`); a server
+saved in the app takes precedence.
+
+A failed delivery does not fail the update run — it is written to the
+operations log (`notify.mail.failed`) and shown under Tools → Notifications as
+the last attempt.
 
 ## Consistency check and repair (v2.77)
 
@@ -349,4 +348,5 @@ change a stored value are applied one by one. Every repair is written to the
 change history of its record (origin "Consistency repair").
 
 Tests (no database needed): `npx tsx tools/test_jrc_parser.ts`,
-`npx tsx tools/test_consistency.ts`, `npx tsx tools/test_smtp.ts`.
+`npx tsx tools/test_consistency.ts`, `npx tsx tools/test_smtp.ts`,
+`npx tsx tools/test_notify.ts`.

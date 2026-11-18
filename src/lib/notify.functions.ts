@@ -21,6 +21,36 @@ export const saveNotifySettingsFn = createServerFn({ method: "POST" })
     return await saveNotifySettings(data);
   });
 
+/** v2.79: the mail server is administered in the app. The password is write-only. */
+export const saveSmtpSettingsFn = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      host: string;
+      port: number;
+      security: string;
+      user: string;
+      password?: string;
+      clearPassword?: boolean;
+      from: string;
+      tlsVerify: boolean;
+    }) => ({
+      host: String(data?.host ?? "").slice(0, 255),
+      port: Number(data?.port ?? 0),
+      security: String(data?.security ?? "starttls"),
+      user: String(data?.user ?? "").slice(0, 320),
+      password: String(data?.password ?? "").slice(0, 1024),
+      clearPassword: data?.clearPassword === true,
+      from: String(data?.from ?? "").slice(0, 400),
+      tlsVerify: data?.tlsVerify !== false,
+    }),
+  )
+  .handler(async ({ data }) => {
+    await requireAdmin("change mail server");
+    const { saveSmtpSettings } = await import("@/lib/notify.server");
+    await saveSmtpSettings(data);
+    return { ok: true };
+  });
+
 export const sendNotifyTest = createServerFn({ method: "POST" })
   .inputValidator((data: { to?: string }) => ({ to: String(data?.to ?? "").slice(0, 254) }))
   .handler(async ({ data }) => {

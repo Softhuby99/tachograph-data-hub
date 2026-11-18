@@ -8,7 +8,8 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addressOf, buildMessage, isMailAddress, sendMail } from "../src/lib/smtp.server";
-import { composeRunMail } from "../src/lib/notify.server";
+import { composeRunMail, decryptSecret, encryptSecret } from "../src/lib/notify.server";
+import { scryptSync } from "node:crypto";
 
 type Seen = { auth: string; from: string; rcpt: string[]; data: string; tls: boolean };
 
@@ -227,6 +228,25 @@ try {
   if ((e as NodeJS.ErrnoException).code === "ENOENT")
     console.log("smtp: starttls skipped (no openssl)");
   else throw e;
+}
+
+// ---- the stored password (v2.79)
+{
+  const key = scryptSync("admin-token-A", "tdh-notify-smtp-v1", 32);
+  const other = scryptSync("admin-token-B", "tdh-notify-smtp-v1", 32);
+  const stored = encryptSecret("p@ss wörd", key);
+  assert.ok(stored.startsWith("v1:") && !stored.includes("p@ss"), "not stored in clear");
+  assert.notEqual(stored, encryptSecret("p@ss wörd", key), "a fresh IV every time");
+  assert.equal(decryptSecret(stored, key), "p@ss wörd");
+  assert.equal(decryptSecret(stored, other), null, "another ADMIN_TOKEN cannot read it");
+  assert.equal(
+    decryptSecret(stored.slice(0, -4) + "AAAA", key),
+    null,
+    "a damaged value is rejected",
+  );
+  assert.equal(decryptSecret("plain-text", key), null);
+  assert.equal(decryptSecret(stored, null), null);
+  assert.throws(() => encryptSecret("x", null), /ADMIN_TOKEN/);
 }
 
 // ---- the run mail
