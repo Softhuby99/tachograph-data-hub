@@ -999,6 +999,24 @@ async function assertPlausibleListing(sourceType: string, nextCount: number): Pr
   }
 }
 
+/**
+ * v2.78: reading approval certificates is best effort and never fails a run —
+ * but a failure must not vanish either. It used to be swallowed (.catch(() =>
+ * undefined)); now it is one folded line in the operations log.
+ */
+async function logEnrichmentFailure(what: string, source: SourceKey, runId: string, e: unknown) {
+  await emitEvent({
+    level: "WARN",
+    category: "update",
+    code: "update.enrichment.failed",
+    status: "partial",
+    runId,
+    sourceType: source,
+    message: `${JRC_SOURCES[source].label}: ${what} failed — ${e instanceof Error ? e.message : String(e)}`,
+    dedupKey: `update.enrichment.failed:${source}:${what}`,
+  });
+}
+
 export async function runUpdateCheckForSource(
   source: SourceKey,
   opts: { runId?: string; trigger?: RunTrigger } = {},
@@ -1097,7 +1115,9 @@ export async function runUpdateCheckForSource(
         items,
         (p) => pdfByFingerprint.get(p.fingerprint) ?? "",
         (p) => p.payload["Device type"] || "Card",
-      ).catch(() => undefined);
+      ).catch((e: unknown) =>
+        logEnrichmentFailure("reading approval certificates", source, runId, e),
+      );
       created = await insertProposals(items);
     }
 
@@ -1154,11 +1174,16 @@ export async function runUpdateCheckForSource(
           rows.find((r) => r.typeApproval === p.jrc_type_approval && r.generation === p.generation)
             ?.pdfUrl ?? "",
         () => "Card",
-      ).catch(() => undefined);
+      ).catch((e: unknown) =>
+        logEnrichmentFailure("reading approval certificates", source, runId, e),
+      );
       let created = await insertProposals(candidates);
       // v2.75: records that exist without a security certificate get the same reading.
       created += await insertProposals(
-        await backfillApprovalProposals(rows, source).catch(() => []),
+        await backfillApprovalProposals(rows, source).catch(async (e: unknown) => {
+          await logEnrichmentFailure("certificate backfill", source, runId, e);
+          return [];
+        }),
       );
       let extraCandidates = 0;
       let extraRows = 0;
