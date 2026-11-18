@@ -127,10 +127,11 @@ export async function fetchOtherCertificateRows(): Promise<OtherCertRow[]> {
 export async function fetchOtherCertificateCardRows(rows?: OtherCertRow[]): Promise<JrcRow[]> {
   const parsed = rows ?? (await fetchOtherCertificateRows());
   return parsed
-    .filter((r) => r.component.toLowerCase() === "card")
+    .filter((r) => r.kind === "Card")
     .map((r) => ({
       manufacturer: r.manufacturer,
-      cardName: r.name,
+      // v2.77: a card row without the "Card - " prefix carries its name in the cell itself.
+      cardName: r.name || r.component,
       certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
       date: r.date,
       eov: "",
@@ -150,7 +151,7 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
   rowsParsed: number;
 }> {
   const parsed = rows ?? (await fetchOtherCertificateRows());
-  const others = parsed.filter((r) => r.component.toLowerCase() !== "card");
+  const others = parsed.filter((r) => r.kind !== "Card");
   return {
     rowsParsed: parsed.length,
     entries: others.map((r) => ({
@@ -163,19 +164,20 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
       }`,
       // v2.71: the approval reads "Device type" (Component was never looked at),
       // so VU / MS entries were treated as card findings and never created.
-      jrc: ["vu", "ms"].includes(r.component.trim().toLowerCase())
-        ? {
-            manufacturer: r.manufacturer,
-            cardName: r.name,
-            certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
-            date: r.date,
-            typeApproval: r.typeApproval,
-            pdfUrl: r.pdfUrl,
-          }
-        : undefined,
+      jrc:
+        r.kind === "VU" || r.kind === "MS"
+          ? {
+              manufacturer: r.manufacturer,
+              cardName: r.name,
+              certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
+              date: r.date,
+              typeApproval: r.typeApproval,
+              pdfUrl: r.pdfUrl,
+            }
+          : undefined,
       payload: {
-        ...(["vu", "ms"].includes(r.component.trim().toLowerCase())
-          ? { "Device type": otherCertDeviceType(r.component) }
+        ...(r.kind === "VU" || r.kind === "MS"
+          ? { "Device type": otherCertDeviceType(r.kind) }
           : {}),
         Component: r.component,
         Manufacturer: r.manufacturer,
@@ -198,10 +200,20 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
   };
 }
 
-function parseJrcDate(value: string): number {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+/**
+ * v2.77: JRC writes most dates as 03/09/2026 but a few as 19.04.2021 — those
+ * counted as "no date" (0), so they lost every newest-entry comparison.
+ */
+export function parseJrcDate(value: string): number {
+  const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(String(value ?? "").trim());
   if (!m) return 0;
   return Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+}
+
+/** JRC date (any of the spellings above) as DD.MM.YYYY; "" when it is not a date. */
+export function jrcDateToDe(value: string): string {
+  const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(String(value ?? "").trim());
+  return m ? `${m[1]!.padStart(2, "0")}.${m[2]!.padStart(2, "0")}.${m[3]}` : "";
 }
 
 function normApproval(value: string): string {
@@ -259,7 +271,9 @@ function jrcStatusText(row: JrcRow): string {
   return parts.filter(Boolean).join(" · ");
 }
 
-function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
+const MIN_SUBSTRING_KEY = 6;
+
+export function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   const key = normApproval(row.typeApproval);
   if (!key) return undefined;
   // A G1 row must not be swallowed by a G2.x card with the same approval no.
@@ -286,10 +300,14 @@ function matchCard(row: JrcRow, cards: CardRow[]): CardRow | undefined {
   }
   // Substring only where one side has no parseable approval (free text such
   // as "Not identified", unusual formats) — never between two parseable ones.
+  // v2.77: a short key ("0001", "1" — JRC lists a Turkish approval as plain
+  // "0001") is contained in half of all approval numbers and used to pick
+  // whichever record came first. Short keys must be equal.
   return cards.find((c) => {
     if (!sameGeneration(c)) return false;
     const haystack = normApproval(c.type_approval_number);
-    if (haystack.length === 0 || !haystack.includes(key)) return false;
+    if (haystack.length === 0) return false;
+    if (key.length < MIN_SUBSTRING_KEY ? haystack !== key : !haystack.includes(key)) return false;
     return rowKeys.length === 0 || approvalKeys(c.type_approval_number).length === 0;
   });
 }
@@ -929,18 +947,25 @@ function otherCertDeviceType(component: string): string {
   return component.trim();
 }
 
+/** v2.77: device type of a listing row — the classified kind, so "Paper Tacho",
+ * "TACHO SIMPLE" and "Paper - Tacho" are all Paper instead of three types. */
+function listingDeviceType(r: OtherCertRow): string {
+  if (r.kind === "Other") return r.component.trim() || "Other";
+  return otherCertDeviceType(r.kind);
+}
+
 function otherCertToListingRow(r: OtherCertRow): CurrentListingRow {
   return {
     source_type: "other_certificates",
     type_approval_number: normApproval(r.typeApproval),
     raw_type_approval: r.typeApproval,
     manufacturer: r.manufacturer,
-    card_name: r.name,
+    card_name: r.name || (r.kind === r.component ? "" : r.component),
     certificate: /^n\.?\/?a\.?$/i.test(r.interopCertificate) ? "" : r.interopCertificate,
     jrc_date: r.date,
     eov: "",
     generation: r.generation,
-    device_type: otherCertDeviceType(r.component),
+    device_type: listingDeviceType(r),
   };
 }
 
@@ -1377,6 +1402,29 @@ export async function runUpdateCheck(
     },
   });
 
+  // v2.77: e-mail about what this run found (Tools → Notifications). Never
+  // fails the run: a mail server that is down is logged, nothing more.
+  try {
+    const { notifyUpdateRun } = await import("./notify.server");
+    await notifyUpdateRun({
+      runId,
+      trigger,
+      startedAt: new Date(startedAt),
+      created: totals.created,
+    });
+  } catch (e) {
+    await emitEvent({
+      level: "WARN",
+      category: "update",
+      code: "notify.mail.failed",
+      status: "failed",
+      trigger,
+      runId,
+      message: `Notification e-mail failed: ${e instanceof Error ? e.message : String(e)}`,
+      dedupKey: "notify.mail.failed",
+    });
+  }
+
   return { ...totals, runId, status, sources: results };
 }
 
@@ -1674,7 +1722,7 @@ async function approveInTx(
     device_type: deviceType,
     // v2.73: the JRC approval date goes into "Date / Status" (market status ranks by it).
     ...(proposal.jrc_date
-      ? { date_status: proposal.jrc_date.replace(/^(\d{2})\/(\d{2})\/(\d{4})$/, "$1.$2.$3") }
+      ? { date_status: jrcDateToDe(proposal.jrc_date) || proposal.jrc_date }
       : {}),
     generation: proposal.generation,
     current_manufacturer: proposal.jrc_manufacturer,
@@ -1847,7 +1895,7 @@ async function approveProposalLegacy(id: string, country: string, userId?: strin
       device_type: deviceType,
       // v2.73: the JRC approval date goes into "Date / Status" (market status ranks by it).
       ...(proposal.jrc_date
-        ? { date_status: proposal.jrc_date.replace(/^(\d{2})\/(\d{2})\/(\d{4})$/, "$1.$2.$3") }
+        ? { date_status: jrcDateToDe(proposal.jrc_date) || proposal.jrc_date }
         : {}),
       generation: proposal.generation,
       current_manufacturer: proposal.jrc_manufacturer,

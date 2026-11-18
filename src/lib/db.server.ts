@@ -416,6 +416,28 @@ export async function getCardHistory(cardId: string, limit = 200): Promise<Field
   return (data ?? []) as unknown as FieldHistoryRow[];
 }
 
+/**
+ * v2.77: removes the change history of one record. The record itself and its
+ * manual edits stay as they are — only the list of earlier changes goes.
+ * Returns how many entries were removed.
+ */
+export async function deleteCardHistory(cardId: string): Promise<number> {
+  if (isLocalDb()) {
+    const res = await pool().query(`DELETE FROM public.card_field_history WHERE card_id = $1`, [
+      cardId,
+    ]);
+    return res.rowCount ?? 0;
+  }
+  const admin = await supabaseAdmin();
+  const { data, error } = await admin
+    .from("card_field_history")
+    .delete()
+    .eq("card_id", cardId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return (data ?? []).length;
+}
+
 // --------------------------------------------------------------- overrides
 
 export async function getAllOverrides(): Promise<OverrideRow[]> {

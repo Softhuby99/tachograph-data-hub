@@ -1,5 +1,7 @@
 // Server-only: definitions + parsers for every JRC page the tool monitors.
 
+import { approvalKeys } from "./market-status";
+
 export type SourceKey =
   | "card_status"
   | "other_certificates"
@@ -125,14 +127,30 @@ export function extractRows(html: string): RawRow[] {
   return out;
 }
 
+/** Legend classes of the JRC pages, used when a cell carries a class instead of a colour. */
+const ANNEX_CLASS_TO_GENERATION: Record<string, string> = {
+  cell_a_1b: "G1",
+  cell_a_1c: "G2.1",
+  cell_a_1cv2: "G2.2",
+};
+
+/** v2.77: bgcolor="#rrggbb" (with or without quotes), a background style, or the legend class. */
 export function generationFromAttrs(attrs: string): string {
-  const m = /bgcolor="#([0-9a-fA-F]{6})"/i.exec(attrs);
-  return m ? (ANNEX_COLOR_TO_GENERATION[m[1].toLowerCase()] ?? "") : "";
+  const colour =
+    /bgcolor\s*=\s*["']?#?([0-9a-fA-F]{6})/i.exec(attrs) ??
+    /background(?:-color)?\s*:\s*#([0-9a-fA-F]{6})/i.exec(attrs);
+  if (colour) return ANNEX_COLOR_TO_GENERATION[colour[1]!.toLowerCase()] ?? "";
+  const cls = /\bcell_a_1(?:b|cv2|c)\b/i.exec(attrs);
+  return cls ? (ANNEX_CLASS_TO_GENERATION[cls[0].toLowerCase()] ?? "") : "";
 }
+
+/** v2.77: a JRC page that never answers must not hang the whole update run. */
+const FETCH_TIMEOUT_MS = 45_000;
 
 export async function fetchPage(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { "user-agent": "TachographCardsInfoTool/1.0" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`JRC request failed [${res.status}]: ${res.statusText}`);
@@ -142,9 +160,39 @@ export async function fetchPage(url: string): Promise<string> {
 
 // ---------------------------------------------------------------- other certs
 
+/** What an "Other certificates" row is about (v2.77). */
+export type ComponentKind = "Card" | "VU" | "MS" | "Paper" | "DSRC" | "M1N1" | "Other";
+
+/**
+ * v2.77: the component cell is free text. Most rows read "VU - DTCO 1381", but
+ * about fifty do not ("Paper Tacho", "DSRC Module R08 (Upgrade)", "Tachograph
+ * G1 v1.5 AETR cards for Moldova", "TACHO2b"). Reading only the text before
+ * " - " turned those into device types of their own and hid a card entry among
+ * the information-only rows. The prefix still decides when there is one; the
+ * keywords classify the rest.
+ */
+export function classifyComponent(cell: string): ComponentKind {
+  const text = cell.trim();
+  const prefix = (text.includes(" - ") ? text.slice(0, text.indexOf(" - ")) : text)
+    .trim()
+    .toLowerCase();
+  if (prefix === "card" || prefix === "cards") return "Card";
+  if (prefix === "vu") return "VU";
+  if (prefix === "ms") return "MS";
+  if (/\bpaper\b|papier|thermal printer|thermo/i.test(text)) return "Paper";
+  if (/\bdsrc\b/i.test(text)) return "DSRC";
+  if (/m1\s*n1/i.test(text)) return "M1N1";
+  if (/\bvehicle unit\b/i.test(text) || /^vu\b/i.test(text)) return "VU";
+  if (/\bmotion sensor\b/i.test(text) || /^ms\b/i.test(text)) return "MS";
+  if (/\bcards?\b/i.test(text)) return "Card";
+  return "Other";
+}
+
 export type OtherCertRow = {
   manufacturer: string;
-  component: string; // "Card", "VU", "MS", "M1N1", "DSRC", "Paper", ...
+  component: string; // text before " - " (or the whole cell): "Card", "VU", "MS", "Paper", ...
+  /** v2.77: classified component — use this, not `component`, to decide what a row is. */
+  kind: ComponentKind;
   name: string;
   interopCertificate: string;
   typeApproval: string;
@@ -155,37 +203,91 @@ export type OtherCertRow = {
   pdfUrl: string;
 };
 
+/**
+ * "Other certificates": Manufacturer | Component | Interoperability certificate |
+ * Type approval | Date | [Mandatory security updates] | Annex [| Annex].
+ *
+ * v2.77: read from the LEFT. The first five columns are always there; what
+ * follows is an optional "mandatory updates" cell and one or two annex colour
+ * cells. Taking "the last seven cells" shifted every row with two annex cells
+ * (the Stoneridge transitional vehicle units) by one column: the component
+ * became the manufacturer, the certificate the component, the date the
+ * approval. The legend table under the list ("Annex1B | Annex1C | …") was read
+ * as an entry as well.
+ */
 export function parseOtherCertificates(html: string): OtherCertRow[] {
   const out: OtherCertRow[] = [];
   for (const row of extractRows(html)) {
-    // Most (older) rows only have 6 columns: manufacturer, component, interop
-    // certificate, type approval, date, annex. Newer rows add a
-    // "Mandatory security updates" column before the annex column.
-    const width = row.values.length;
-    if (width < 6) continue;
-    const raw = width >= 7 ? row.values.slice(-7) : row.values.slice(-6);
-    const rawAttrs = width >= 7 ? row.attrs.slice(-7) : row.attrs.slice(-6);
-    const v = width >= 7 ? raw : [raw[0], raw[1], raw[2], raw[3], raw[4], "", raw[5]];
-    const annexAttr = width >= 7 ? rawAttrs[6] : rawAttrs[5];
-    const rawLinks = width >= 7 ? row.links.slice(-7) : row.links.slice(-6);
-    const taLink = rawLinks[3] ?? "";
-    if (v[0].toLowerCase().startsWith("manufacturer")) continue;
-    if (!v[0] && !v[1]) continue;
-    const sep = v[1].indexOf(" - ");
-    const component = sep > 0 ? v[1].slice(0, sep).trim() : v[1].trim();
-    const name = sep > 0 ? v[1].slice(sep + 3).trim() : "";
-    if (!v[3] && !v[2]) continue;
-    out.push({
-      manufacturer: v[0],
-      component,
-      name,
-      interopCertificate: v[2],
-      typeApproval: v[3],
-      date: v[4],
-      mandatoryUpdates: v[5],
-      generation: generationFromAttrs(annexAttr),
-      pdfUrl: taLink,
-    });
+    // Legend and layout tables are not data.
+    if (row.attrs.some((a) => /cell_invis/i.test(a))) continue;
+    let values = row.values;
+    let attrs = row.attrs;
+    let links = row.links;
+    // A header block can be glued in front of the first data row: skip it.
+    if ((values[0] ?? "").toLowerCase().startsWith("manufacturer")) {
+      let start = attrs.findIndex((a) => /tableCell/i.test(a));
+      if (start < 0 && values.length >= 12) start = Math.floor(values.length / 2);
+      if (start <= 0) continue; // header only
+      values = values.slice(start);
+      attrs = attrs.slice(start);
+      links = links.slice(start);
+    }
+    // Two rows can sit in one <tr> (a missing row tag on the page): read record
+    // after record. A record ends with its annex colour cell(s).
+    let p = 0;
+    while (values.length - p >= 6) {
+      const [manufacturer = "", componentCell = "", interop = "", typeApproval = "", date = ""] =
+        values.slice(p, p + 5);
+      const pdfUrl = links[p + 3] ?? "";
+      let i = p + 5;
+      let generation = "";
+      const extra: string[] = [];
+      while (i < values.length && !generationFromAttrs(attrs[i] ?? "")) {
+        if (values[i]) extra.push(values[i]!);
+        i++;
+      }
+      // No colour at all: the rest of the row belongs to this record.
+      const coloured = i < values.length;
+      while (i < values.length && generationFromAttrs(attrs[i] ?? "")) {
+        generation = generationFromAttrs(attrs[i] ?? "");
+        i++;
+      }
+      p = coloured ? i : values.length;
+      if (!manufacturer && !componentCell) continue;
+      if (!typeApproval && !interop) continue;
+      const mandatoryUpdates = coloured ? extra.join(" ") : (extra[0] ?? "");
+      const sep = componentCell.indexOf(" - ");
+      const component = sep > 0 ? componentCell.slice(0, sep).trim() : componentCell.trim();
+      const name = sep > 0 ? componentCell.slice(sep + 3).trim() : "";
+      out.push({
+        manufacturer,
+        component,
+        kind: classifyComponent(componentCell),
+        name,
+        interopCertificate: interop,
+        typeApproval,
+        date,
+        mandatoryUpdates,
+        generation,
+        pdfUrl,
+      });
+    }
+  }
+  // An extension of an approval is the same kind of product: "TACHO2b"
+  // (e1-215-03) is paper because "Paper - TACHO2b" (e1-215-02) is.
+  const base = (r: OtherCertRow) =>
+    approvalKeys(r.typeApproval).map((k) => `${k.mark}|${k.series}|${k.number}`);
+  const kindByBase = new Map<string, ComponentKind>();
+  for (const r of out) {
+    if (r.kind === "Other") continue;
+    for (const k of base(r)) if (!kindByBase.has(k)) kindByBase.set(k, r.kind);
+  }
+  for (const r of out) {
+    if (r.kind !== "Other") continue;
+    const found = base(r)
+      .map((k) => kindByBase.get(k))
+      .find((k) => k !== undefined);
+    if (found) r.kind = found;
   }
   return out;
 }

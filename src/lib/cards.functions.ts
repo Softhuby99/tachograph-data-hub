@@ -9,6 +9,7 @@ import {
   insertCard,
   getCardById,
   getCardHistory,
+  deleteCardHistory,
   insertFieldHistory,
   uuidOrNull,
   applyCardEdit,
@@ -42,6 +43,33 @@ export const getCardChangeHistory = createServerFn({ method: "GET" })
   });
 
 // ---- writes (optional auth) ---------------------------------------------
+
+/**
+ * v2.77: deletes the change history of one record (admin). The data is not
+ * touched. The operations log keeps one line saying that it happened.
+ */
+export const clearCardChangeHistory = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
+  .handler(async ({ data }) =>
+    logActionFailure("Delete change history", { cardId: data.cardId }, async () => {
+      if (!uuidOrNull(data.cardId)) throw new Error("Unknown record");
+      const removed = await deleteCardHistory(data.cardId);
+      if (removed > 0) {
+        await emitEvent({
+          level: "INFO",
+          category: "action",
+          code: "action.history.cleared",
+          status: "success",
+          trigger: "manual",
+          cardId: data.cardId,
+          message: `Change history of a record deleted (${removed} entr${removed === 1 ? "y" : "ies"})`,
+          details: { removed },
+        });
+      }
+      return { ok: true, removed };
+    }),
+  );
 
 function stringMap(v: unknown, allowed: Set<string>): Record<string, string> {
   const out: Record<string, string> = {};

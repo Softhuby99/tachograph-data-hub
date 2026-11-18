@@ -11,9 +11,13 @@ import {
   Database,
   ShieldAlert,
   GitBranch,
+  Wrench,
+  Mail,
 } from "lucide-react";
 import { EventLogView } from "@/components/EventLogView";
 import { DataQualityView } from "@/components/DataQualityView";
+import { ConsistencyView } from "@/components/ConsistencyView";
+import { NotificationsView } from "@/components/NotificationsView";
 import { PlatformLinesView } from "@/components/PlatformLinesView";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -678,12 +682,14 @@ export function ToolsView({
   isAdmin?: boolean;
   onOpenCard?: (cardId: string) => void;
 }) {
-  const [sub, setSub] = useState<"log" | "quality" | "lines" | "data">(isAdmin ? "log" : "data");
+  const [sub, setSub] = useState<"log" | "quality" | "consistency" | "lines" | "notify" | "data">(
+    isAdmin ? "log" : "data",
+  );
   const active = isAdmin ? sub : "data";
   return (
     <div className="space-y-4">
       {isAdmin && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant={active === "log" ? "default" : "outline"}
@@ -700,10 +706,24 @@ export function ToolsView({
           </Button>
           <Button
             size="sm"
+            variant={active === "consistency" ? "default" : "outline"}
+            onClick={() => setSub("consistency")}
+          >
+            <Wrench className="mr-2 h-4 w-4" /> Consistency
+          </Button>
+          <Button
+            size="sm"
             variant={active === "lines" ? "default" : "outline"}
             onClick={() => setSub("lines")}
           >
             <GitBranch className="mr-2 h-4 w-4" /> Platform lines
+          </Button>
+          <Button
+            size="sm"
+            variant={active === "notify" ? "default" : "outline"}
+            onClick={() => setSub("notify")}
+          >
+            <Mail className="mr-2 h-4 w-4" /> Notifications
           </Button>
           <Button
             size="sm"
@@ -718,6 +738,10 @@ export function ToolsView({
         <EventLogView />
       ) : active === "quality" ? (
         <DataQualityView onOpenCard={onOpenCard} />
+      ) : active === "consistency" ? (
+        <ConsistencyView onOpenCard={onOpenCard} />
+      ) : active === "notify" ? (
+        <NotificationsView />
       ) : active === "lines" ? (
         <PlatformLinesView cards={cards} />
       ) : (

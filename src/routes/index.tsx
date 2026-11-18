@@ -18,6 +18,7 @@ import {
   getCards,
   getOverrides,
   getCardChangeHistory,
+  clearCardChangeHistory,
 } from "@/lib/cards.functions";
 import { getCurrentListing } from "@/lib/market.functions";
 import {
@@ -63,6 +64,7 @@ import {
   Globe2,
   Wrench,
   BookOpen,
+  Trash2,
   History,
   CalendarClock,
   AlertTriangle,
@@ -1515,17 +1517,28 @@ function DetailView({
         </Card>
       )}
 
-      <HistoryCard cardId={card.id} />
+      <HistoryCard cardId={card.id} canEdit={canEdit} />
     </div>
   );
 }
 
 const HISTORY_ORIGINS: Record<string, string> = {
   manual: "Manual edit",
-  jrc_proposal: "Approved JRC proposal",
+  jrc_proposal: "Approved proposal",
+  jrc_sync: "JRC synchronisation",
   csv_import: "CSV import",
   reset: "Manual edits removed",
+  data_correction: "Data correction",
+  consistency_fix: "Consistency repair",
 };
+
+/** v2.77: a readable origin for every entry — "jrc_audit_2026-10-01_cc_fill" was shown as is. */
+function historyOrigin(origin: string): string {
+  if (HISTORY_ORIGINS[origin]) return HISTORY_ORIGINS[origin];
+  const audit = /^jrc_audit_(\d{4})-(\d{2})-(\d{2})/.exec(origin);
+  if (audit) return `Data audit ${audit[3]}.${audit[2]}.${audit[1]}`;
+  return origin.replace(/_/g, " ");
+}
 
 /** Field labels are defined for group 1; fall back to the raw column name. */
 const FIELD_LABELS: Record<string, string> = Object.fromEntries(
@@ -1548,8 +1561,11 @@ type HistoryRow = {
  * until now the override table only kept the current values, so a corrected
  * field left no trace of what it held before or where the change came from.
  */
-function HistoryCard({ cardId }: { cardId: string }) {
+function HistoryCard({ cardId, canEdit }: { cardId: string; canEdit: boolean }) {
   const fetchHistory = useServerFn(getCardChangeHistory);
+  const clearHistory = useServerFn(clearCardChangeHistory);
+  const qc = useQueryClient();
+  const [clearing, setClearing] = useState(false);
   const history = useQuery({
     queryKey: ["card_field_history", cardId],
     queryFn: async (): Promise<HistoryRow[]> =>
@@ -1558,6 +1574,28 @@ function HistoryCard({ cardId }: { cardId: string }) {
 
   const rows = history.data ?? [];
   if (history.isLoading || rows.length === 0) return null;
+
+  // v2.77: the list of earlier changes can be deleted per record. The values
+  // of the record stay as they are.
+  const onClear = async () => {
+    if (
+      !window.confirm(
+        `Delete the change history of this record (${rows.length} entr${rows.length === 1 ? "y" : "ies"})?\n\n` +
+          "The data of the record is not changed. This cannot be undone.",
+      )
+    )
+      return;
+    setClearing(true);
+    try {
+      const r = await clearHistory({ data: { cardId } });
+      toast.success(`Change history deleted (${r.removed} entr${r.removed === 1 ? "y" : "ies"})`);
+      await qc.invalidateQueries({ queryKey: ["card_field_history", cardId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The history could not be deleted");
+    } finally {
+      setClearing(false);
+    }
+  };
 
   return (
     <Card>
@@ -1568,6 +1606,19 @@ function HistoryCard({ cardId }: { cardId: string }) {
           <Badge variant="outline" className="ml-1 text-xs font-normal">
             {rows.length}
           </Badge>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7 text-xs font-normal"
+              onClick={onClear}
+              disabled={clearing}
+              title="Deletes the list of earlier changes of this record. The data itself is not changed."
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {clearing ? "Deleting…" : "Delete history"}
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -1593,7 +1644,7 @@ function HistoryCard({ cardId }: { cardId: string }) {
                     <span aria-hidden>→</span> <span>{r.new_value || "—"}</span>
                   </td>
                   <td className="py-2 pr-4 text-muted-foreground">
-                    {HISTORY_ORIGINS[r.origin] ?? r.origin}
+                    {historyOrigin(r.origin)}
                     {r.source_label && ` · ${r.source_label}`}
                     {r.source_url && (
                       <>

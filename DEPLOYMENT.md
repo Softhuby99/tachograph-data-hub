@@ -308,3 +308,45 @@ completion/migration markers. A full container smoke test remains separate.
 The GitHub Docker build now requires the bootstrap integration suite to pass
 against PostgreSQL 15 before publishing an image, including legacy databases
 without cron_config/pgcrypto and rollback/retry of that migration.
+
+## E-mail notifications (v2.77)
+
+After a full update run (the daily automatic run or "Check for updates") that
+found new or changed entries, the app sends one e-mail listing them. Nothing is
+sent when a run finds nothing.
+
+1. Add the mail server to `/opt/TDH/.env` (see `.env.example`):
+
+   ```
+   SMTP_HOST=mail.example.org
+   SMTP_PORT=587
+   SMTP_SECURITY=starttls
+   SMTP_USER=tdh@example.org
+   SMTP_PASS=...
+   SMTP_FROM=Tachograph Data Hub <tdh@example.org>
+   ```
+
+   `SMTP_SECURITY`: `starttls` (port 587), `tls` (port 465) or `none` (port 25,
+   an internal relay without login — leave `SMTP_USER` empty). For an internal
+   server with a self-signed certificate set `SMTP_TLS_VERIFY=false`.
+   `PUBLIC_BASE_URL` is used for the link in the mail.
+2. Recreate the container so it reads the new values.
+3. In the app: Tools → Notifications. Enter the recipients, switch it on, save,
+   then "Send test e-mail".
+
+The mail server and its password are read from the environment only; they are
+never stored in the database or sent to the browser. A failed delivery does not
+fail the update run — it is written to the operations log (`notify.mail.failed`)
+and shown under Tools → Notifications as the last attempt.
+
+## Consistency check and repair (v2.77)
+
+Tools → Consistency compares the records with each other and with the JRC
+listing of the last update run: flags, country spelling, generation and dates
+against JRC, manual edits that repeat the stored value, duplicates, and JRC
+entries without a record. Safe repairs can be applied together; repairs that
+change a stored value are applied one by one. Every repair is written to the
+change history of its record (origin "Consistency repair").
+
+Tests (no database needed): `npx tsx tools/test_jrc_parser.ts`,
+`npx tsx tools/test_consistency.ts`, `npx tsx tools/test_smtp.ts`.

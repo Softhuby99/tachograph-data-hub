@@ -132,7 +132,10 @@ function stripZeros(value: string): string {
 }
 
 export function approvalKeys(value: string | null | undefined): ApprovalKey[] {
-  const text = String(value ?? "").toLowerCase();
+  // v2.77: stray brackets (JRC lists one approval as "e9_]02") are typing slips.
+  const text = String(value ?? "")
+    .toLowerCase()
+    .replace(/[[\]]/g, "");
   const out: ApprovalKey[] = [];
   for (const m of text.matchAll(LONG_APPROVAL_RE)) {
     out.push({
@@ -257,9 +260,12 @@ function isListed(
   // confuses the series: "e4000100" is not contained in "e4aetr000100".
   const key = normApproval(typeApproval);
   if (!key) return false;
+  // v2.77: a placeholder such as "1" or "0001" is contained in almost every
+  // approval number and counted as "listed". Short values must be equal.
   return listing.some((e) => {
     const haystack = e.type_approval_number || normApproval(e.raw_type_approval);
     if (!haystack) return false;
+    if (key.length < 6 || haystack.length < 6) return haystack === key;
     return haystack.includes(key) || key.includes(haystack);
   });
 }
