@@ -10,13 +10,15 @@ import {
   getCardById,
   getCardHistory,
   deleteCardHistory,
+  deleteAllCardHistory,
+  getHistoryStats,
   insertFieldHistory,
   uuidOrNull,
   applyCardEdit,
   EDITABLE_FIELDS,
 } from "@/lib/db.server";
 import { flagEmoji, normalizeCountry } from "@/lib/country-flag";
-import { emitEvent, logActionFailure } from "@/lib/events.server";
+import { emitEvent, logActionFailure, requireAdmin } from "@/lib/events.server";
 
 // Shared, database-backed manual edits of card fields.
 // The original row in tachograph_cards stays untouched; the patch is merged on read.
@@ -185,6 +187,44 @@ export const resetCardOverride = createServerFn({ method: "POST" })
       await deleteOverride(data.cardId);
       await insertFieldHistory(history);
       return { ok: true };
+    }),
+  );
+
+/** v2.83: size of the change history (Tools → Data & Export). Admin only. */
+export const getChangeHistoryStats = createServerFn({ method: "POST" }).handler(async () => {
+  await requireAdmin("read change history size");
+  return await getHistoryStats();
+});
+
+/**
+ * v2.83: deletes the change history of ALL records. The caller has to send the
+ * number of entries it was shown: if the history grew in the meantime the
+ * server refuses, so nobody deletes more than they confirmed.
+ */
+export const clearAllChangeHistory = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: { expectedEntries: number }) => ({
+    expectedEntries: Math.trunc(Number(data?.expectedEntries ?? -1)),
+  }))
+  .handler(async ({ data }) =>
+    logActionFailure("Delete all change history", {}, async () => {
+      const before = await getHistoryStats();
+      if (before.entries !== data.expectedEntries) {
+        throw new Error(
+          `The change history changed in the meantime (${before.entries} entries now). Reload and confirm again.`,
+        );
+      }
+      const removed = await deleteAllCardHistory();
+      await emitEvent({
+        level: "WARN",
+        category: "action",
+        code: "action.history.cleared_all",
+        status: "success",
+        trigger: "manual",
+        message: `Change history of all records deleted (${removed} entries, ${before.records} records)`,
+        details: { removed, records: before.records },
+      });
+      return { ok: true, removed, records: before.records };
     }),
   );
 

@@ -349,7 +349,8 @@ change history of its record (origin "Consistency repair").
 
 Tests (no database needed): `npx tsx tools/test_jrc_parser.ts`,
 `npx tsx tools/test_consistency.ts`, `npx tsx tools/test_smtp.ts`,
-`npx tsx tools/test_notify.ts`, `npx tsx tools/test_pdf_reader.ts`.
+`npx tsx tools/test_notify.ts`, `npx tsx tools/test_pdf_reader.ts`,
+`npx tsx tools/test_reports.ts`.
 
 ## Node.js version (v2.82)
 

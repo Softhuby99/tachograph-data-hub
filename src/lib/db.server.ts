@@ -438,6 +438,42 @@ export async function deleteCardHistory(cardId: string): Promise<number> {
   return (data ?? []).length;
 }
 
+/** v2.83: how much change history there is (entries, records that have any). */
+export async function getHistoryStats(): Promise<{ entries: number; records: number }> {
+  if (isLocalDb()) {
+    const { rows } = await pool().query(
+      `SELECT count(*)::int AS entries, count(DISTINCT card_id)::int AS records
+         FROM public.card_field_history`,
+    );
+    return { entries: Number(rows[0]?.entries ?? 0), records: Number(rows[0]?.records ?? 0) };
+  }
+  const admin = await supabaseAdmin();
+  const { count, error } = await admin
+    .from("card_field_history")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(error.message);
+  return { entries: count ?? 0, records: 0 };
+}
+
+/**
+ * v2.83: removes the change history of ALL records in one go. The records and
+ * their manual edits stay as they are. Returns how many entries were removed.
+ */
+export async function deleteAllCardHistory(): Promise<number> {
+  if (isLocalDb()) {
+    const res = await pool().query(`DELETE FROM public.card_field_history`);
+    return res.rowCount ?? 0;
+  }
+  const admin = await supabaseAdmin();
+  const { data, error } = await admin
+    .from("card_field_history")
+    .delete()
+    .not("id", "is", null)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return (data ?? []).length;
+}
+
 // --------------------------------------------------------------- overrides
 
 export async function getAllOverrides(): Promise<OverrideRow[]> {

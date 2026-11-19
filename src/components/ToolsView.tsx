@@ -13,15 +13,18 @@ import {
   GitBranch,
   Wrench,
   Mail,
+  History,
+  Trash2,
 } from "lucide-react";
 import { EventLogView } from "@/components/EventLogView";
 import { DataQualityView } from "@/components/DataQualityView";
 import { ConsistencyView } from "@/components/ConsistencyView";
 import { NotificationsView } from "@/components/NotificationsView";
 import { PlatformLinesView } from "@/components/PlatformLinesView";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPlatformLines } from "@/lib/platform.functions";
+import { clearAllChangeHistory, getChangeHistoryStats } from "@/lib/cards.functions";
 import { parseCertificate } from "@/lib/cert-family";
 import type { PlatformLine } from "@/lib/platform-timeline";
 import { toast } from "sonner";
@@ -93,7 +96,9 @@ function buildOfflineData(cards: ExportRow[], lines: PlatformLine[] = []): strin
     // the view (agreed 02.10.2026, point 14).
     const ref = parseCertificate(c["security_certificate"]);
     row["cert_family"] = ref?.family ?? "";
-    row["platform_line"] = ref ? (lines.find((l) => l.families.includes(ref.family))?.name ?? "") : "";
+    row["platform_line"] = ref
+      ? (lines.find((l) => l.families.includes(ref.family))?.name ?? "")
+      : "";
     delete row["created_at"];
     delete row["updated_at"];
     return row;
@@ -663,6 +668,88 @@ function DataToolsPanel({
 }
 
 /**
+ * v2.83: the change history of all records at once (Tools → Data & Export).
+ * The history of a single record is deleted in the record itself.
+ */
+function ChangeHistoryCard() {
+  const qc = useQueryClient();
+  const fetchStats = useServerFn(getChangeHistoryStats);
+  const clearAll = useServerFn(clearAllChangeHistory);
+  const [busy, setBusy] = useState(false);
+  const stats = useQuery({
+    queryKey: ["card_field_history_stats"],
+    queryFn: () => fetchStats(),
+    retry: false,
+  });
+  if (stats.error) return null; // not an admin session
+  const entries = stats.data?.entries ?? 0;
+  const records = stats.data?.records ?? 0;
+
+  const onClear = async () => {
+    if (
+      !window.confirm(
+        `Delete the change history of ALL records?\n\n${entries} entries in ${records} records will be removed. ` +
+          "The data of the records and their manual edits are not changed.\n\nThis cannot be undone.",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const r = await clearAll({ data: { expectedEntries: entries } });
+      toast.success(`Change history deleted: ${r.removed} entries in ${r.records} records`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The history could not be deleted");
+    } finally {
+      setBusy(false);
+      await qc.invalidateQueries({ queryKey: ["card_field_history_stats"] });
+      await qc.invalidateQueries({ queryKey: ["card_field_history"] });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-4 w-4 text-primary" /> Change history
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          Every record keeps a list of its earlier changes (approved proposals, manual edits,
+          imports, repairs). It can be deleted for a single record in the record itself, or here for
+          all records at once. Only the list goes — the data stays as it is.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            {stats.isLoading ? (
+              "Counting…"
+            ) : (
+              <>
+                <strong>{entries}</strong> entr{entries === 1 ? "y" : "ies"} in{" "}
+                <strong>{records}</strong> record{records === 1 ? "" : "s"}
+              </>
+            )}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onClear}
+            disabled={busy || stats.isLoading || entries === 0}
+          >
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Delete history of all records
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * v2.52: Tools is split into sub-tabs. "Log" (operations log) exists only for
  * a signed-in admin — the server enforces this independently. "Data & Export"
  * holds the previous cards unchanged. v2.53 adds "Data quality" (admin only).
@@ -745,7 +832,10 @@ export function ToolsView({
       ) : active === "lines" ? (
         <PlatformLinesView cards={cards} />
       ) : (
-        <DataToolsPanel cards={cards} filteredCards={filteredCards} onImport={onImport} />
+        <>
+          <DataToolsPanel cards={cards} filteredCards={filteredCards} onImport={onImport} />
+          {isAdmin && <ChangeHistoryCard />}
+        </>
       )}
     </div>
   );

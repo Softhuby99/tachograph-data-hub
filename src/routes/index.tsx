@@ -65,6 +65,7 @@ import {
   Wrench,
   BookOpen,
   Trash2,
+  FileBarChart,
   History,
   CalendarClock,
   AlertTriangle,
@@ -78,6 +79,7 @@ import { parseCertificate } from "@/lib/cert-family";
 import { WorldMapView } from "@/components/WorldMapView";
 import { ToolsView } from "@/components/ToolsView";
 import { InfoView } from "@/components/InfoView";
+import { ReportsView } from "@/components/ReportsView";
 import { getEventOverview, verifyAdminLogin } from "@/lib/events.functions";
 
 export const Route = createFileRoute("/")({
@@ -274,7 +276,9 @@ function TachographTool() {
   const adminUnlocked = !adminRequired || !!adminToken;
   const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"data" | "map" | "analytics" | "updates" | "info" | "tools">("data");
+  const [tab, setTab] = useState<"data" | "map" | "analytics" | "reports" | "updates" | "info" | "tools">(
+    "data",
+  );
   // v2.55: record → Platform Timeline link.
   const [timelineFocus, setTimelineFocus] = useState<TimelineFocus>(null);
   // v2.54: a manual edit that collided with someone else's change.
@@ -531,6 +535,13 @@ function TachographTool() {
               <BarChart3 className="mr-2 h-4 w-4" /> Market Analytics
             </Button>
             <Button
+              variant={tab === "reports" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("reports")}
+            >
+              <FileBarChart className="mr-2 h-4 w-4" /> Reports
+            </Button>
+            <Button
               variant={tab === "updates" ? "default" : "outline"}
               size="sm"
               onClick={() => setTab("updates")}
@@ -644,6 +655,9 @@ function TachographTool() {
         {!isLoading && !error && tab === "map" && <WorldMapView cards={cards} flagUrl={flagUrl} topApproval={topApprovalByCountry} />}
         {!isLoading && !error && tab === "analytics" && (
           <AnalyticsView cards={cards} marketStatus={marketStatus} timelineFocus={timelineFocus} />
+        )}
+        {!isLoading && !error && tab === "reports" && (
+          <ReportsView cards={cards} marketStatus={marketStatus} onOpenCard={setToolsRecordId} />
         )}
         {tab === "updates" && <UpdatesView />}
         {tab === "info" && <InfoView />}
