@@ -278,9 +278,9 @@ const CC_FETCH_CONCURRENCY = 4;
 /** Extract plain text from the first pages of a certificate / report PDF. */
 /**
  * v2.81: pdfjs-dist 6 calls Promise.withResolvers, which Node only has from
- * version 22 — the container runs Node 20. Without it every PDF failed to open
- * ("Promise.withResolvers is not a function"), so no approval certificate was
- * ever read on the server. Defined once, only where it is missing.
+ * version 22. Up to v2.81 the container ran Node 20 and every PDF failed to
+ * open ("Promise.withResolvers is not a function"). Since v2.82 the image runs
+ * Node 22, where this does nothing; it stays for a dev machine on Node 20.
  */
 function ensurePromiseWithResolvers(): void {
   const P = Promise as unknown as { withResolvers?: unknown };

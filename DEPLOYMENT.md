@@ -350,3 +350,12 @@ change history of its record (origin "Consistency repair").
 Tests (no database needed): `npx tsx tools/test_jrc_parser.ts`,
 `npx tsx tools/test_consistency.ts`, `npx tsx tools/test_smtp.ts`,
 `npx tsx tools/test_notify.ts`, `npx tsx tools/test_pdf_reader.ts`.
+
+## Node.js version (v2.82)
+
+The image runs Node.js 22 LTS (`ARG NODE_VERSION=22` in `Dockerfile.web`).
+Both build stages stay on Debian bookworm, so PostgreSQL and the data volume
+are unchanged; an update from an image with Node 20 needs no extra step. The
+first `docker pull` after the switch downloads a new base layer and takes a
+little longer. Check the running version with
+`docker exec tacho node --version`.

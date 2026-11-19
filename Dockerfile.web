@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 # Single-container deployment: Node/Nitro + PostgreSQL, native HTTPS.
-ARG NODE_VERSION=20
+# v2.82: Node 22 LTS. Node 20 left maintenance in April 2026, and pdfjs-dist 6
+# (approval certificates) relies on Node 22 APIs. Both stages stay on Debian
+# bookworm, so the PostgreSQL package and the data directory format are unchanged.
+ARG NODE_VERSION=22
 
 # ---------- build stage ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS build
