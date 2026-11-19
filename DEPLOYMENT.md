@@ -237,7 +237,7 @@ docker exec -i tacho psql -U tdh -d tdh < backup_YYYYMMDD.sql
 ## 10. Login
 
 Reading is open to everyone who can reach the instance. Editing, update checks
-and the Tools menu need the admin login: "Admin sign in" in the header, with
+and the Tools menu need the admin login: "Admin login" in the header, with
 the value of `ADMIN_TOKEN`. Every rejected attempt is recorded in the
 operations log. There are no user accounts.
 

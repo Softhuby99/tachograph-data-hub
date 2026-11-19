@@ -1,7 +1,7 @@
 // Write protection. Reading is open to everyone who can reach the instance;
 // every server function that changes something carries this middleware and
 // needs the admin token: ADMIN_TOKEN in the container environment, entered in
-// the app under "Admin sign in" and sent as x-admin-token (see
+// the app under "Admin login" and sent as x-admin-token (see
 // admin-token-middleware.ts). Without a configured token the instance is
 // read-only — an unset token must not mean "open".
 //
@@ -31,7 +31,7 @@ export const adminAuth = createMiddleware({ type: "function" }).server(async ({ 
   if (adminToken.length === 0) {
     throw new Response(
       "This instance is read-only: set ADMIN_TOKEN in the container environment " +
-        "(e.g. /opt/TDH/.env) and enter the same value under Tools to enable writing.",
+        "(e.g. /opt/TDH/.env) and sign in with the same value (Admin login) to enable writing.",
       { status: 403 },
     );
   }
