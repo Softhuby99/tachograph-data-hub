@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   checkUpdates,
   checkUpdateSource,
+  notifyAfterManualCheck,
   getScheduleInfo,
   approveJrcProposal,
   rejectJrcProposal,
@@ -172,6 +173,7 @@ export function UpdatesView() {
 
   const check = useServerFn(checkUpdates);
   const checkOne = useServerFn(checkUpdateSource);
+  const notifyAfter = useServerFn(notifyAfterManualCheck);
   const approve = useServerFn(approveJrcProposal);
   const reopen = useServerFn(reopenJrcProposal);
   const reject = useServerFn(rejectJrcProposal);
@@ -196,6 +198,7 @@ export function UpdatesView() {
     let created = 0;
     let rows = 0;
     let aborted = false;
+    let firstStart = "";
     try {
       for (const key of Object.keys(SOURCE_LABELS)) {
         setActiveSource(key);
@@ -204,6 +207,7 @@ export function UpdatesView() {
           const res = await checkOne({ data: { source: key } });
           rows += res.rowsParsed ?? 0;
           created += res.created ?? 0;
+          if (!firstStart && res.startedAt) firstStart = res.startedAt;
           setSourceState((s) => ({
             ...s,
             [key]: res.error ? "error" : res.created > 0 ? "updated" : "clean",
@@ -228,6 +232,18 @@ export function UpdatesView() {
       }
       if (!aborted)
         toast.success(`Check finished — ${rows} rows read, ${created} new proposal(s).`);
+      // v2.80: the e-mail a full run sends (Tools → Notifications).
+      if (!aborted && created > 0 && firstStart) {
+        try {
+          const n = await notifyAfter({ data: { startedAt: firstStart, created } });
+          if (n.sent) toast.info(`Notification e-mail sent (${n.count} finding(s)).`);
+          else if ("error" in n && n.error) toast.warning(`Notification e-mail failed: ${n.error}`);
+        } catch (e) {
+          toast.warning(
+            `Notification e-mail failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
     } finally {
       setActiveSource(null);
       setRunning(false);

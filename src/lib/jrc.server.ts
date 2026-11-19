@@ -900,6 +900,8 @@ type SourceResult = {
   capped?: number;
   implausible?: boolean;
   durationMs?: number;
+  /** v2.80: when this source started, server clock (ISO). */
+  startedAt?: string;
   checkRunId?: string | null;
 };
 
@@ -1285,6 +1287,7 @@ export async function runUpdateCheckForSource(
   result.deferred = deferredInfo;
   result.capped = cappedCc;
   result.durationMs = Date.now() - startedAt;
+  result.startedAt = new Date(startedAt).toISOString();
 
   const checkRunId = await insertCheckRun({
     source_type: result.source,

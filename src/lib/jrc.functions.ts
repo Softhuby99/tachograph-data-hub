@@ -106,6 +106,47 @@ export const checkUpdateSource = createServerFn({ method: "POST" })
     ),
   );
 
+/**
+ * v2.80: "Check for updates" in the Update Monitor runs the sources one by one
+ * (so the list can show progress), which never reached the notification at the
+ * end of a full run. The page calls this once after the last source. The time
+ * window comes from the server's own start time of the first source and is
+ * limited to the last six hours.
+ */
+export const notifyAfterManualCheck = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: { startedAt: string; created: number }) => ({
+    startedAt: String(data?.startedAt ?? ""),
+    created: Math.max(0, Math.trunc(Number(data?.created ?? 0)) || 0),
+  }))
+  .handler(async ({ data }) => {
+    const now = Date.now();
+    const t = Date.parse(data.startedAt);
+    const startedAt = new Date(
+      Number.isNaN(t) || t > now || now - t > 6 * 3600_000 ? now - 3600_000 : t,
+    );
+    const { randomUUID } = await import("crypto");
+    const runId = randomUUID();
+    const { notifyUpdateRun } = await import("@/lib/notify.server");
+    try {
+      return await notifyUpdateRun({ runId, trigger: "manual", startedAt, created: data.created });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      const { emitEvent } = await import("@/lib/events.server");
+      await emitEvent({
+        level: "WARN",
+        category: "update",
+        code: "notify.mail.failed",
+        status: "failed",
+        trigger: "manual",
+        runId,
+        message: `Notification e-mail failed: ${message}`,
+        dedupKey: "notify.mail.failed",
+      });
+      return { sent: false, error: message };
+    }
+  });
+
 export const approveJrcProposal = createServerFn({ method: "POST" })
   .middleware([optionalAuth])
   .inputValidator(
