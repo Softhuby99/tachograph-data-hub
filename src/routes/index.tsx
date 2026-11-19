@@ -32,6 +32,14 @@ import {
   type MarketGroup,
 } from "@/lib/market-status";
 import { approvalHolderOf, chipPlatformOf, isOwnApproval } from "@/lib/chip-platform";
+import {
+  computeShareList,
+  holderOf,
+  shareKeyOf,
+  shareScope,
+  UNKNOWN_PLATFORM,
+  type PartKind,
+} from "@/lib/market-share";
 import { getAuthMode } from "@/lib/auth-mode.functions";
 import { APP_VERSION } from "@/lib/version";
 import { flagUrl } from "@/lib/country-flag";
@@ -1812,7 +1820,7 @@ function AnalyticsView({
   const mfgList = useMemo(() => {
     const map: Record<string, { approvals: number; countries: Set<string> }> = {};
     cards.forEach((c) => {
-      const m = c.current_manufacturer_normalized || c.current_manufacturer || "—";
+      const m = holderOf(c);
       if (!map[m]) map[m] = { approvals: 0, countries: new Set() };
       map[m].approvals++;
       map[m].countries.add(c.country);
@@ -1902,7 +1910,7 @@ function AnalyticsView({
         ? ovCards.filter((c) => c.generation === drill.value)
         : drill.kind === "manufacturer"
           ? cards.filter(
-              (c) => (c.current_manufacturer_normalized || c.current_manufacturer) === drill.value,
+              (c) => holderOf(c) === drill.value,
             )
           : drill.kind === "certificate"
             ? ovCards.filter((c) => String(c.security_certificate ?? "").trim() === drill.value)
@@ -2538,8 +2546,6 @@ function GenSplitLegend({ tone }: { tone: "dark" | "purple" }) {
 }
 
 // v2.59: own / partner colouring in the market share table.
-type PartKind = "own" | "partner" | "unknown";
-const PART_ORDER: Record<PartKind, number> = { own: 0, partner: 1, unknown: 2 };
 const PART_LABEL: Record<PartKind, string> = {
   own: "own approval (platform vendor holds it)",
   partner: "via partner (another card manufacturer holds it)",
@@ -2578,91 +2584,19 @@ function CurrentStatusView({
   const [detailCard, setDetailCard] = useState<TachoCard | null>(null);
 
   const byId = marketStatus.byId;
-  const UNKNOWN_PLATFORM = "Platform unknown";
-  const groupKeyOf = (c: TachoCard) =>
-    groupBy === "holder"
-      ? c.current_manufacturer_normalized || c.current_manufacturer || "—"
-      : chipPlatformOf(c).vendor || UNKNOWN_PLATFORM;
-  const scoped = useMemo(
-    () => cards.filter((c) => deviceType === "all" || (c.device_type || "Card") === deviceType),
-    [cards, deviceType],
+  // v2.84: the figures come from src/lib/market-share.ts — the same computation
+  // the Reports menu uses, so both always show the same numbers.
+  const groupKeyOf = (c: TachoCard) => shareKeyOf(c, groupBy);
+  const { scoped, current } = useMemo(
+    () => shareScope(cards, byId, { deviceType, includeHistory }),
+    [cards, byId, deviceType, includeHistory],
   );
-
-  const activeOnly = useMemo(
-    () => scoped.filter((c) => byId.get(c.id)?.status === "current"),
-    [scoped, byId],
-  );
-  // With "include history" the table counts every record (long-term share).
-  const current = includeHistory ? scoped : activeOnly;
   const delisted = useMemo(
     () => scoped.filter((c) => byId.get(c.id)?.status === "delisted"),
     [scoped, byId],
   );
 
-  const shareList = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        holders: number;
-        countries: Set<string>;
-        own: number;
-        partner: number;
-        gens: Record<string, number>;
-        // v2.59: who is behind the row — by platform: the approval holders;
-        // by holder: the chip platforms used. kind = own / partner / unknown.
-        parts: Record<string, { n: number; kind: PartKind }>;
-      }
-    > = {};
-    for (const c of current) {
-      const m = groupKeyOf(c);
-      if (!map[m]) map[m] = { holders: 0, countries: new Set(), own: 0, partner: 0, gens: {}, parts: {} };
-      map[m].holders++;
-      {
-        const vendor = chipPlatformOf(c).vendor;
-        const kind: PartKind = !vendor ? "unknown" : isOwnApproval(c, vendor) ? "own" : "partner";
-        const key =
-          groupBy === "platform"
-            ? c.current_manufacturer_normalized || c.current_manufacturer || "—"
-            : vendor || "platform unknown";
-        const part = (map[m].parts[key] ??= { n: 0, kind });
-        part.n++;
-      }
-      // v2.58: split by generation, same split as the bars above.
-      const gen = c.generation || "—";
-      map[m].gens[gen] = (map[m].gens[gen] ?? 0) + 1;
-      map[m].countries.add(c.country);
-      if (groupBy === "platform") {
-        const vendor = chipPlatformOf(c).vendor;
-        if (vendor && isOwnApproval(c, vendor)) map[m].own++;
-        else if (vendor) map[m].partner++;
-      }
-    }
-    const total = current.length || 1;
-    return Object.entries(map)
-      .map(([name, v]) => ({
-        name,
-        holders: v.holders,
-        countries: v.countries.size,
-        own: v.own,
-        partner: v.partner,
-        gens: v.gens,
-        parts: Object.entries(v.parts)
-          .map(([label, p]) => ({ label, ...p }))
-          .sort(
-            (a, b) =>
-              PART_ORDER[a.kind] - PART_ORDER[b.kind] || b.n - a.n || a.label.localeCompare(b.label),
-          ),
-        share: (v.holders / total) * 100,
-      }))
-      .sort(
-        (a, b) =>
-          Number(a.name === UNKNOWN_PLATFORM) - Number(b.name === UNKNOWN_PLATFORM) ||
-          b.holders - a.holders ||
-          b.countries - a.countries,
-      );
-    // groupKeyOf depends only on groupBy
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, groupBy]);
+  const shareList = useMemo(() => computeShareList(current, groupBy), [current, groupBy]);
   const shareMax = shareList[0]?.holders || 1;
 
   const mfgCountries = useMemo(() => {

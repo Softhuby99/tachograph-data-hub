@@ -19,8 +19,16 @@ import {
 import { getPlatformLines } from "@/lib/platform.functions";
 import type { MarketGroup, MarketStatusEntry } from "@/lib/market-status";
 import {
+  computeShareList,
+  notInForce,
+  shareScope,
+  SHARE_GENERATIONS,
+  UNKNOWN_PLATFORM,
+  type ShareGroupBy,
+  type ShareListRow,
+} from "@/lib/market-share";
+import {
   dependencyReport,
-  marketShareReport,
   movesReport,
   pipelineReport,
   RECENT_DAYS,
@@ -28,7 +36,6 @@ import {
   type ExpiryBucket,
   type ReportCard,
   type ReportLine,
-  type ShareBlock,
 } from "@/lib/reports";
 
 // v2.83: menu "Reports" — four product-marketing reports over the card data.
@@ -42,7 +49,8 @@ const REPORTS: { key: ReportKey; label: string; icon: typeof PieChart; question:
     key: "share",
     label: "Market share",
     icon: PieChart,
-    question: "Who supplies the tachograph cards of each generation, and in how many countries?",
+    question:
+      "Whose chip platform, and which supplier, is behind the card approvals in force today?",
   },
   {
     key: "moves",
@@ -69,6 +77,8 @@ const REPORTS: { key: ReportKey; label: string; icon: typeof PieChart; question:
 const fmtDate = (isoDate: string) =>
   isoDate ? `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}.${isoDate.slice(0, 4)}` : "—";
 const pct = (share: number) => `${Math.round(share * 100)} %`;
+/** Share in per cent with one decimal — the way Market Analytics shows it. */
+const pct1 = (percent: number) => `${percent.toFixed(1)} %`;
 const csvCell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 function downloadCsv(name: string, head: string[], rows: unknown[][]) {
@@ -128,7 +138,7 @@ function Table({
         <thead>
           <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
             {head.map((h, i) => (
-              <th key={i} className="px-3 py-1.5 font-medium">
+              <th key={i} className="whitespace-nowrap px-3 py-1.5 font-medium">
                 {h}
               </th>
             ))}
@@ -162,51 +172,93 @@ function Bar({ value, max }: { value: number; max: number }) {
   );
 }
 
-function ShareTable({
-  block,
-  nameLabel,
-  top = 8,
-  showCountries = false,
+function ShareListTable({
+  rows,
+  groupBy,
+  detailed,
 }: {
-  block: ShareBlock;
-  nameLabel: string;
-  top?: number;
-  showCountries?: boolean;
+  rows: ShareListRow[];
+  groupBy: ShareGroupBy;
+  /** Full table (generation split, own / via partner, who is behind the row). */
+  detailed: boolean;
 }) {
-  if (block.total === 0) return <Empty>No approval of this generation.</Empty>;
-  const known = block.rows.filter((r) => r.name !== UNKNOWN);
-  const shown = known.slice(0, top);
-  const rest = known.slice(top);
-  const unknown = block.rows.find((r) => r.name === UNKNOWN);
-  const max = Math.max(...block.rows.map((r) => r.count));
-  const row = (name: string, count: number, countries: string[], muted = false) => (
-    <tr key={name} className="border-b last:border-0" title={countries.join(", ")}>
-      <Td className={muted ? "text-muted-foreground" : "font-medium"}>{name}</Td>
-      <Td className="w-12 whitespace-nowrap text-right tabular-nums">{count}</Td>
-      <Td className="w-16 whitespace-nowrap text-right tabular-nums text-muted-foreground">
-        {pct(count / block.total)}
-      </Td>
-      <Td className="w-[30%] align-middle">
-        <Bar value={count} max={max} />
-      </Td>
-      {showCountries && <Td className="text-xs text-muted-foreground">{countries.join(", ")}</Td>}
-    </tr>
-  );
+  if (rows.length === 0) return <Empty>No approval in this scope.</Empty>;
+  const max = Math.max(...rows.map((r) => r.holders));
+  const nameLabel = groupBy === "platform" ? "Chip platform" : "Approval holder";
   return (
     <Table
-      head={[nameLabel, "Countries", "Share", "", ...(showCountries ? ["Which countries"] : [])]}
-      minWidth={showCountries ? 720 : 320}
+      head={[
+        nameLabel,
+        "Approvals",
+        ...(detailed ? ["G1 / G2.1 / G2.2"] : []),
+        ...(detailed && groupBy === "platform" ? ["Own / via partner"] : []),
+        ...(detailed ? ["Countries"] : []),
+        "Share",
+        "",
+      ]}
+      minWidth={detailed ? 760 : 280}
     >
-      {shown.map((r) => row(r.name, r.count, r.countries))}
-      {rest.length > 0 &&
-        row(
-          `${rest.length} other${rest.length === 1 ? "" : "s"}`,
-          rest.reduce((n, r) => n + r.count, 0),
-          rest.flatMap((r) => r.countries.map((c) => `${c} (${r.name})`)),
-          true,
-        )}
-      {unknown && row(UNKNOWN, unknown.count, unknown.countries, true)}
+      {rows.map((r) => (
+        <tr key={r.name} className="border-b last:border-0">
+          <Td>
+            <div className={r.name === UNKNOWN_PLATFORM ? "text-muted-foreground" : "font-medium"}>
+              {r.name}
+            </div>
+            {detailed && r.parts.length > 0 && (
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {groupBy === "platform" ? "Approval held by: " : "Chip platform: "}
+                {r.parts.map((p) => `${p.label} ${p.n}`).join(" · ")}
+              </div>
+            )}
+          </Td>
+          <Td className="w-20 whitespace-nowrap tabular-nums">{r.holders}</Td>
+          {detailed && (
+            <Td className="whitespace-nowrap tabular-nums text-muted-foreground">
+              {r.gens["G1"] ?? 0} / {r.gens["G2.1"] ?? 0} / {r.gens["G2.2"] ?? 0}
+            </Td>
+          )}
+          {detailed && groupBy === "platform" && (
+            <Td className="whitespace-nowrap tabular-nums">
+              {r.name === UNKNOWN_PLATFORM ? "—" : `${r.own} / ${r.partner}`}
+            </Td>
+          )}
+          {detailed && <Td className="w-20 tabular-nums">{r.countries}</Td>}
+          <Td className="w-20 whitespace-nowrap font-medium tabular-nums">{pct1(r.share)}</Td>
+          <Td className={`align-middle ${detailed ? "w-[22%]" : "w-[30%]"}`}>
+            <Bar value={r.holders} max={max} />
+          </Td>
+        </tr>
+      ))}
     </Table>
+  );
+}
+
+function Choice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <select
+        className="h-8 rounded-md border bg-background px-2 text-sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -259,10 +311,32 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
   const lines = linesQuery.data;
 
   const today = useMemo(() => new Date(), []);
-  const share = useMemo(
-    () => marketShareReport(cards, marketStatus.groups),
-    [cards, marketStatus.groups],
-  );
+  // Market share: the same computation and the same settings as Market
+  // Analytics → Overview (product group Card), so the figures are identical.
+  const [groupBy, setGroupBy] = useState<ShareGroupBy>("platform");
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const share = useMemo(() => {
+    const { scoped, current } = shareScope(cards, marketStatus.byId, {
+      deviceType: "Card",
+      includeHistory,
+    });
+    return {
+      records: scoped.length,
+      total: current.length,
+      countries: new Set(current.map((c) => String(c.country ?? "")).filter(Boolean)).size,
+      rows: computeShareList(current, groupBy),
+      generations: SHARE_GENERATIONS.map((generation) => {
+        const list = current.filter((c) => c.generation === generation);
+        return {
+          generation,
+          total: list.length,
+          share: current.length ? (list.length / current.length) * 100 : 0,
+          rows: computeShareList(list, groupBy),
+        };
+      }),
+      notInForce: includeHistory ? [] : notInForce(marketStatus.groups, "Card"),
+    };
+  }, [cards, marketStatus, groupBy, includeHistory]);
   const moves = useMemo(
     () => movesReport(marketStatus.groups, today),
     [marketStatus.groups, today],
@@ -304,35 +378,37 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
 
   const exportCsv = () => {
     if (active === "share") {
+      const line = (scope: string, r: ShareListRow) => [
+        scope,
+        r.name,
+        r.holders,
+        r.gens["G1"] ?? 0,
+        r.gens["G2.1"] ?? 0,
+        r.gens["G2.2"] ?? 0,
+        groupBy === "platform" ? r.own : "",
+        groupBy === "platform" ? r.partner : "",
+        r.countries,
+        pct1(r.share),
+        r.parts.map((p) => `${p.label} ${p.n}`).join(", "),
+      ];
       downloadCsv(
-        "market-share",
-        ["Scope", "Supplier", "Countries", "Share", "Which countries"],
+        `market-share-by-${groupBy}`,
         [
-          ...share.latest.rows.map((r) => [
-            "Newest generation",
-            r.name,
-            r.count,
-            pct(r.share),
-            r.countries.join(", "),
-          ]),
-          ...share.generations.flatMap((g) =>
-            g.suppliers.rows.map((r) => [
-              g.generation,
-              r.name,
-              r.count,
-              pct(r.share),
-              r.countries.join(", "),
-            ]),
-          ),
-          ...share.generations.flatMap((g) =>
-            g.platforms.rows.map((r) => [
-              `${g.generation} chip platform`,
-              r.name,
-              r.count,
-              pct(r.share),
-              r.countries.join(", "),
-            ]),
-          ),
+          "Scope",
+          groupBy === "platform" ? "Chip platform" : "Approval holder",
+          "Approvals",
+          "G1",
+          "G2.1",
+          "G2.2",
+          "Own approval",
+          "Via partner",
+          "Countries",
+          "Share",
+          groupBy === "platform" ? "Approval held by" : "Chip platform",
+        ],
+        [
+          ...share.rows.map((r) => line(includeHistory ? "All approvals" : "In force today", r)),
+          ...share.generations.flatMap((g) => g.rows.map((r) => line(g.generation, r))),
         ],
       );
     } else if (active === "moves") {
@@ -427,8 +503,7 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
     }
   };
 
-  const leader = share.latest.rows.find((r) => r.name !== UNKNOWN);
-  const g22 = share.generations.find((g) => g.generation === "G2.2")!;
+  const leader = share.rows.find((r) => r.name !== UNKNOWN_PLATFORM && r.name !== UNKNOWN);
   const steps = moves.kept + moves.switches.length;
   const expired = pipeline.expiring.filter((e) => e.bucket === "expired").length;
   const within12 = pipeline.expiring.filter(
@@ -478,34 +553,88 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
 
         {active === "share" && (
           <>
+            <div className="report-no-print flex flex-wrap items-center gap-4 rounded-md border bg-muted/40 px-3 py-2">
+              <Choice
+                label="Group by"
+                value={groupBy}
+                onChange={setGroupBy}
+                options={[
+                  { value: "platform", label: "Chip platform" },
+                  { value: "holder", label: "Approval holder" },
+                ]}
+              />
+              <Choice
+                label="Basis"
+                value={includeHistory ? "all" : "current"}
+                onChange={(v) => setIncludeHistory(v === "all")}
+                options={[
+                  { value: "current", label: "Approvals in force today" },
+                  { value: "all", label: "All approvals (including history)" },
+                ]}
+              />
+              <span className="text-xs text-muted-foreground">
+                Same figures as Market Analytics → Overview with product group “Card”.
+              </span>
+            </div>
+            <p className="text-sm">
+              <strong>
+                {groupBy === "platform" ? "By chip platform" : "By approval holder"} ·{" "}
+                {includeHistory ? "all approvals including history" : "approvals in force today"}
+              </strong>
+            </p>
+
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Tile label="Countries with a card approval" value={share.countries} />
               <Tile
-                label="Largest supplier (newest generation)"
+                label={includeHistory ? "Approvals on record" : "Approvals in force today"}
+                value={share.total}
+                hint={includeHistory ? "all card records" : `of ${share.records} card records`}
+              />
+              <Tile
+                label={groupBy === "platform" ? "Largest chip platform" : "Largest approval holder"}
                 value={leader?.name ?? "—"}
-                hint={leader ? `${leader.count} countries · ${pct(leader.share)}` : undefined}
+                hint={leader ? `${leader.holders} approvals · ${pct1(leader.share)}` : undefined}
               />
-              <Tile
-                label="Countries with a G2.2 card"
-                value={g22.suppliers.total}
-                hint={`${pct(share.countries ? g22.suppliers.total / share.countries : 0)} of all countries`}
-              />
-              <Tile
-                label="Suppliers with a G2.2 approval"
-                value={g22.suppliers.rows.filter((r) => r.name !== UNKNOWN).length}
-              />
+              {groupBy === "platform" ? (
+                <Tile
+                  label={`${leader?.name ?? "Leader"}: own / via partner`}
+                  value={leader ? `${leader.own} / ${leader.partner}` : "—"}
+                  hint="approval held by the platform vendor / by another card manufacturer"
+                />
+              ) : (
+                <Tile
+                  label="Approval holders"
+                  value={share.rows.filter((r) => r.name !== UNKNOWN).length}
+                />
+              )}
+              <Tile label="Countries" value={share.countries} />
             </div>
 
             <Section
-              title="Supplier of the newest card generation, per country"
-              note="For every country the newest approval of its newest generation counts — one supplier per country. This is the position in the market today."
+              title={
+                (includeHistory ? "Long-term share" : "Current market share") +
+                (groupBy === "platform" ? " by chip platform" : " by approval holder")
+              }
+              note={
+                (includeHistory
+                  ? "Every type approval on record, including superseded and delisted ones. "
+                  : "One type approval per country: the newest generation, within it the most recent approval, still listed on JRC today. ") +
+                (groupBy === "platform"
+                  ? "Grouped by the vendor of the chip platform, taken from the security certificate — whoever holds the approval. “Own” means the platform vendor holds the approval itself, “via partner” means another card manufacturer does."
+                  : "Grouped by the company that holds the type approval; below each name the chip platforms its cards are built on.")
+              }
             >
-              <ShareTable block={share.latest} nameLabel="Supplier" top={12} showCountries />
+              <ShareListTable rows={share.rows} groupBy={groupBy} detailed />
+              {share.notInForce.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Not in the figures (newest approval delisted or status unclear):{" "}
+                  {share.notInForce.join(", ")}
+                </p>
+              )}
             </Section>
 
             <Section
-              title="Supplier per generation"
-              note="Per generation the newest approval of each country. A country that moved on to a newer generation still counts in the older one — this shows how the positions shifted from generation to generation."
+              title="Within each generation"
+              note="The same approvals split by card generation. The percentage in a table is the share within that generation; the heading gives the generation’s part of all approvals."
             >
               <div className="grid gap-4 xl:grid-cols-3">
                 {share.generations.map((g) => (
@@ -513,24 +642,10 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
                     <div className="text-sm font-medium">
                       {g.generation}{" "}
                       <span className="font-normal text-muted-foreground">
-                        · {g.suppliers.total} countries
+                        · {g.total} approval{g.total === 1 ? "" : "s"} · {pct1(g.share)} of all
                       </span>
                     </div>
-                    <ShareTable block={g.suppliers} nameLabel="Supplier" top={7} />
-                  </div>
-                ))}
-              </div>
-            </Section>
-
-            <Section
-              title="Chip platform per generation"
-              note="The platform behind the card, derived from its security certificate — it also counts cards another company personalises on that platform. “Not known” means no certificate is recorded."
-            >
-              <div className="grid gap-4 xl:grid-cols-3">
-                {share.generations.map((g) => (
-                  <div key={g.generation} className="space-y-1.5">
-                    <div className="text-sm font-medium">{g.generation}</div>
-                    <ShareTable block={g.platforms} nameLabel="Platform" />
+                    <ShareListTable rows={g.rows} groupBy={groupBy} detailed={false} />
                   </div>
                 ))}
               </div>
@@ -872,11 +987,14 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
         )}
 
         <p className="border-t pt-3 text-xs text-muted-foreground">
-          How this is counted: one approval per country and generation (the newest); a record that
-          names two countries counts for both. Spellings of the same company are counted as one
-          supplier (for example “AKD d.o.o.” and “AKD”); placeholders such as “to be verified”
-          appear as “{UNKNOWN}”. The figures are as good as the records: check Tools → Data quality
-          and Tools → Consistency before quoting them.
+          How this is counted:{" "}
+          {active === "share"
+            ? "the market share uses the same computation as Market Analytics → Overview (product group Card), so both show the same figures. "
+            : "one approval per country and generation (the newest); a record that names two countries counts for both. "}
+          Spellings of the same company are counted as one supplier (for example “AKD d.o.o.” and
+          “AKD”); placeholders such as “to be verified” appear as “{UNKNOWN}”. The figures are as
+          good as the records: check Tools → Data quality and Tools → Consistency before quoting
+          them.
         </p>
       </div>
     </div>

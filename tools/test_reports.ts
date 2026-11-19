@@ -1,11 +1,11 @@
 // v2.83: the four marketing reports. Run: npx tsx tools/test_reports.ts
 import assert from "node:assert/strict";
 import { computeMarketStatus } from "../src/lib/market-status";
+import { computeShareList, notInForce, shareKeyOf, shareScope } from "../src/lib/market-share";
 import {
   dependencyReport,
   generationLeaders,
   inG22Area,
-  marketShareReport,
   movesReport,
   pipelineReport,
   supplierName,
@@ -184,26 +184,61 @@ const stray = computeMarketStatus(
 );
 assert.equal(generationLeaders(stray.groups).size, 0);
 
-// ---- 1. market share
-const share = marketShareReport(cards, ms.groups);
-assert.equal(share.countries, 6, "Monaco has no approval of a known generation");
-const latest = Object.fromEntries(share.latest.rows.map((r) => [r.name, r.count]));
-assert.deepEqual(latest, { Thales: 2, PWPW: 2, "CETIS d.d.": 1, "Hungarian Banknote Printing": 1 });
-const g22 = share.generations.find((g) => g.generation === "G2.2")!;
-assert.equal(g22.suppliers.total, 4);
-assert.equal(g22.suppliers.rows[0]!.count, 2);
-assert.equal(Math.round(g22.suppliers.rows[0]!.share * 100), 50);
-assert.deepEqual(
-  Object.fromEntries(g22.platforms.rows.map((r) => [r.name, r.count])),
-  { Thales: 2, STMicroelectronics: 2 },
-  "the platform comes from the security certificate",
-);
-const g1 = share.generations.find((g) => g.generation === "G1")!;
-assert.equal(
-  g1.suppliers.rows.find((r) => r.name === "Thales")!.count,
-  1,
-  "Gemalto counts as Thales",
-);
+// ---- 1. market share: one computation for Market Analytics and Reports
+{
+  const { scoped, current } = shareScope(cards, ms.byId, {
+    deviceType: "Card",
+    includeHistory: false,
+  });
+  assert.equal(scoped.length, 11);
+  // Germany, France, Hungary, Kazakhstan, "Bulgaria, Poland" — Monaco's placeholder is not in force
+  assert.equal(current.length, 5);
+
+  const byPlatform = computeShareList(current, "platform");
+  assert.deepEqual(
+    byPlatform.map((r) => [r.name, r.holders, r.own, r.partner, r.share]),
+    [
+      ["Thales", 4, 2, 2, 80],
+      ["STMicroelectronics", 1, 0, 1, 20],
+    ],
+    "the platform comes from the security certificate; own = the vendor holds the approval",
+  );
+  assert.deepEqual(byPlatform[0]!.gens, { "G2.2": 2, "G2.1": 1, G1: 1 });
+  assert.deepEqual(
+    byPlatform[0]!.parts.map((p) => [p.label, p.n, p.kind]),
+    [
+      ["Thales", 2, "own"],
+      ["CETIS d.d.", 1, "partner"],
+      ["Hungarian Banknote Printing", 1, "partner"],
+    ],
+  );
+
+  const byHolder = computeShareList(current, "holder");
+  assert.deepEqual(
+    byHolder.map((r) => [r.name, r.holders, r.share]),
+    [
+      ["Thales", 2, 40],
+      ["CETIS d.d.", 1, 20],
+      ["Hungarian Banknote Printing", 1, 20],
+      ["PWPW", 1, 20],
+    ],
+  );
+  // both groupings count the same approvals
+  const sum = (rows: { holders: number }[]) => rows.reduce((n, r) => n + r.holders, 0);
+  assert.equal(sum(byPlatform), current.length);
+  assert.equal(sum(byHolder), current.length);
+  assert.equal(shareKeyOf(cards[3]!, "holder"), "Thales", "Gemalto counts as Thales");
+
+  // history: every card record
+  const all = shareScope(cards, ms.byId, { deviceType: "Card", includeHistory: true });
+  assert.equal(all.current.length, 11);
+  assert.equal(
+    computeShareList(all.current, "platform").at(-1)!.name,
+    "Platform unknown",
+    "unknown goes last",
+  );
+  assert.deepEqual(notInForce(ms.groups, "Card"), ["Monaco"]);
+}
 
 // ---- 2. moves
 const moves = movesReport(ms.groups, today);

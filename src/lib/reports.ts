@@ -1,6 +1,8 @@
 // v2.83: the four product-marketing reports (menu "Reports").
 //
-//   1. Market share   — who supplies the cards of each generation, by country
+//   1. Market share   — computed in market-share.ts, the same figures as
+//                       Market Analytics (approvals in force, by chip platform
+//                       or approval holder)
 //   2. Moves          — new approvals of the last 12 months, supplier changes
 //                       from one generation to the next ("who replaced whom")
 //   3. Opportunities  — countries without a G2.2 approval, security
@@ -18,6 +20,9 @@ import { generationRank, type MarketGroup, type MarketStatusEntry } from "./mark
 import { parseCertificate } from "./cert-family";
 import { chipPlatformOf } from "./chip-platform";
 import { normalizeCountry } from "./country-flag";
+import { supplierName, UNKNOWN } from "./supplier";
+
+export { supplierName, UNKNOWN };
 
 export type ReportCard = {
   id: string;
@@ -45,46 +50,9 @@ export type ReportLine = { name: string; vendor: string; families: string[] };
 export const GENERATIONS = ["G1", "G2.1", "G2.2"] as const;
 export type Generation = (typeof GENERATIONS)[number];
 
-export const UNKNOWN = "Not known";
 const DAY = 86_400_000;
 
 const str = (v: unknown) => String(v ?? "").trim();
-
-// ------------------------------------------------------------------ suppliers
-//
-// The manufacturer field is free text: "AKD", "AKD d.o.o." and "Agencija za
-// komercijalnu djelatnost d.o.o (AKD)" are one company. Counted as written,
-// they split a supplier's share and turn a renewal into a "supplier change".
-// Only spellings of the same company are grouped — no mergers, no parents.
-
-const SUPPLIER_GROUPS: [RegExp, string][] = [
-  [/thales|gemalto/i, "Thales"],
-  [/idemia|oberthur|morpho/i, "IDEMIA"],
-  [/imprimerie nationale|\bin groupe\b/i, "Imprimerie Nationale"],
-  [/\bakd\b|agencija za komercijalnu/i, "AKD"],
-  [/pwpw|polska wytw/i, "PWPW"],
-  [/austria card/i, "Austria Card"],
-  [/giesecke|g\s*[+&]\s*d\b/i, "Giesecke+Devrient"],
-  [/kraftfahrt-bundesamt|\bkba\b/i, "Kraftfahrt-Bundesamt"],
-  [/cardplus/i, "CardPlus"],
-  [/fnmt|real casa de la moneda/i, "FNMT-RCM"],
-  [/security printing and systems/i, "Security Printing and Systems"],
-  [/\btobb\b|union of chambers/i, "TOBB"],
-  [/lodvila/i, "Lodvila"],
-  [/hungarian banknote/i, "Hungarian Banknote Printing"],
-  [/st[áa]tn[íi] tisk[áa]rna cenin/i, "Státní tiskárna cenin"],
-];
-const SUPPLIER_PLACEHOLDER =
-  /^$|to be verified|not publicly documented|not identified|not confirmed|unknown|^[-–—]+$/i;
-
-/** One name per company; UNKNOWN for placeholders. */
-export function supplierName(raw: unknown): string {
-  // "PWPW S.A. / DEMAX": the first name is the approval holder.
-  const first = str(raw).split(/\s+\/\s+/)[0] ?? "";
-  if (SUPPLIER_PLACEHOLDER.test(first)) return UNKNOWN;
-  for (const [re, name] of SUPPLIER_GROUPS) if (re.test(first)) return name;
-  return first;
-}
 
 // --------------------------------------------------------------------- basics
 
@@ -206,68 +174,6 @@ function latestLeader(byGen: Map<Generation, Leader>): Leader | null {
     if (l) return l;
   }
   return null;
-}
-
-// ------------------------------------------------------------ 1. market share
-
-export type ShareRow = { name: string; count: number; share: number; countries: string[] };
-export type ShareBlock = { total: number; rows: ShareRow[] };
-
-function shareBlock(items: { name: string; country: string }[]): ShareBlock {
-  const by = new Map<string, string[]>();
-  for (const i of items) by.set(i.name, [...(by.get(i.name) ?? []), i.country]);
-  const total = items.length;
-  const rows = [...by]
-    .map(([name, countries]) => ({
-      name,
-      count: countries.length,
-      share: total ? countries.length / total : 0,
-      countries: countries.sort((a, b) => a.localeCompare(b)),
-    }))
-    // "Not known" always last, whatever its size.
-    .sort(
-      (a, b) =>
-        Number(a.name === UNKNOWN) - Number(b.name === UNKNOWN) ||
-        b.count - a.count ||
-        a.name.localeCompare(b.name),
-    );
-  return { total, rows };
-}
-
-export type MarketShareReport = {
-  countries: number;
-  /** Supplier of each country's newest generation. */
-  latest: ShareBlock;
-  generations: { generation: Generation; suppliers: ShareBlock; platforms: ShareBlock }[];
-};
-
-export function marketShareReport(cards: ReportCard[], groups: MarketGroup[]): MarketShareReport {
-  const byId = new Map(cards.map((c) => [c.id, c]));
-  const leaders = generationLeaders(groups);
-  const latest: { name: string; country: string }[] = [];
-  for (const [country, byGen] of leaders) {
-    const l = latestLeader(byGen);
-    if (l) latest.push({ name: l.supplier, country });
-  }
-  return {
-    countries: leaders.size,
-    latest: shareBlock(latest),
-    generations: GENERATIONS.map((generation) => {
-      const list = [...leaders.values()]
-        .map((byGen) => byGen.get(generation))
-        .filter((l): l is Leader => !!l);
-      return {
-        generation,
-        suppliers: shareBlock(list.map((l) => ({ name: l.supplier, country: l.country }))),
-        platforms: shareBlock(
-          list.map((l) => {
-            const card = byId.get(l.cardId);
-            return { name: (card && chipPlatformOf(card).vendor) || UNKNOWN, country: l.country };
-          }),
-        ),
-      };
-    }),
-  };
 }
 
 // ------------------------------------------------------------------- 2. moves
