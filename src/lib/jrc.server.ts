@@ -157,6 +157,12 @@ export async function fetchOtherCertificateInfoEntries(rows?: OtherCertRow[]): P
     entries: others.map((r) => ({
       key: `${r.component}|${r.manufacturer}|${r.name}|${r.typeApproval}`,
       fingerprint: [r.interopCertificate, r.date, r.mandatoryUpdates, r.generation].join("|"),
+      labels: [
+        "Interoperability certificate",
+        "Date of approval",
+        "Mandatory security updates",
+        "Annex",
+      ],
       country: "",
       generation: r.generation,
       title: `${r.component} · ${r.name || r.typeApproval} — ${r.manufacturer}${
@@ -504,7 +510,13 @@ export function approvalPdfCandidates(
 async function readApprovalPdf(
   urls: string[],
 ): Promise<{ doc: ApprovalDoc | null; url: string; note: string }> {
-  let note = "no PDF found for this approval";
+  // v2.81: the most telling failure wins. The last candidate is usually a
+  // guessed URL that answers 404, which used to hide the real error of the
+  // linked document (e.g. the PDF reader failing).
+  let note = "";
+  const fail = (n: string) => {
+    if (!note || /^HTTP 404/.test(note)) note = n;
+  };
   for (const url of urls) {
     try {
       const res = await fetch(url, {
@@ -512,16 +524,16 @@ async function readApprovalPdf(
         signal: AbortSignal.timeout(APPROVAL_PDF_TIMEOUT_MS),
       });
       if (!res.ok) {
-        note = `HTTP ${res.status}`;
+        fail(`HTTP ${res.status}`);
         continue;
       }
       const buf = await res.arrayBuffer();
       if (buf.byteLength > APPROVAL_PDF_MAX_BYTES) {
-        note = "PDF too large";
+        fail("PDF too large");
         continue;
       }
       if (new TextDecoder().decode(buf.slice(0, 5)) !== "%PDF-") {
-        note = "not a PDF";
+        fail("not a PDF");
         continue;
       }
       const text = await extractPdfText(buf);
@@ -530,10 +542,10 @@ async function readApprovalPdf(
       }
       return { doc: parseApprovalText(text), url, note: "" };
     } catch (err) {
-      note = err instanceof Error ? err.message.slice(0, 120) : "read failed";
+      fail(err instanceof Error ? err.message.slice(0, 120) : "read failed");
     }
   }
-  return { doc: null, url: "", note };
+  return { doc: null, url: "", note: note || "no PDF found for this approval" };
 }
 
 /**
@@ -617,7 +629,10 @@ export function newRecordExtras(proposal: {
 
 const BACKFILL_PER_RUN = 8;
 const BACKFILL_RETRY_DAYS = 30;
-const BACKFILL_SNAPSHOT = "approval_pdf";
+// v2.81: "_v2" — every attempt before v2.81 failed in the PDF reader (Node 20
+// lacks Promise.withResolvers), so earlier "no PDF" marks must not hold off
+// the retry for 30 days.
+const BACKFILL_SNAPSHOT = "approval_pdf_v2";
 const CHIP_FIELDS = new Set([
   "chip_platform_vendor",
   "certified_security_platform",
@@ -772,6 +787,8 @@ type SnapshotEntry = {
   title: string;
   payload: Record<string, string>;
   generation?: string;
+  /** v2.81: names of the fingerprint parts, so a change can say what changed. */
+  labels?: string[];
   /** v2.71: JRC values for entries that can become a record (VU / MS). */
   jrc?: {
     manufacturer: string;
@@ -785,6 +802,29 @@ type SnapshotEntry = {
 
 const MAX_INFO_PER_SOURCE = 40;
 
+/**
+ * v2.81: what differs between the stored and the new state of an info entry,
+ * e.g. "KmWC: 12/03/2024 → 20/04/2026". An info finding used to say only
+ * "status updated", which tells nobody what happened.
+ */
+export function whatChanged(
+  previous: string | undefined,
+  entry: { fingerprint: string; labels?: string[] },
+): string {
+  if (previous === undefined) return "New on the JRC page";
+  const before = previous.split("|");
+  const after = entry.fingerprint.split("|");
+  const labels = entry.labels ?? [];
+  if (labels.length !== after.length) return "Values changed on the JRC page";
+  const parts: string[] = [];
+  for (let i = 0; i < after.length; i++) {
+    const o = (before[i] ?? "").trim();
+    const n = (after[i] ?? "").trim();
+    if (o !== n) parts.push(`${labels[i]}: ${o || "—"} → ${n || "—"}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "Values changed on the JRC page";
+}
+
 async function collectInfoEntries(
   source: Exclude<SourceKey, "card_status" | "other_certificates" | "ted_procurement">,
 ): Promise<{ entries: SnapshotEntry[]; rowsParsed: number }> {
@@ -797,6 +837,7 @@ async function collectInfoEntries(
       entries: rows.map((r) => ({
         key: `${r.country}|${r.equipment}|${r.certificate}`,
         fingerprint: `${r.endOfValidity}|${r.sha1}`,
+        labels: ["End of validity", "SHA-1"],
         country: r.country,
         title: `${r.country} · ${r.equipment} certificate ${r.certificate}`,
         payload: {
@@ -817,6 +858,7 @@ async function collectInfoEntries(
       entries: rows.map((r) => ({
         key: r.code,
         fingerprint: `${r.manufacturer}|${r.date}`,
+        labels: ["Manufacturer", "Assigned on"],
         country: "",
         title: `Manufacturer code ${r.code} · ${r.manufacturer}`,
         payload: {
@@ -834,6 +876,15 @@ async function collectInfoEntries(
       rowsParsed: rows.length,
       entries: rows.map((r) => ({
         key: r.country,
+        labels: [
+          "State authority identified",
+          "Policy approved",
+          "TC.C",
+          "KmWC",
+          "VU.C",
+          "KmVU",
+          "Km",
+        ],
         fingerprint: [r.stateAuthority, r.policyApproved, r.tcc, r.kmwc, r.vuc, r.kmvu, r.km].join(
           "|",
         ),
@@ -858,6 +909,16 @@ async function collectInfoEntries(
     rowsParsed: rows.length,
     entries: rows.map((r) => ({
       key: `${r.brand}|${r.model}`,
+      labels: [
+        "Version(s)",
+        "Type approval(s)",
+        "Vulnerable version(s)",
+        "Update to version(s)",
+        "Version(s) after update",
+        "Type approval(s) after update",
+        "Mandatory as from",
+        "Deadline",
+      ],
       fingerprint: [
         r.versions,
         r.typeApprovals,
@@ -1104,7 +1165,7 @@ export async function runUpdateCheckForSource(
           source_type: source,
           source_label: meta.label,
           title: e.title,
-          payload: e.payload,
+          payload: { ...e.payload, "What changed": whatChanged(snapshot.get(e.key), e) },
           changes: { fields: [] },
           status: "pending",
         };

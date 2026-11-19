@@ -340,11 +340,21 @@ function baseUrl(): string {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-type Finding = {
+export type Finding = {
   kind: string;
   source_type: string;
   source_label: string;
   title: string;
+  source_url?: string;
+  country?: string;
+  generation?: string;
+  jrc_manufacturer?: string;
+  jrc_card_name?: string;
+  jrc_certificate?: string;
+  jrc_date?: string;
+  jrc_type_approval?: string;
+  payload?: Record<string, string> | null;
+  changes?: { fields?: { label: string; old: string; new: string }[] } | null;
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -352,6 +362,115 @@ const KIND_LABEL: Record<string, string> = {
   changed: "Change",
   info: "Information",
 };
+
+const KIND_COLOUR: Record<string, string> = {
+  new: "#047857",
+  changed: "#b45309",
+  info: "#1d4ed8",
+};
+
+/** One line under each source heading: what the source is. */
+const SOURCE_NOTE: Record<string, string> = {
+  card_status: "Tachograph cards with a JRC interoperability certificate",
+  other_certificates: "Vehicle units, motion sensors, printer paper and other components",
+  public_key_certificates: "Member State public key certificates",
+  key_management: "Key management status per country as published by JRC",
+  security_updates: "Mandatory security updates for vehicle units",
+  manufacturer_codes: "Manufacturer codes assigned by JRC",
+  cc_certificates: "Common Criteria certificates (security certification of chips and cards)",
+  ted_procurement: "Public procurement notices (TED)",
+  research: "Findings read from approval documents",
+};
+
+/** Payload keys in the order they are worth reading; the rest follows. */
+const KEY_ORDER = [
+  "Device type",
+  "Manufacturer",
+  "Name",
+  "Country",
+  "Resolved country",
+  "Applicant country",
+  "Type approval certificate",
+  "Annex",
+  "Date of approval",
+  "Interoperability certificate",
+  "Mandatory security updates",
+  "Security certificate",
+  "Certificate issued",
+  "Chip",
+  "Approval document read",
+];
+/** Internal or repetitive keys the e-mail leaves out. */
+const SKIP_KEYS = new Set([
+  "What changed",
+  "Component",
+  "Basis",
+  "Chip basis",
+  "Country source",
+  "Country evidence",
+  "Country confidence",
+  "Confidence",
+  "Approval document",
+  "Type approval PDF",
+  "Country note",
+]);
+const MAX_ROWS = 10;
+
+export type DetailRow = { label: string; value: string; change?: { old: string; new: string } };
+
+const clip = (v: string, n = 200) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
+
+/** The facts the e-mail shows for one finding. */
+export function findingDetails(f: Finding): { rows: DetailRow[]; document: string } {
+  const rows: DetailRow[] = [];
+  const payload = f.payload ?? {};
+  const seen = new Set<string>();
+  const add = (label: string, value: string | undefined) => {
+    const v = String(value ?? "").trim();
+    if (!v || seen.has(label) || /^n\.?\/?a\.?$/i.test(v)) return;
+    seen.add(label);
+    rows.push({ label, value: clip(v) });
+  };
+
+  // 1. what changed
+  const what = String(payload["What changed"] ?? "").trim();
+  if (what) {
+    for (const part of what.split("; ")) {
+      const m = /^(.+?): (.*) → (.*)$/.exec(part);
+      if (m) rows.push({ label: m[1]!, value: "", change: { old: m[2]!, new: m[3]! } });
+      else rows.push({ label: "What changed", value: part });
+    }
+  }
+  for (const c of f.changes?.fields ?? []) {
+    rows.push({
+      label: c.label,
+      value: "",
+      change: { old: clip(c.old || "—", 120), new: clip(c.new || "—", 120) },
+    });
+    seen.add(c.label);
+  }
+
+  // 2. the facts of the entry
+  const keys = [
+    ...KEY_ORDER.filter((k) => k in payload),
+    ...Object.keys(payload).filter((k) => !KEY_ORDER.includes(k)),
+  ];
+  for (const k of keys) if (!SKIP_KEYS.has(k)) add(k, payload[k]);
+  // Proposals from the card list carry the facts in columns, not in the payload.
+  add("Manufacturer", f.jrc_manufacturer);
+  add("Name", f.jrc_card_name);
+  add("Country", f.country);
+  add("Type approval certificate", f.jrc_type_approval);
+  add("Generation", seen.has("Annex") ? "" : f.generation);
+  add("Date", seen.has("Date of approval") ? "" : f.jrc_date);
+  add("Interoperability certificate", f.jrc_certificate);
+
+  const doc = String(payload["Approval document"] ?? payload["Type approval PDF"] ?? "").trim();
+  return {
+    rows: rows.slice(0, MAX_ROWS + (what ? what.split("; ").length : 0)),
+    document: /^https?:\/\//.test(doc) ? doc : "",
+  };
+}
 
 export function composeRunMail(
   findings: Finding[],
@@ -364,46 +483,104 @@ export function composeRunMail(
     count("info") ? `${count("info")} information` : "",
   ].filter(Boolean);
   const subject = `Tachograph Data Hub: ${findings.length} finding(s) to review — ${parts.join(", ")}`;
+  const intro = `The update run found ${findings.length} entr${findings.length === 1 ? "y that waits" : "ies that wait"} for your decision.`;
+  const legend = [
+    count("new") ? "New entry: not in the data yet — approving it creates the record." : "",
+    count("changed") ? "Change: a value of an existing record differs from the source." : "",
+    count("info")
+      ? "Information: something changed on a source page that has no field in the data — approving it adds a note to the records of that country."
+      : "",
+  ].filter(Boolean);
 
   const groups = new Map<string, Finding[]>();
   for (const f of findings) groups.set(f.source_label, [...(groups.get(f.source_label) ?? []), f]);
 
-  const text = [
-    `The update run found ${findings.length} entr${findings.length === 1 ? "y that waits" : "ies that wait"} for your decision.`,
-    "",
-    ...[...groups].flatMap(([label, list]) => [
-      `${label} (${list.length})`,
-      ...list.map((f) => `  - ${KIND_LABEL[f.kind] ?? f.kind}: ${f.title}`),
-      "",
-    ]),
+  // ---- plain text
+  const text: string[] = [intro, "", ...legend, ""];
+  for (const [label, list] of groups) {
+    const note = SOURCE_NOTE[list[0]!.source_type];
+    text.push(`${label} (${list.length})${note ? ` — ${note}` : ""}`, "");
+    for (const f of list) {
+      const d = findingDetails(f);
+      text.push(`  ${KIND_LABEL[f.kind] ?? f.kind}: ${f.title}`);
+      for (const r of d.rows) {
+        text.push(
+          r.change
+            ? `      ${r.label}: ${r.change.old} → ${r.change.new}`
+            : `      ${r.label}: ${r.value}`,
+        );
+      }
+      if (d.document) text.push(`      Approval document: ${d.document}`);
+      if (f.source_url) text.push(`      Source: ${f.source_url}`);
+      text.push("");
+    }
+  }
+  text.push(
     link ? `Review and approve: ${link}` : "Review and approve them in the Update Monitor.",
     "",
     `Nothing was changed in the data. Sent by Tachograph Data Hub V${APP_VERSION}.`,
-  ].join("\n");
+  );
 
-  const html = [
-    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;line-height:1.5">`,
-    `<p>The update run found <strong>${findings.length}</strong> entr${findings.length === 1 ? "y that waits" : "ies that wait"} for your decision.</p>`,
-    ...[...groups].map(
-      ([label, list]) =>
-        `<p style="margin:16px 0 4px;font-weight:bold">${esc(label)} (${list.length})</p>` +
-        `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
-        list
-          .map(
-            (f) =>
-              `<tr><td style="padding:3px 12px 3px 0;white-space:nowrap;color:#6b7280;vertical-align:top">${esc(KIND_LABEL[f.kind] ?? f.kind)}</td>` +
-              `<td style="padding:3px 0">${esc(f.title)}</td></tr>`,
-          )
-          .join("") +
-        `</table>`,
-    ),
+  // ---- HTML (inline styles only: mail clients ignore style sheets)
+  const cell = "padding:2px 14px 2px 0;vertical-align:top";
+  const html: string[] = [
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;line-height:1.45;max-width:760px">`,
+    `<p style="margin:0 0 8px">${esc(intro)}</p>`,
+    legend.length
+      ? `<p style="margin:0 0 4px;color:#6b7280;font-size:12px">${legend.map(esc).join("<br>")}</p>`
+      : "",
+  ];
+  for (const [label, list] of groups) {
+    const note = SOURCE_NOTE[list[0]!.source_type];
+    html.push(
+      `<h3 style="margin:22px 0 2px;font-size:15px">${esc(label)} (${list.length})</h3>`,
+      note ? `<div style="color:#6b7280;font-size:12px;margin-bottom:8px">${esc(note)}</div>` : "",
+    );
+    for (const f of list) {
+      const d = findingDetails(f);
+      const colour = KIND_COLOUR[f.kind] ?? "#374151";
+      const rows = d.rows
+        .map((r) =>
+          r.change
+            ? `<tr><td style="${cell};color:#6b7280;white-space:nowrap">${esc(r.label)}</td>` +
+              `<td style="padding:2px 0"><span style="color:#9ca3af;text-decoration:line-through">${esc(r.change.old)}</span>` +
+              ` &rarr; <strong>${esc(r.change.new)}</strong></td></tr>`
+            : `<tr><td style="${cell};color:#6b7280;white-space:nowrap">${esc(r.label)}</td>` +
+              `<td style="padding:2px 0">${
+                /^https?:\/\/\S+$/.test(r.value)
+                  ? `<a href="${esc(r.value)}" style="color:#2563eb;word-break:break-all">${esc(r.value)}</a>`
+                  : esc(r.value)
+              }</td></tr>`,
+        )
+        .join("");
+      const links = [
+        d.document
+          ? `<a href="${esc(d.document)}" style="color:#2563eb">Approval document</a>`
+          : "",
+        f.source_url ? `<a href="${esc(f.source_url)}" style="color:#2563eb">Source page</a>` : "",
+      ].filter(Boolean);
+      html.push(
+        `<div style="border:1px solid #e5e7eb;border-left:4px solid ${colour};border-radius:6px;padding:10px 12px;margin:8px 0">`,
+        `<div style="margin-bottom:6px"><span style="display:inline-block;font-size:11px;font-weight:bold;color:#ffffff;background:${colour};border-radius:4px;padding:1px 6px;margin-right:6px">${esc(KIND_LABEL[f.kind] ?? f.kind)}</span>`,
+        `<strong>${esc(f.title)}</strong></div>`,
+        rows
+          ? `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">${rows}</table>`
+          : "",
+        links.length
+          ? `<div style="margin-top:6px;font-size:12px">${links.join(" &middot; ")}</div>`
+          : "",
+        `</div>`,
+      );
+    }
+  }
+  html.push(
     link
-      ? `<p style="margin-top:20px"><a href="${esc(link)}" style="background:#2563eb;color:#ffffff;padding:8px 14px;border-radius:6px;text-decoration:none">Open the Update Monitor</a></p>`
-      : `<p style="margin-top:20px">Review and approve them in the Update Monitor.</p>`,
+      ? `<p style="margin-top:22px"><a href="${esc(link)}" style="background:#2563eb;color:#ffffff;padding:8px 14px;border-radius:6px;text-decoration:none">Open the Update Monitor</a></p>`
+      : `<p style="margin-top:22px">Review and approve them in the Update Monitor.</p>`,
     `<p style="color:#6b7280;font-size:12px;margin-top:20px">Nothing was changed in the data. Sent by Tachograph Data Hub V${APP_VERSION}.</p>`,
     `</div>`,
-  ].join("");
-  return { subject, text, html };
+  );
+  return { subject, text: text.join("\n"), html: html.filter(Boolean).join("") };
 }
 
 /**
@@ -432,7 +609,9 @@ export async function notifyUpdateRun(run: {
   // A few seconds of slack: the proposals carry the database clock.
   const since = new Date(run.startedAt.getTime() - 5000).toISOString();
   const rows = await eventsQuery<Finding>(
-    `SELECT kind, source_type, source_label, title
+    `SELECT kind, source_type, source_label, title, source_url, country, generation,
+            jrc_manufacturer, jrc_card_name, jrc_certificate, jrc_date, jrc_type_approval,
+            payload, changes
        FROM public.jrc_update_proposals
       WHERE created_at >= $1 AND status = 'pending'
       ORDER BY source_label, kind DESC, title
@@ -490,15 +669,31 @@ export async function sendTestMail(to?: string): Promise<{ recipients: string[] 
     [
       {
         kind: "new",
-        source_type: "card_status",
-        source_label: "Card status",
-        title: "Test — this is what a new JRC entry looks like (e0-0000-00)",
-      },
-      {
-        kind: "changed",
         source_type: "other_certificates",
         source_label: "Other certificates",
-        title: "Test — this is what a changed JRC entry looks like",
+        source_url: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
+        title: "Test — VU · Example Vehicle Unit — Example Manufacturer (G2.2)",
+        payload: {
+          "Device type": "Vehicle Unit",
+          Manufacturer: "Example Manufacturer",
+          Name: "Example Vehicle Unit",
+          "Type approval certificate": "e0-0000-00",
+          Annex: "G2.2 (Annex 1C v2)",
+          "Date of approval": "01/01/2026",
+          "Interoperability certificate": "JRC_DTLab/A2-000/2026",
+        },
+      },
+      {
+        kind: "info",
+        source_type: "key_management",
+        source_label: "Key management status",
+        source_url: "https://dtc.jrc.ec.europa.eu/dtc_key_management_status_dt.php.html",
+        title: "Test — Example country · key management status updated",
+        payload: {
+          "What changed": "KmWC: 12/03/2024 → 20/04/2026",
+          Country: "Example country",
+          "Policy approved": "17/05/2022",
+        },
       },
     ],
     baseUrl(),

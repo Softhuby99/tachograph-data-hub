@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addressOf, buildMessage, isMailAddress, sendMail } from "../src/lib/smtp.server";
 import { composeRunMail, decryptSecret, encryptSecret } from "../src/lib/notify.server";
+import { whatChanged } from "../src/lib/jrc.server";
 import { scryptSync } from "node:crypto";
 
 type Seen = { auth: string; from: string; rcpt: string[]; data: string; tls: boolean };
@@ -249,26 +250,68 @@ try {
   assert.throws(() => encryptSecret("x", null), /ADMIN_TOKEN/);
 }
 
-// ---- the run mail
+// ---- what changed in an info entry (v2.81)
+assert.equal(
+  whatChanged("17/03/2010|04/05/2010|||||", {
+    fingerprint: "17/03/2010|04/05/2010||12/03/2024|||",
+    labels: ["State authority identified", "Policy approved", "TC.C", "KmWC", "VU.C", "KmVU", "Km"],
+  }),
+  "KmWC: — → 12/03/2024",
+);
+assert.equal(
+  whatChanged(undefined, { fingerprint: "a|b", labels: ["A", "B"] }),
+  "New on the JRC page",
+);
+assert.equal(whatChanged("a", { fingerprint: "a|b" }), "Values changed on the JRC page");
+
+// ---- the run mail (v2.81: with the facts of every finding)
 const mail = composeRunMail(
   [
     {
       kind: "new",
-      source_type: "card_status",
-      source_label: "Card status",
-      title: "New entry · Kazakhstan · e26-23-1",
+      source_type: "other_certificates",
+      source_label: "Other certificates",
+      source_url: "https://dtc.jrc.ec.europa.eu/dtc_other_certificates.php.html",
+      title: "VU · SE5000-8.1 Rev E — Stoneridge Electronics AB (G2.2)",
+      jrc_manufacturer: "Stoneridge Electronics AB",
+      jrc_type_approval: "e5-0002-11",
+      payload: {
+        Component: "VU",
+        "Device type": "Vehicle Unit",
+        Manufacturer: "Stoneridge Electronics AB",
+        Name: "SE5000-8.1 Rev E Transitional VU",
+        "Type approval certificate": "e5-0002-11",
+        Annex: "G2.2 (Annex 1C v2)",
+        "Date of approval": "28/05/2024",
+        "Interoperability certificate": "JRC_DTLab/A2-162/2023",
+        "Mandatory security updates": "YES, see details",
+        "Approval document": "https://dtc.jrc.ec.europa.eu/PDF_OtherCertificates/e5-0002-11.pdf",
+      },
     },
     {
       kind: "changed",
       source_type: "card_status",
       source_label: "Card status",
       title: "Spain · e9-0006-00 <b>",
+      country: "Spain",
+      jrc_type_approval: "e9-0006-00",
+      changes: {
+        fields: [{ label: "JRC Interoperability Status", old: "", new: "JRC_DTLab/A3-1/2026" }],
+      },
     },
     {
       kind: "info",
       source_type: "key_management",
       source_label: "Key management status",
-      title: "Malta · updated",
+      title: "Malta · key management status updated",
+      country: "Malta",
+      payload: {
+        "What changed": "KmWC: 12/03/2024 → 20/04/2026; VU.C: — → 01/02/2026",
+        Country: "Malta",
+        "Policy approved": "17/05/2022",
+        KmWC: "20/04/2026",
+        Km: "",
+      },
     },
   ],
   "https://tdh.example.org",
@@ -277,11 +320,39 @@ assert.equal(
   mail.subject,
   "Tachograph Data Hub: 3 finding(s) to review — 1 new, 1 changed, 1 information",
 );
-assert.match(mail.text, /Card status \(2\)\n {2}- New entry: New entry · Kazakhstan · e26-23-1/);
+// what changed comes first, as old → new
+assert.match(
+  mail.text,
+  /Information: Malta · key management status updated\n {6}KmWC: 12\/03\/2024 → 20\/04\/2026\n {6}VU\.C: — → 01\/02\/2026/,
+);
+assert.match(
+  mail.text,
+  /Change: Spain · e9-0006-00 <b>\n {6}JRC Interoperability Status: — → JRC_DTLab\/A3-1\/2026/,
+);
+// the facts of a new entry, without internal keys and without repeating them
+assert.match(mail.text, /Device type: Vehicle Unit/);
+assert.match(mail.text, /Date of approval: 28\/05\/2024/);
+assert.match(
+  mail.text,
+  /Approval document: https:\/\/dtc\.jrc\.ec\.europa\.eu\/PDF_OtherCertificates\/e5-0002-11\.pdf/,
+);
+assert.ok(!/Component:/.test(mail.text), "internal keys are left out");
+assert.equal(
+  mail.text.match(/Manufacturer: Stoneridge/g)?.length,
+  1,
+  "payload and column facts are not repeated",
+);
+assert.ok(!/ {6}Km: /.test(mail.text), "empty values are left out");
+assert.match(mail.text, /Other certificates \(1\) — Vehicle units, motion sensors/);
 assert.match(mail.text, /Review and approve: https:\/\/tdh\.example\.org/);
+// HTML: escaped, struck-through old value
 assert.ok(
   mail.html.includes("&lt;b&gt;") && !mail.html.includes("<b>"),
   "titles are escaped in the HTML part",
+);
+assert.match(mail.html, /line-through">12\/03\/2024<\/span> &rarr; <strong>20\/04\/2026<\/strong>/);
+assert.ok(
+  mail.html.includes('href="https://dtc.jrc.ec.europa.eu/PDF_OtherCertificates/e5-0002-11.pdf"'),
 );
 
 console.log("smtp: ok");

@@ -276,7 +276,32 @@ const CC_TEXT_MAX_PAGES = 8; // number + PP references sit on the first pages
 const CC_FETCH_CONCURRENCY = 4;
 
 /** Extract plain text from the first pages of a certificate / report PDF. */
+/**
+ * v2.81: pdfjs-dist 6 calls Promise.withResolvers, which Node only has from
+ * version 22 — the container runs Node 20. Without it every PDF failed to open
+ * ("Promise.withResolvers is not a function"), so no approval certificate was
+ * ever read on the server. Defined once, only where it is missing.
+ */
+function ensurePromiseWithResolvers(): void {
+  const P = Promise as unknown as { withResolvers?: unknown };
+  if (typeof P.withResolvers === "function") return;
+  Object.defineProperty(Promise, "withResolvers", {
+    configurable: true,
+    writable: true,
+    value: function withResolvers<T>() {
+      let resolve!: (value: T | PromiseLike<T>) => void;
+      let reject!: (reason?: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    },
+  });
+}
+
 export async function extractPdfText(data: ArrayBuffer): Promise<string> {
+  ensurePromiseWithResolvers();
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
   pdfjs.GlobalWorkerOptions.workerPort = null as never; // run on the main thread (Worker runtime)
   const doc = await pdfjs.getDocument({
