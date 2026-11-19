@@ -178,6 +178,11 @@ export function ManufacturerTimeline({
   );
 }
 
+// v2.88: the fields form as many columns as the detail pane has room for
+// (container query) — two on a laptop, three or four on a wide screen.
+const FIELD_GRID = "grid gap-x-6 gap-y-3 md:grid-cols-2 @5xl:grid-cols-3 @[100rem]:grid-cols-4";
+const FIELD_WIDE = "md:col-span-2 @5xl:col-span-full";
+
 export function DetailView({
   card,
   edited,
@@ -228,7 +233,7 @@ export function DetailView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="@container space-y-6">
       <div className="flex flex-wrap items-center gap-4">
         {flagUrl(card.country, 80) ? (
           <img
@@ -241,8 +246,8 @@ export function DetailView({
         ) : (
           <span className="text-4xl leading-none">{card.country_flag}</span>
         )}
-        <div>
-          <h2 className="text-2xl font-semibold">
+        <div className="min-w-0 flex-1">
+          <h2 className="break-words text-2xl font-semibold">
             {card.country || card.tachograph_application_os || card.current_manufacturer || "—"}
             {edited && (
               <Badge variant="outline" className="ml-2 align-middle text-xs">
@@ -303,7 +308,7 @@ export function DetailView({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+        <CardContent className={FIELD_GRID}>
           {GROUP1_FIELDS.map(([k, label]) => {
             const key = k as string;
             let value = String((card as Record<string, unknown>)[key] ?? "");
@@ -354,7 +359,7 @@ export function DetailView({
               );
             }
             if (key === "jrc_certificate_source" || key === "primary_source") {
-              return <LinkField key={key} label={label} value={value} className="md:col-span-2" />;
+              return <LinkField key={key} label={label} value={value} className={FIELD_WIDE} />;
             }
             if (key === "certificate_expiry_date") {
               return (
@@ -379,7 +384,7 @@ export function DetailView({
             return <Field key={key} label={label} value={value} />;
           })}
           {!editing && (
-            <div className="md:col-span-2">
+            <div className={FIELD_WIDE}>
               <CertificationChainPanel card={card} />
             </div>
           )}
@@ -394,11 +399,11 @@ export function DetailView({
             Procurement
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+        <CardContent className={FIELD_GRID}>
           <Field
             label="Latest Tender / Procurement Procedure"
             value={card.latest_tender}
-            className="md:col-span-2"
+            className={FIELD_WIDE}
           />
           <Field label="Winner / Contractor" value={card.winner_contractor} />
           <Field label="Procurement Status / Assessment" value={card.procurement_status} />
@@ -406,13 +411,13 @@ export function DetailView({
             <Field
               label="Scope / Assessment"
               value={card.procurement_scope}
-              className="md:col-span-2"
+              className={FIELD_WIDE}
             />
           )}
           <LinkField
             label="Tender / Procurement Source"
             value={card.tender_source}
-            className="md:col-span-2"
+            className={FIELD_WIDE}
           />
         </CardContent>
       </Card>

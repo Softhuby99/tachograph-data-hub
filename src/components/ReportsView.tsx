@@ -636,7 +636,7 @@ export function ReportsView({ cards, marketStatus, onOpenCard, initialReport = "
               title="Within each generation"
               note="The same approvals split by card generation. The percentage in a table is the share within that generation; the heading gives the generation’s part of all approvals."
             >
-              <div className="grid gap-4 xl:grid-cols-3">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-3">
                 {share.generations.map((g) => (
                   <div key={g.generation} className="space-y-1.5">
                     <div className="text-sm font-medium">

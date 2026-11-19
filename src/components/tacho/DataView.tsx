@@ -99,13 +99,13 @@ export function DataView({
     }
   };
 
-  // v2.46: the list / detail split is draggable. Dragging the divider widens
-  // the list; the detail pane keeps (at least) the width it has in the default
-  // layout and moves right — the row scrolls horizontally instead of the
-  // detail pane being squeezed. Width is remembered per browser.
-  const DEFAULT_LIST_W = 360;
+  // The list / detail split is draggable (v2.46); the width is remembered per
+  // browser. v2.88: without a remembered width the list takes a share of the
+  // screen, and it never grows so far that the detail pane is pushed out of
+  // view — the row used to scroll sideways and cut the record off.
   const SPLITTER_W = 24;
-  const [listWidth, setListWidth] = useState<number>(DEFAULT_LIST_W);
+  const DETAIL_MIN_W = 560;
+  const [listWidth, setListWidth] = useState<number | null>(null);
   // Read after mount (not in the initializer) so server and client render the
   // same markup first.
   useEffect(() => {
@@ -116,23 +116,47 @@ export function DataView({
       /* storage unavailable */
     }
   }, []);
-  const [detailMinWidth, setDetailMinWidth] = useState<number | null>(null);
   const splitRef = useRef<HTMLDivElement | null>(null);
-  const splitDrag = useRef<{ x: number; w: number } | null>(null);
-  // Width the detail pane has with the default list width; it never gets
-  // narrower than that (re-measured when the window is resized).
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const splitDrag = useRef<{ x: number; w: number; max: number } | null>(null);
+  // v2.88: next to the record (wide layout) the list ends at the bottom edge
+  // of the window, whatever the screen height and however far the page is
+  // scrolled. Set on the element directly: this runs on every scroll frame
+  // and must not re-render the list. Below the wide layout the class applies.
+  const listBoxRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const measure = () => {
-      const el = splitRef.current;
-      if (el) setDetailMinWidth(Math.max(480, el.clientWidth - DEFAULT_LIST_W - SPLITTER_W));
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      const el = listBoxRef.current;
+      if (!el) return;
+      if (!window.matchMedia("(min-width: 1024px)").matches) {
+        el.style.height = "";
+        return;
+      }
+      const top = Math.max(0, el.getBoundingClientRect().top);
+      el.style.height = `${Math.max(320, Math.round(window.innerHeight - top - 16))}px`;
     };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(fit);
+    };
+    fit();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    // filters, the manufacturer timeline or a wrapping header move the list
+    const observer = new ResizeObserver(schedule);
+    observer.observe(document.body);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, []);
-  const saveListWidth = (w: number) => {
+  const saveListWidth = (w: number | null) => {
     try {
-      window.localStorage.setItem("tdh.dataListWidth", String(Math.round(w)));
+      if (w === null) window.localStorage.removeItem("tdh.dataListWidth");
+      else window.localStorage.setItem("tdh.dataListWidth", String(Math.round(w)));
     } catch {
       /* storage unavailable — width just isn't remembered */
     }
@@ -140,13 +164,20 @@ export function DataView({
   const startSplitDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    splitDrag.current = { x: e.clientX, w: listWidth };
+    // Start from what is on screen (the automatic or the limited width), and
+    // stop where the detail pane reaches its minimum.
+    const row = splitRef.current?.clientWidth ?? 0;
+    splitDrag.current = {
+      x: e.clientX,
+      w: listRef.current?.getBoundingClientRect().width ?? 360,
+      max: Math.max(260, row - SPLITTER_W - DETAIL_MIN_W),
+    };
     document.body.style.userSelect = "none";
   };
   const moveSplitDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = splitDrag.current;
     if (!d) return;
-    setListWidth(Math.min(1600, Math.max(260, d.w + e.clientX - d.x)));
+    setListWidth(Math.min(d.max, Math.max(260, d.w + e.clientX - d.x)));
   };
   const endSplitDrag = () => {
     if (!splitDrag.current) return;
@@ -216,7 +247,7 @@ export function DataView({
   return (
     <>
       <Card className="mb-6">
-        <CardContent className="grid gap-3 pt-6 md:grid-cols-2 lg:grid-cols-5">
+        <CardContent className="grid gap-3 pt-6 md:grid-cols-2 lg:grid-cols-5 2xl:grid-cols-7">
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Full-text search
@@ -327,15 +358,19 @@ export function DataView({
 
       <div
         ref={splitRef}
-        className="flex flex-col gap-6 lg:flex-row lg:gap-0 lg:overflow-x-auto lg:pb-2"
+        className="flex flex-col gap-6 lg:flex-row lg:gap-0"
         style={
           {
-            "--list-w": `${listWidth}px`,
-            "--detail-min-w": detailMinWidth ? `${detailMinWidth}px` : "0px",
+            // remembered width, or a share of the row that grows with the screen
+            "--list-w": listWidth ? `${listWidth}px` : "clamp(360px, 26%, 520px)",
+            "--list-max": `calc(100% - ${SPLITTER_W + DETAIL_MIN_W}px)`,
           } as CSSProperties
         }
       >
-        <div className="min-w-0 lg:w-[var(--list-w)] lg:shrink-0">
+        <div
+          ref={listRef}
+          className="min-w-0 lg:sticky lg:top-4 lg:w-[min(var(--list-w),var(--list-max))] lg:shrink-0 lg:self-start"
+        >
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <p className="text-sm text-muted-foreground">
               {statusView === "all"
@@ -352,79 +387,81 @@ export function DataView({
               </button>
             )}
           </div>
-          <ScrollArea className="h-[70vh] rounded-lg border bg-card">
-            <div className="divide-y">
-              {filtered.map((c) => {
-                const active = selected?.id === c.id;
-                const fUrl = flagUrl(c.country, 40);
-                const edited = !!overrides[c.id];
-                const status = marketStatusById?.get(c.id)?.status;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedId(c.id)}
-                    className={
-                      "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent " +
-                      (active ? "bg-accent" : "")
-                    }
-                  >
-                    {fUrl ? (
-                      <img
-                        src={fUrl}
-                        alt={`${c.country} flag`}
-                        width={32}
-                        height={24}
-                        loading="lazy"
-                        className="h-6 w-8 shrink-0 rounded-sm border object-cover shadow-sm"
-                      />
-                    ) : (
-                      <span className="text-2xl leading-none">{c.country_flag}</span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <span className="truncate font-medium">
-                          {/* A vehicle unit or motion sensor has no country —
+          <div ref={listBoxRef} className="h-[70vh]">
+            <ScrollArea className="h-full rounded-lg border bg-card">
+              <div className="divide-y">
+                {filtered.map((c) => {
+                  const active = selected?.id === c.id;
+                  const fUrl = flagUrl(c.country, 40);
+                  const edited = !!overrides[c.id];
+                  const status = marketStatusById?.get(c.id)?.status;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedId(c.id)}
+                      className={
+                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent " +
+                        (active ? "bg-accent" : "")
+                      }
+                    >
+                      {fUrl ? (
+                        <img
+                          src={fUrl}
+                          alt={`${c.country} flag`}
+                          width={32}
+                          height={24}
+                          loading="lazy"
+                          className="h-6 w-8 shrink-0 rounded-sm border object-cover shadow-sm"
+                        />
+                      ) : (
+                        <span className="text-2xl leading-none">{c.country_flag}</span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className="truncate font-medium">
+                            {/* A vehicle unit or motion sensor has no country —
                               without a fallback the row would be blank. */}
-                          {c.country ||
-                            c.tachograph_application_os ||
-                            c.current_manufacturer ||
-                            "—"}
-                          {edited && (
-                            <Badge variant="outline" className="ml-2 text-[10px]">
-                              edited
-                            </Badge>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1">
-                          <ExpiryBadge expiry={expiryOf(c.certificate_expiry_date)} compact />
-                          {status && (
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] ${MARKET_STATUS_BADGE_CLASS[status]}`}
-                              title="Market status — see the Market Analytics tab"
-                            >
-                              {MARKET_STATUS_LABEL[status]}
-                            </Badge>
-                          )}
-                          <Badge variant="secondary">{c.generation}</Badge>
-                        </span>
+                            {c.country ||
+                              c.tachograph_application_os ||
+                              c.current_manufacturer ||
+                              "—"}
+                            {edited && (
+                              <Badge variant="outline" className="ml-2 text-[10px]">
+                                edited
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1">
+                            <ExpiryBadge expiry={expiryOf(c.certificate_expiry_date)} compact />
+                            {status && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] ${MARKET_STATUS_BADGE_CLASS[status]}`}
+                                title="Market status — see the Market Analytics tab"
+                              >
+                                {MARKET_STATUS_LABEL[status]}
+                              </Badge>
+                            )}
+                            <Badge variant="secondary">{c.generation}</Badge>
+                          </span>
+                        </div>
+                        <p className="line-clamp-1 text-xs text-muted-foreground">
+                          {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
+                        </p>
                       </div>
-                      <p className="line-clamp-1 text-xs text-muted-foreground">
-                        {c.current_manufacturer_normalized || c.current_manufacturer || "—"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-              {filtered.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  {hiddenByStatus > 0
-                    ? `No ${STATUS_VIEW_LABEL[statusView].toLowerCase()} records match — ${hiddenByStatus} in the history.`
-                    : "No matches."}
-                </p>
-              )}
-            </div>
-          </ScrollArea>
+                    </button>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    {hiddenByStatus > 0
+                      ? `No ${STATUS_VIEW_LABEL[statusView].toLowerCase()} records match — ${hiddenByStatus} in the history.`
+                      : "No matches."}
+                  </p>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
         </div>
 
         <div
@@ -438,14 +475,14 @@ export function DataView({
           onPointerUp={endSplitDrag}
           onPointerCancel={endSplitDrag}
           onDoubleClick={() => {
-            setListWidth(DEFAULT_LIST_W);
-            saveListWidth(DEFAULT_LIST_W);
+            setListWidth(null);
+            saveListWidth(null);
           }}
         >
-          <div className="h-[70vh] w-1 rounded-full bg-border transition-colors group-hover:bg-primary/50 group-active:bg-primary" />
+          <div className="w-1 rounded-full bg-border transition-colors group-hover:bg-primary/50 group-active:bg-primary" />
         </div>
 
-        <div className="min-w-0 lg:min-w-[var(--detail-min-w)] lg:flex-1">
+        <div className="min-w-0 lg:flex-1">
           {selected ? (
             <DetailView
               card={selected}

@@ -370,198 +370,208 @@ export function WorldMapView({
           </div>
         </CardHeader>
         <CardContent>
+          {/* v2.88: the map keeps its proportions, so on a wide window it is
+              limited by the height of the screen and centred. */}
           <div
-            ref={containerRef}
-            className="relative w-full cursor-grab overflow-hidden rounded-lg border active:cursor-grabbing"
+            className="overflow-hidden rounded-lg border"
             style={{ background: MAP.bg, borderColor: MAP.border }}
-            onPointerDown={(e) => {
-              dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
-              e.currentTarget.setPointerCapture(e.pointerId);
-            }}
-            onPointerMove={(e) => {
-              const d = dragRef.current;
-              if (!d) return;
-              setHover(null);
-              const rect = e.currentTarget.getBoundingClientRect();
-              const sx = WIDTH / rect.width;
-              const sy = HEIGHT / rect.height;
-              setOffset({
-                x: d.ox + (e.clientX - d.x) * sx,
-                y: d.oy + (e.clientY - d.y) * sy,
-              });
-            }}
-            onPointerUp={() => (dragRef.current = null)}
-            onPointerLeave={() => {
-              dragRef.current = null;
-              setHover(null);
-            }}
           >
-            <svg
-              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-              className="h-auto w-full touch-none select-none"
-              role="img"
-              aria-label="World map of tachograph card type approvals"
-            >
-              <g transform={`translate(${offset.x},${offset.y}) scale(${zoom})`}>
-                {shapes.map((s) => {
-                  const app = atlasToApp.get(s.name);
-                  const active = app && app === selected;
-                  return (
-                    <path
-                      key={s.name}
-                      d={s.d}
-                      className={app ? "cursor-pointer" : undefined}
-                      fill={
-                        app
-                          ? active
-                            ? MAP.sel
-                            : hover?.country === app
-                              ? MAP.hasHover
-                              : MAP.has
-                          : MAP.land
-                      }
-                      stroke={MAP.bg}
-                      strokeWidth={0.5 / zoom}
-                      onClick={() => app && setSelected(app)}
-                      onPointerMove={app ? (e) => tipAt(app, e) : undefined}
-                      onPointerLeave={app ? () => setHover(null) : undefined}
-                    >
-                      {!app && <title>{s.name}</title>}
-                    </path>
-                  );
-                })}
-
-                {labels.map((l) => {
-                  const active = l.country === selected;
-                  const top = topApproval?.get(l.country);
-                  const color = activeColor(top);
-                  const platform = platformDisplay(
-                    top?.status === "current" ? l.cards.find((c) => c.id === top.id) : undefined,
-                  );
-                  return (
-                    <g
-                      key={l.country}
-                      transform={`translate(${l.xy[0]},${l.xy[1]}) scale(${1 / zoom})`}
-                      className="cursor-pointer"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerMove={(e) => tipAt(l.country, e)}
-                      onPointerLeave={() => setHover(null)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelected(l.country);
-                        setCardModal(null);
-                        setCountryModal(l.country);
-                      }}
-                    >
-                      <title>{`${l.country}: ${top?.generation || "Generation unknown"}; ${platform.vendor || "Platform unverified"}; ${platform.relation}`}</title>
-                      {active && <circle r={17} fill="none" stroke="#ffffff" strokeWidth={1} />}
-                      <circle
-                        r={14}
-                        fill="none"
-                        stroke={platform.color}
-                        strokeWidth={2}
-                        strokeDasharray={platform.vendor ? undefined : "3 3"}
-                      />
-                      <circle
-                        r={11}
-                        fill={color ?? MAP.dark}
-                        stroke={active ? "#ffffff" : color ? MAP.dark : MAP.none}
-                        strokeWidth={active ? 2.5 : 1.5}
-                        strokeDasharray={color || active ? undefined : "3 2"}
-                      />
-                      <text
-                        textAnchor="middle"
-                        dy="0.35em"
-                        fill={color ? MAP.dark : MAP.text}
-                        className="text-[11px] font-bold"
-                      >
-                        {l.cards.length}
-                      </text>
-                      {showNumbers && (
-                        <text
-                          textAnchor="middle"
-                          y={24}
-                          fill={MAP.text}
-                          className="text-[9px] font-semibold"
-                        >
-                          {l.country}
-                        </text>
-                      )}
-                      {showNumbers &&
-                        l.cards.slice(0, 4).map((c, i) => (
-                          <text
-                            key={c.id}
-                            textAnchor="middle"
-                            y={34 + i * 10}
-                            fill={MAP.muted}
-                            className="text-[8px]"
-                          >
-                            {c.type_approval_number || c.generation}
-                          </text>
-                        ))}
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
-
-            {/* Legend */}
             <div
-              className="pointer-events-none absolute bottom-2 left-2 rounded-md border px-2.5 py-2 text-[11px] leading-5"
-              style={{
-                background: "rgba(15,23,42,0.88)",
-                borderColor: MAP.border,
-                color: MAP.text,
+              ref={containerRef}
+              className="relative mx-auto w-full cursor-grab overflow-hidden active:cursor-grabbing"
+              style={{ maxWidth: `max(320px, calc((100vh - 17rem) * ${WIDTH / HEIGHT}))` }}
+              onPointerDown={(e) => {
+                dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                const d = dragRef.current;
+                if (!d) return;
+                setHover(null);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const sx = WIDTH / rect.width;
+                const sy = HEIGHT / rect.height;
+                setOffset({
+                  x: d.ox + (e.clientX - d.x) * sx,
+                  y: d.oy + (e.clientY - d.y) * sy,
+                });
+              }}
+              onPointerUp={() => (dragRef.current = null)}
+              onPointerLeave={() => {
+                dragRef.current = null;
+                setHover(null);
               }}
             >
-              <div className="font-semibold">Fill · Generation</div>
-              {GEN_LEGEND.map(([g, c]) => (
-                <div key={g} className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: c }} />
-                  {g}
-                </div>
-              ))}
-              <div className="flex items-center gap-2" style={{ color: MAP.muted }}>
-                <span
-                  className="inline-block h-3 w-3 rounded-full border border-dashed"
-                  style={{ borderColor: MAP.none, background: MAP.dark }}
-                />
-                none confirmed
-              </div>
-              <div className="mt-2 border-t pt-1 font-semibold" style={{ borderColor: MAP.border }}>
-                Ring · Security platform
-              </div>
-              {Object.entries(PLATFORM_COLORS).map(([vendor, color]) => (
-                <div key={vendor} className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-3 w-3 rounded-full border-2"
-                    style={{ borderColor: color }}
-                  />
-                  {vendor}
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-block h-3 w-3 rounded-full border-2 border-dashed"
-                  style={{ borderColor: MAP.none }}
-                />
-                Platform unverified
-              </div>
-              <div className="mt-1 text-[10px]" style={{ color: MAP.muted }}>
-                Number = type approvals in DB
-              </div>
-            </div>
+              <svg
+                viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+                className="h-auto w-full touch-none select-none"
+                role="img"
+                aria-label="World map of tachograph card type approvals"
+              >
+                <g transform={`translate(${offset.x},${offset.y}) scale(${zoom})`}>
+                  {shapes.map((s) => {
+                    const app = atlasToApp.get(s.name);
+                    const active = app && app === selected;
+                    return (
+                      <path
+                        key={s.name}
+                        d={s.d}
+                        className={app ? "cursor-pointer" : undefined}
+                        fill={
+                          app
+                            ? active
+                              ? MAP.sel
+                              : hover?.country === app
+                                ? MAP.hasHover
+                                : MAP.has
+                            : MAP.land
+                        }
+                        stroke={MAP.bg}
+                        strokeWidth={0.5 / zoom}
+                        onClick={() => app && setSelected(app)}
+                        onPointerMove={app ? (e) => tipAt(app, e) : undefined}
+                        onPointerLeave={app ? () => setHover(null) : undefined}
+                      >
+                        {!app && <title>{s.name}</title>}
+                      </path>
+                    );
+                  })}
 
-            {/* Hover tooltip */}
-            {hover && (
-              <MapTooltip
-                hover={hover}
-                width={containerRef.current?.clientWidth ?? 0}
-                top={topApproval?.get(hover.country)}
-                card={cards.find((c) => c.id === topApproval?.get(hover.country)?.id)}
-                total={counts.get(hover.country)?.length ?? 0}
-              />
-            )}
+                  {labels.map((l) => {
+                    const active = l.country === selected;
+                    const top = topApproval?.get(l.country);
+                    const color = activeColor(top);
+                    const platform = platformDisplay(
+                      top?.status === "current" ? l.cards.find((c) => c.id === top.id) : undefined,
+                    );
+                    return (
+                      <g
+                        key={l.country}
+                        transform={`translate(${l.xy[0]},${l.xy[1]}) scale(${1 / zoom})`}
+                        className="cursor-pointer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerMove={(e) => tipAt(l.country, e)}
+                        onPointerLeave={() => setHover(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected(l.country);
+                          setCardModal(null);
+                          setCountryModal(l.country);
+                        }}
+                      >
+                        <title>{`${l.country}: ${top?.generation || "Generation unknown"}; ${platform.vendor || "Platform unverified"}; ${platform.relation}`}</title>
+                        {active && <circle r={17} fill="none" stroke="#ffffff" strokeWidth={1} />}
+                        <circle
+                          r={14}
+                          fill="none"
+                          stroke={platform.color}
+                          strokeWidth={2}
+                          strokeDasharray={platform.vendor ? undefined : "3 3"}
+                        />
+                        <circle
+                          r={11}
+                          fill={color ?? MAP.dark}
+                          stroke={active ? "#ffffff" : color ? MAP.dark : MAP.none}
+                          strokeWidth={active ? 2.5 : 1.5}
+                          strokeDasharray={color || active ? undefined : "3 2"}
+                        />
+                        <text
+                          textAnchor="middle"
+                          dy="0.35em"
+                          fill={color ? MAP.dark : MAP.text}
+                          className="text-[11px] font-bold"
+                        >
+                          {l.cards.length}
+                        </text>
+                        {showNumbers && (
+                          <text
+                            textAnchor="middle"
+                            y={24}
+                            fill={MAP.text}
+                            className="text-[9px] font-semibold"
+                          >
+                            {l.country}
+                          </text>
+                        )}
+                        {showNumbers &&
+                          l.cards.slice(0, 4).map((c, i) => (
+                            <text
+                              key={c.id}
+                              textAnchor="middle"
+                              y={34 + i * 10}
+                              fill={MAP.muted}
+                              className="text-[8px]"
+                            >
+                              {c.type_approval_number || c.generation}
+                            </text>
+                          ))}
+                      </g>
+                    );
+                  })}
+                </g>
+              </svg>
+
+              {/* Legend */}
+              <div
+                className="pointer-events-none absolute bottom-2 left-2 rounded-md border px-2.5 py-2 text-[11px] leading-5"
+                style={{
+                  background: "rgba(15,23,42,0.88)",
+                  borderColor: MAP.border,
+                  color: MAP.text,
+                }}
+              >
+                <div className="font-semibold">Fill · Generation</div>
+                {GEN_LEGEND.map(([g, c]) => (
+                  <div key={g} className="flex items-center gap-2">
+                    <span className="inline-block h-3 w-3 rounded-full" style={{ background: c }} />
+                    {g}
+                  </div>
+                ))}
+                <div className="flex items-center gap-2" style={{ color: MAP.muted }}>
+                  <span
+                    className="inline-block h-3 w-3 rounded-full border border-dashed"
+                    style={{ borderColor: MAP.none, background: MAP.dark }}
+                  />
+                  none confirmed
+                </div>
+                <div
+                  className="mt-2 border-t pt-1 font-semibold"
+                  style={{ borderColor: MAP.border }}
+                >
+                  Ring · Security platform
+                </div>
+                {Object.entries(PLATFORM_COLORS).map(([vendor, color]) => (
+                  <div key={vendor} className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full border-2"
+                      style={{ borderColor: color }}
+                    />
+                    {vendor}
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3 w-3 rounded-full border-2 border-dashed"
+                    style={{ borderColor: MAP.none }}
+                  />
+                  Platform unverified
+                </div>
+                <div className="mt-1 text-[10px]" style={{ color: MAP.muted }}>
+                  Number = type approvals in DB
+                </div>
+              </div>
+
+              {/* Hover tooltip */}
+              {hover && (
+                <MapTooltip
+                  hover={hover}
+                  width={containerRef.current?.clientWidth ?? 0}
+                  top={topApproval?.get(hover.country)}
+                  card={cards.find((c) => c.id === topApproval?.get(hover.country)?.id)}
+                  total={counts.get(hover.country)?.length ?? 0}
+                />
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

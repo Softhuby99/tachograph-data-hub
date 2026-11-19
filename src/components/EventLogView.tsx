@@ -211,7 +211,7 @@ function SchedulePanel({ status }: { status: SchedulerStatusView }) {
       <Button size="sm" className="h-7" disabled={!dirty || saving} onClick={() => void onSave()}>
         {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null} Save
       </Button>
-      <span className="text-muted-foreground">
+      <span className="min-w-0 wrap-anywhere text-muted-foreground">
         Next: {status.enabled ? fmt(status.nextRunAt) : "—"} · Last automatic:{" "}
         {fmt(status.lastStartAt)}
         {status.lastTrigger ? ` (${status.lastTrigger})` : ""}

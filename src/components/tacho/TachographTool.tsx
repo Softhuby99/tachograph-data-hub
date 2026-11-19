@@ -90,6 +90,13 @@ function useAuthMode() {
   });
 }
 
+/**
+ * v2.88: the page takes the width the browser offers instead of a fixed
+ * 1280 px column. The cap only matters on ultra-wide screens, where lines and
+ * table rows would otherwise become too long to follow.
+ */
+const PAGE_FRAME = "mx-auto w-full max-w-[2560px] px-4 sm:px-6 lg:px-8";
+
 export function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
   const authMode = useAuthMode();
@@ -304,7 +311,9 @@ export function TachographTool() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
+        <div
+          className={`${PAGE_FRAME} flex flex-wrap items-center justify-between gap-4 py-4 sm:py-6`}
+        >
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Tachograph Cards Info Tool</h1>
@@ -314,7 +323,7 @@ export function TachographTool() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               className="rounded-full border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground"
               title="App version"
@@ -430,7 +439,7 @@ export function TachographTool() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className={`${PAGE_FRAME} py-6`}>
         {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
         {error && <p className="text-sm text-destructive">Error loading: {String(error)}</p>}
 

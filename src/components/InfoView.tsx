@@ -924,7 +924,7 @@ function GenerationsTab() {
 
 export function InfoView({ defaultTab = "cards" }: { defaultTab?: "cards" | "g1" | "g2" }) {
   return (
-    <div className="space-y-4">
+    <div className="max-w-[1600px] space-y-4">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Tachograph card guide</h2>
         <p className="text-sm text-muted-foreground">

@@ -701,7 +701,7 @@ export function UpdatesView() {
                         ? `New JRC entry · ${p.country ? `${p.country} · ` : ""}${p.jrc_type_approval || "—"}`
                         : `${p.country || "—"} · ${p.jrc_type_approval || "—"}`)}
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">
                       {p.source_label ||
                         SOURCE_LABELS[p.source_type ?? "card_status"] ||
@@ -826,7 +826,7 @@ export function UpdatesView() {
                     {fields.map((f) => (
                       <div
                         key={f.field}
-                        className="grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0"
+                        className="grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs wrap-anywhere *:min-w-0 last:border-b-0"
                       >
                         <span className="font-medium">{f.label}</span>
                         <span className="text-muted-foreground line-through">{f.old || "—"}</span>
@@ -1099,7 +1099,7 @@ function LiveFieldTable({
           return (
             <div
               key={f.field}
-              className={`grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs last:border-b-0 ${conflict ? "bg-amber-50 dark:bg-amber-950/40" : ""}`}
+              className={`grid grid-cols-3 gap-2 border-b px-3 py-2 text-xs wrap-anywhere *:min-w-0 last:border-b-0 ${conflict ? "bg-amber-50 dark:bg-amber-950/40" : ""}`}
             >
               <span className="font-medium">
                 {f.label}
