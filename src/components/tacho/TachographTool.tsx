@@ -1,5 +1,3 @@
-import { Link } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -94,18 +92,15 @@ function useAuthMode() {
 
 export function TachographTool() {
   const { data: rawCards, isLoading, error } = useCards();
-  const auth = useAuth();
   const authMode = useAuthMode();
-  const authEnabled = authMode.data?.enabled ?? true;
   const adminRequired = authMode.data?.adminRequired ?? false;
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const [adminInput, setAdminInput] = useState("");
-  // In local mode with ADMIN_TOKEN: can edit only after entering the token.
-  // In Supabase mode: can edit with a session.
-  // In local mode without ADMIN_TOKEN: always can edit.
-  const adminUnlocked = !adminRequired || !!adminToken;
-  const canEdit = adminUnlocked && (!authEnabled || !!auth.session);
+  // With ADMIN_TOKEN configured, editing needs the admin login. Without one
+  // the controls stay visible, but the server refuses every write and says so
+  // (the instance is read-only until a token is set).
+  const canEdit = !adminRequired || !!adminToken;
   const qc = useQueryClient();
   const [tab, setTab] = useState<
     "data" | "map" | "analytics" | "reports" | "updates" | "info" | "tools"
@@ -306,26 +301,6 @@ export function TachographTool() {
     toast.info("Signed out of admin mode.");
   };
 
-  // One-time migration: push edits that still live in this browser's localStorage
-  // into the shared database, then clear them locally.
-  useEffect(() => {
-    if (!auth.session || !rawCards?.length) return;
-    const raw = localStorage.getItem("tacho-overrides-v1");
-    if (!raw) return;
-    localStorage.removeItem("tacho-overrides-v1");
-    try {
-      const legacy = JSON.parse(raw) as Record<string, Record<string, string>>;
-      for (const [cardId, patch] of Object.entries(legacy)) {
-        if (patch && Object.keys(patch).length > 0) {
-          saveMutation.mutate({ cardId, patch });
-        }
-      }
-    } catch {
-      /* ignore malformed legacy data */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.session, rawCards?.length]);
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
@@ -413,16 +388,6 @@ export function TachographTool() {
               </Button>
             )}
             <span className="mx-1 h-8 w-px bg-border" />
-            {authEnabled &&
-              (auth.session ? (
-                <Button variant="ghost" size="sm" onClick={() => void auth.signOut()}>
-                  Sign out
-                </Button>
-              ) : (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/auth">Sign in</Link>
-                </Button>
-              ))}
             {adminRequired &&
               (adminToken ? (
                 <Button variant="ghost" size="sm" onClick={signOutAdmin}>
@@ -474,7 +439,7 @@ export function TachographTool() {
             cards={cards}
             overrides={overrides}
             canEdit={canEdit}
-            editHint={adminRequired ? "Admin login required to edit" : "Sign in to edit"}
+            editHint="Admin login required to edit"
             onSave={saveOverride}
             onReset={resetOverride}
             onFilteredChange={setFilteredIds}

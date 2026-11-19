@@ -9,14 +9,7 @@ export default tseslint.config(
   {
     // Generated files carry "do not edit" headers - linting them only produces
     // findings that the next generator run reverts.
-    ignores: [
-      "dist",
-      ".output",
-      ".vinxi",
-      "src/lib/ta-country.ts",
-      "src/integrations/supabase/previewAuthStorage.ts",
-      "src/routeTree.gen.ts",
-    ],
+    ignores: ["dist", ".output", ".vinxi", "src/lib/ta-country.ts", "src/routeTree.gen.ts"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

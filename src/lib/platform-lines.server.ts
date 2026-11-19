@@ -1,8 +1,8 @@
 // v2.55: platform line table (see db/migrations/0009_platform_lines.sql).
-// Local PostgreSQL only; the hosted backend gets an empty list, so the
-// timeline then shows every certificate family as "not assigned".
+// Without a configured database, or before the migration ran, the list is
+// empty and the timeline shows every certificate family as "not assigned".
 
-import { eventsBackendAvailable, eventsQuery } from "@/lib/db.server";
+import { dbConfigured, eventsQuery } from "@/lib/db.server";
 import type { PlatformLine } from "@/lib/platform-timeline";
 
 const clean = (list: unknown, max = 40): string[] =>
@@ -15,7 +15,7 @@ const clean = (list: unknown, max = 40): string[] =>
     : [];
 
 export async function listPlatformLines(): Promise<PlatformLine[]> {
-  if (!eventsBackendAvailable()) return [];
+  if (!dbConfigured()) return [];
   try {
     return await eventsQuery<PlatformLine>(
       `SELECT id, name, vendor, families, patterns, note, sort
@@ -27,7 +27,7 @@ export async function listPlatformLines(): Promise<PlatformLine[]> {
 }
 
 export async function savePlatformLine(line: Partial<PlatformLine>): Promise<PlatformLine> {
-  if (!eventsBackendAvailable()) throw new Error("Platform lines need the local database");
+  if (!dbConfigured()) throw new Error("Platform lines need the local database");
   const name = String(line.name ?? "")
     .trim()
     .slice(0, 120);
@@ -75,7 +75,7 @@ export async function savePlatformLine(line: Partial<PlatformLine>): Promise<Pla
 }
 
 export async function deletePlatformLine(id: string): Promise<boolean> {
-  if (!eventsBackendAvailable()) return false;
+  if (!dbConfigured()) return false;
   const rows = await eventsQuery(`DELETE FROM public.platform_lines WHERE id = $1 RETURNING id`, [
     id,
   ]);

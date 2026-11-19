@@ -9,17 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicJrcCheckRouteImport } from './routes/api/public/jrc-check'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicFetchRouteImport } from './routes/api/public/fetch'
 
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,14 +37,12 @@ const ApiPublicFetchRoute = ApiPublicFetchRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
@@ -58,7 +50,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/api/public/fetch': typeof ApiPublicFetchRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/jrc-check': typeof ApiPublicJrcCheckRoute
@@ -67,21 +58,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/auth'
     | '/api/public/fetch'
     | '/api/public/health'
     | '/api/public/jrc-check'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/auth'
-    | '/api/public/fetch'
-    | '/api/public/health'
-    | '/api/public/jrc-check'
+  to: '/' | '/api/public/fetch' | '/api/public/health' | '/api/public/jrc-check'
   id:
     | '__root__'
     | '/'
-    | '/auth'
     | '/api/public/fetch'
     | '/api/public/health'
     | '/api/public/jrc-check'
@@ -89,7 +73,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuthRoute: typeof AuthRoute
   ApiPublicFetchRoute: typeof ApiPublicFetchRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicJrcCheckRoute: typeof ApiPublicJrcCheckRoute
@@ -97,13 +80,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -137,7 +113,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuthRoute: AuthRoute,
   ApiPublicFetchRoute: ApiPublicFetchRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicJrcCheckRoute: ApiPublicJrcCheckRoute,

@@ -25,7 +25,7 @@ export async function computeDataQuality(): Promise<{
     listPlatformLines(),
   ]);
   const merged = mergeOverrides(cards, overrides);
-  // Without platform lines (hosted backend / table missing) the "not assigned"
+  // Without platform lines (table missing or empty) the "not assigned"
   // rule would flag every certificate — skip it then.
   const issues = checkCards(merged, lines.length > 0 ? lines : undefined);
   return { computedAt: new Date().toISOString(), summary: summarise(merged, issues), issues };

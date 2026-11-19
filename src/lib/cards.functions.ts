@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { optionalAuth } from "@/lib/auth";
+import { adminAuth } from "@/lib/auth";
 import {
   getAllCards,
   getAllOverrides,
@@ -51,7 +51,7 @@ export const getCardChangeHistory = createServerFn({ method: "GET" })
  * touched. The operations log keeps one line saying that it happened.
  */
 export const clearCardChangeHistory = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
   .handler(async ({ data }) =>
     logActionFailure("Delete change history", { cardId: data.cardId }, async () => {
@@ -83,7 +83,7 @@ function stringMap(v: unknown, allowed: Set<string>): Record<string, string> {
 }
 
 export const saveCardOverride = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator(
     (data: {
       cardId: string;
@@ -163,7 +163,7 @@ export const saveCardOverride = createServerFn({ method: "POST" })
   );
 
 export const resetCardOverride = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { cardId: string }) => ({ cardId: String(data?.cardId ?? "") }))
   .handler(async ({ data, context }) =>
     logActionFailure("Reset card edits", { cardId: data.cardId }, async () => {
@@ -202,7 +202,7 @@ export const getChangeHistoryStats = createServerFn({ method: "POST" }).handler(
  * server refuses, so nobody deletes more than they confirmed.
  */
 export const clearAllChangeHistory = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { expectedEntries: number }) => ({
     expectedEntries: Math.trunc(Number(data?.expectedEntries ?? -1)),
   }))
@@ -286,7 +286,7 @@ const matchKey = (r: Record<string, unknown>) =>
  * override table; unknown rows are inserted as new cards.
  */
 export const importCards = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { rows: Record<string, string>[] }) => ({
     rows: Array.isArray(data?.rows) ? data.rows : [],
   }))

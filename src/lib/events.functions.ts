@@ -11,7 +11,6 @@ import {
   requireAdmin,
   type EventFilter,
 } from "@/lib/events.server";
-import { envFlag } from "@/lib/env-flag";
 
 // v2.52: operations log (Tools → Log). Every function here is admin-only and
 // checks the token on the server; hiding the tab in the UI is not the guard.
@@ -44,7 +43,7 @@ export const verifyAdminLogin = createServerFn({ method: "POST" })
     mode: data?.mode === "session" ? ("session" as const) : ("login" as const),
   }))
   .handler(async ({ data }) => {
-    const ok = envFlag("AUTH_MODE") === "none" && adminTokenMatches(data.token);
+    const ok = adminTokenMatches(data.token);
     if (ok) {
       if (data.mode === "login") {
         const ctx = await requestContext();

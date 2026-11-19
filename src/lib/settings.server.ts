@@ -1,11 +1,11 @@
 // v2.53: app_settings (key → JSON) and run_locks (update-run lease).
-// Local PostgreSQL only; on the hosted backend both degrade to defaults /
-// "no lock" so the app keeps working there without the scheduler.
+// Without a configured database (build, tests) both degrade to defaults /
+// "no lock".
 
-import { eventsBackendAvailable, eventsQuery } from "@/lib/db.server";
+import { dbConfigured, eventsQuery } from "@/lib/db.server";
 
 export function settingsAvailable(): boolean {
-  return eventsBackendAvailable();
+  return dbConfigured();
 }
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {

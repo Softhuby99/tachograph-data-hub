@@ -6,9 +6,8 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-// Allow pinning the Nitro preset for self-hosted Docker deployments (node-server).
-// Outside a Lovable build, NITRO_PRESET auto-targets; inside, the explicit
-// nitro option overrides the default Cloudflare preset.
+// The Docker build sets NITRO_PRESET=node-server (Dockerfile.web); the explicit
+// nitro option then overrides the Cloudflare preset this config defaults to.
 const nitroPreset = process.env.NITRO_PRESET;
 
 export default defineConfig({

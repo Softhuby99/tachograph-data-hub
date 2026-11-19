@@ -3,7 +3,6 @@
 
 import {
   JRC_SOURCES,
-  cellText,
   extractRows,
   fetchPage,
   generationFromAttrs,
@@ -44,15 +43,9 @@ import {
   upsertSnapshots,
   insertCheckRun,
   getProposal,
-  getCardVerificationNotes,
-  updateCardVerificationNote,
-  updateCardFields,
-  insertCard,
-  insertFieldHistory,
   updateProposalStatus,
   replaceCurrentListing,
   getCurrentListing as dbGetCurrentListing,
-  setProposalCardId,
   withOverrides,
   withTransaction,
   insertFieldHistoryTx,
@@ -1603,14 +1596,7 @@ export async function approveProposal(
   userId?: string | null,
   opts: ApproveOptions = {},
 ): Promise<ApproveResult> {
-  if (!isLocalDbBackend()) {
-    return (await approveProposalLegacy(id, country, userId)) as ApproveResult;
-  }
   return await withTransaction((q) => approveInTx(q, id, country, userId ?? null, opts));
-}
-
-function isLocalDbBackend(): boolean {
-  return !!process.env["DB_HOST"];
 }
 
 async function approveInTx(
@@ -1863,150 +1849,6 @@ const UUID_LOCAL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 function uuidOrNullLocal(v: unknown): string | null {
   const s = sv(v);
   return UUID_LOCAL.test(s) ? s : null;
-}
-
-/** Pre-v2.54 path, kept for the hosted (Supabase) backend without transactions. */
-async function approveProposalLegacy(id: string, country: string, userId?: string | null) {
-  const proposal = await getProposal(id);
-  if (!proposal) throw new Error("Proposal not found");
-  if (proposal.status !== "pending") throw new Error("Proposal already handled");
-
-  const changes = proposal.changes?.fields ?? [];
-  const deviceType = DEVICE_TYPES.has(proposal.payload?.["Device type"] ?? "")
-    ? (proposal.payload?.["Device type"] as string)
-    : "Card";
-
-  // A vehicle unit or motion sensor becomes a record of its own, even when the
-  // proposal was filed as informational. Proposals created before the device
-  // type existed are still marked "info", and they are never re-proposed —
-  // their fingerprint is remembered — so approving one has to do the right
-  // thing rather than fall into the note path, where it wrote nothing at all.
-  const createsRecord = !proposal.card_id && (proposal.kind !== "info" || deviceType !== "Card");
-
-  if (proposal.kind === "info" && !createsRecord && !proposal.card_id) {
-    // Informational sources have no direct card column. Applying them records
-    // the finding on the verification note of the matching country's cards.
-    const payload = proposal.payload ?? {};
-    const note = [
-      `[${proposal.source_label}] ${proposal.title}`,
-      Object.entries(payload)
-        .filter(([, v]) => v)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join("; "),
-    ]
-      .filter(Boolean)
-      .join(" — ");
-
-    // Without a country there is nothing to attach the note to. Saying so is
-    // the point: silently marking the proposal approved while writing nothing
-    // is how a finding disappears without anyone noticing.
-    const target = (proposal.country || country).trim();
-    if (!target) {
-      throw new Error(
-        "This finding has no country, so there is nothing to note it on. " +
-          "Enter the country it belongs to, or dismiss the proposal.",
-      );
-    }
-    const affected = await getCardVerificationNotes(target);
-    if (affected.length === 0) {
-      throw new Error(`No records for "${target}" — the note would have nowhere to go.`);
-    }
-    for (const card of affected) {
-      const existingNote = (card.verification_note ?? "").trim();
-      if (existingNote.includes(note)) continue;
-      await updateCardVerificationNote(card.id, existingNote ? `${existingNote}\n${note}` : note);
-    }
-  } else if (proposal.card_id) {
-    const patch: Record<string, string> = {};
-    for (const c of changes) patch[c.field] = c.new;
-    // A country coming from a JRC table cell can carry stray or non-breaking
-    // whitespace. Stored unnormalised it still *looks* right in the UI but
-    // misses the ISO lookup, and the card keeps the flag of its previous
-    // country. Normalise here, and keep country_flag in step so the stored
-    // emoji can never contradict the country field.
-    if (typeof patch["country"] === "string") {
-      patch["country"] = normalizeCountry(patch["country"]);
-      patch["country_flag"] = flagEmoji(patch["country"]);
-    }
-    if (Object.keys(patch).length > 0) {
-      // The old values come from the proposal itself: buildProposals recorded
-      // what the card held when the difference was detected.
-      const oldByField = new Map(changes.map((c) => [c.field, c.old ?? ""]));
-      await updateCardFields(proposal.card_id, patch);
-      await insertFieldHistory(
-        Object.entries(patch).map(([field, value]) => ({
-          card_id: proposal.card_id as string,
-          field,
-          old_value: String(oldByField.get(field) ?? ""),
-          new_value: value,
-          origin: "jrc_proposal",
-          source_label: proposal.source_label ?? "",
-          source_url: proposal.source_url ?? "",
-          proposal_id: id,
-        })),
-      );
-    }
-  } else {
-    const name = normalizeCountry(country || proposal.country);
-    // A card belongs to a country — that is what the record is about. A vehicle
-    // unit or motion sensor is a product of a vendor; the certification scheme
-    // is not the country it is used in (the same trap as reading the country
-    // off an eNN prefix), so an empty country is the honest answer there.
-    if (!name && deviceType === "Card") {
-      throw new Error("Country is required for a new card entry");
-    }
-    // v2.50 (code review 11): a record with this approval for this country may
-    // already exist (an earlier approval of this very proposal, or a manual
-    // entry). Link to it instead of inserting a second copy.
-    const cardsNow = (await dbGetCardsForJrc()) as CardRow[];
-    const existing = proposal.jrc_type_approval
-      ? matchCard(
-          { typeApproval: proposal.jrc_type_approval, generation: proposal.generation } as JrcRow,
-          // Same device type AND same country (v2.51): a new vehicle unit must
-          // never be linked to a card that happens to share the number.
-          cardsNow.filter(
-            (c) =>
-              (c.device_type || "Card") === deviceType &&
-              normalizeCountry(c.country ?? "") === name,
-          ),
-        )
-      : undefined;
-    if (existing) {
-      await setProposalCardId(id, existing.id);
-      await updateProposalStatus(id, "approved", userId);
-      return { ok: true, linkedExisting: existing.id };
-    }
-    const newId = await insertCard({
-      country: name,
-      country_flag: flagEmoji(name),
-      // Cards, vehicle units and motion sensors share the table; the source
-      // reports which one this is. Anything else stays a card.
-      device_type: deviceType,
-      // v2.73: the JRC approval date goes into "Date / Status" (market status ranks by it).
-      ...(proposal.jrc_date
-        ? { date_status: jrcDateToDe(proposal.jrc_date) || proposal.jrc_date }
-        : {}),
-      generation: proposal.generation,
-      current_manufacturer: proposal.jrc_manufacturer,
-      current_manufacturer_normalized: proposal.jrc_manufacturer,
-      tachograph_application_os: proposal.jrc_card_name,
-      type_approval_number: proposal.jrc_type_approval,
-      jrc_interoperability_status: [
-        proposal.jrc_certificate,
-        proposal.jrc_date ? `issued ${proposal.jrc_date}` : "",
-        proposal.jrc_eov ? `EOV ${proposal.jrc_eov}` : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      jrc_certificate_source: proposal.source_url,
-      // v2.74: what the approval certificate said (security certificate, labs, chip, …)
-      ...newRecordExtras(proposal),
-    });
-    if (newId) await setProposalCardId(id, newId);
-  }
-
-  await updateProposalStatus(id, "approved", userId);
-  return { ok: true };
 }
 
 export async function rejectProposal(id: string, userId?: string | null) {

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { optionalAuth } from "@/lib/auth";
+import { adminAuth } from "@/lib/auth";
 import {
   runUpdateCheck,
   runUpdateCheckForSource,
@@ -78,7 +78,7 @@ export const getScheduleInfo = createServerFn({ method: "GET" }).handler(async (
 // ---- writes (optional auth) ---------------------------------------------
 
 export const checkUpdates = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .handler(async () =>
     logActionFailure("Update run", {}, async () => {
       const { withManualLease } = await import("@/lib/scheduler.server");
@@ -87,7 +87,7 @@ export const checkUpdates = createServerFn({ method: "POST" })
   );
 
 export const checkUpdateSource = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { source: string }) => ({
     source: String(data?.source ?? ""),
   }))
@@ -114,7 +114,7 @@ export const checkUpdateSource = createServerFn({ method: "POST" })
  * limited to the last six hours.
  */
 export const notifyAfterManualCheck = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { startedAt: string; created: number }) => ({
     startedAt: String(data?.startedAt ?? ""),
     created: Math.max(0, Math.trunc(Number(data?.created ?? 0)) || 0),
@@ -148,7 +148,7 @@ export const notifyAfterManualCheck = createServerFn({ method: "POST" })
   });
 
 export const approveJrcProposal = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator(
     (data: {
       id: string;
@@ -181,7 +181,7 @@ export const approveJrcProposal = createServerFn({ method: "POST" })
   );
 
 export const rejectJrcProposal = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
   .handler(async ({ data, context }) =>
     logActionFailure("Reject proposal", { proposalId: data.id }, () =>
@@ -191,7 +191,7 @@ export const rejectJrcProposal = createServerFn({ method: "POST" })
 
 /** Puts a handled proposal back on the pending list so it can be decided again. */
 export const reopenJrcProposal = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { id: string }) => ({ id: String(data?.id ?? "") }))
   .handler(async ({ data }) =>
     logActionFailure("Reopen proposal", { proposalId: data.id }, () => reopenProposal(data.id)),
@@ -202,7 +202,7 @@ export const reopenJrcProposal = createServerFn({ method: "POST" })
  * working through the handled list — it changes no status and writes no card.
  */
 export const markJrcProposalsReviewed = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { ids: string[]; reviewed?: boolean }) => ({
     ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id ?? "")) : [],
     reviewed: data?.reviewed !== false,

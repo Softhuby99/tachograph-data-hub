@@ -1,14 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { envFlag } from "@/lib/env-flag";
 
-// Public (no auth) function the client uses to decide whether to render the
-// Sign in / Sign out controls and the admin-token login.
-// AUTH_MODE=none -> Supabase login disabled (local Docker).
-// ADMIN_TOKEN set + AUTH_MODE=none -> local admin login required for writes.
-export const getAuthMode = createServerFn({ method: "GET" }).handler(async () => {
-  const localMode = envFlag("AUTH_MODE") === "none";
-  return {
-    enabled: !localMode,
-    adminRequired: localMode && !!process.env["ADMIN_TOKEN"],
-  };
-});
+// Public (no auth): tells the client whether an admin token is configured, i.e.
+// whether to offer "Admin sign in". Editing, update checks and the Tools menu
+// need that login; without a configured token the server refuses every write.
+export const getAuthMode = createServerFn({ method: "GET" }).handler(async () => ({
+  adminRequired: !!process.env["ADMIN_TOKEN"],
+}));

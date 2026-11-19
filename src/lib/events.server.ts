@@ -9,7 +9,7 @@
 //    tokens, URL credentials) replaced, sensitive keys in details redacted;
 //  - recurring identical problems fold into one open row (dedup_key) until it
 //    is acknowledged; auth events are always stored one by one;
-//  - when the database is unavailable (or not the local PostgreSQL), the event
+//  - when the database is unavailable, the event
 //    is written as one JSON line to stderr (supervisor log, rotated).
 //
 // Reading the log is admin-only — see events.functions.ts.
@@ -17,8 +17,7 @@
 import { randomUUID, timingSafeEqual } from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
 import { APP_VERSION } from "@/lib/version";
-import { envFlag } from "@/lib/env-flag";
-import { eventsBackendAvailable, eventsQuery } from "@/lib/db.server";
+import { dbConfigured, eventsQuery } from "@/lib/db.server";
 
 export type EventLevel = "ERROR" | "WARN" | "INFO";
 export type EventCategory =
@@ -341,7 +340,7 @@ export async function emitEvent(ev: EventInput): Promise<string | null> {
     fallback(row, "recursion");
     return null;
   }
-  if (!eventsBackendAvailable()) {
+  if (!dbConfigured()) {
     fallback(row, "no-local-db");
     return null;
   }
@@ -387,7 +386,6 @@ export function emitBootOnce(): void {
     message: `Web server started (v${APP_VERSION})`,
     details: {
       node: process.version,
-      authMode: process.env["AUTH_MODE"] ?? "",
       adminTokenSet: !!process.env["ADMIN_TOKEN"],
     },
   });
@@ -543,7 +541,7 @@ export type EventRow = {
 };
 
 export async function listEvents(f: EventFilter): Promise<{ rows: EventRow[]; total: number }> {
-  if (!eventsBackendAvailable()) return { rows: [], total: 0 };
+  if (!dbConfigured()) return { rows: [], total: 0 };
   const { sql, params } = whereFor(f);
   const limit = Math.min(Math.max(Number(f.limit) || 100, 1), 500);
   const offset = Math.max(Number(f.offset) || 0, 0);
@@ -576,7 +574,7 @@ export async function exportEvents(f: EventFilter): Promise<EventRow[]> {
 }
 
 export async function ackEvents(ids: string[], note: string): Promise<number> {
-  if (!eventsBackendAvailable()) return 0;
+  if (!dbConfigured()) return 0;
   const clean = ids.filter((id) => UUID_RE.test(id)).slice(0, 500);
   if (clean.length === 0) return 0;
   const rows = await eventsQuery<{ id: string }>(
@@ -603,7 +601,7 @@ export async function eventOverview(): Promise<{
   sources: SourceHealth[];
   schedule: { configured: boolean; note: string };
 }> {
-  if (!eventsBackendAvailable()) {
+  if (!dbConfigured()) {
     return {
       openErrors: 0,
       openWarnings: 0,
@@ -669,7 +667,7 @@ export type CleanupResult = {
  * the cap.
  */
 export async function cleanupEvents(): Promise<CleanupResult | null> {
-  if (!eventsBackendAvailable()) return null;
+  if (!dbConfigured()) return null;
   const n = async (sql: string, params: unknown[] = []) =>
     (await eventsQuery<{ id: string }>(sql, params)).length;
   const deletedProblems = await n(
@@ -757,8 +755,9 @@ export async function logAdminDenied(action: string, providedToken: string): Pro
 }
 
 /**
- * Read access to the operations log: only with a valid admin token in local
- * mode (AUTH_MODE=none + ADMIN_TOKEN). Throws a 401 Response otherwise.
+ * Admin-only access (operations log, settings, history): only with a valid
+ * admin token. Throws a 401 Response otherwise — also when no ADMIN_TOKEN is
+ * configured.
  */
 export async function requireAdmin(action: string): Promise<void> {
   let provided = "";
@@ -768,7 +767,7 @@ export async function requireAdmin(action: string): Promise<void> {
   } catch {
     provided = "";
   }
-  if (envFlag("AUTH_MODE") === "none" && adminTokenMatches(provided)) return;
+  if (adminTokenMatches(provided)) return;
   await logAdminDenied(action, provided);
   throw new Response("Unauthorized: admin login required", { status: 401 });
 }

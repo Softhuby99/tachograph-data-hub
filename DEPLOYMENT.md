@@ -6,8 +6,9 @@
 
 
 Single-container deployment of the **full web version**: TanStack Start (Nitro
-node-server) + PostgreSQL, with native HTTPS. No Lovable/Supabase backend, no
-nginx, no login (by default). Runs entirely in one Docker container.
+node-server) + PostgreSQL, with native HTTPS. No external backend, no nginx.
+Reading is open; writing needs the admin token. Runs entirely in one Docker
+container.
 
 ```
 ┌────────────────────── single container (port 443) ──────────────────────┐
@@ -35,7 +36,6 @@ Copy `.env.example` to `.env` and adjust:
 
 ```bash
 PORT=443
-AUTH_MODE=none
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_NAME=tdh
@@ -47,23 +47,20 @@ NITRO_SSL_KEY=/certs/privkey.pem
 DOMAIN=tdh.example.com
 ```
 
-> `AUTH_MODE=none` is required for a self-hosted container. Without it the app
-> takes the Supabase path, offers a Sign in it cannot serve, and fails with
-> "Missing Supabase environment variable(s)" — the container has no Supabase
-> backend. `ADMIN_TOKEN` then gates writing: unset, the instance is read-only.
-> Both are runtime variables, so they belong in `.env`, not in the image.
+> `ADMIN_TOKEN` gates writing: unset, the instance is read-only. It is a
+> runtime variable, so it belongs in `.env`, not in the image.
 
-> `DB_HOST` non-empty = local PostgreSQL mode. Leave `DB_HOST` unset to fall
-> back to the Lovable/Supabase backend (used by the preview).
+> `AUTH_MODE` is no longer read (since 2.86 the admin token is the only login
+> and PostgreSQL the only database). An existing `AUTH_MODE=none` line in
+> `.env` does no harm and can be removed.
+
 > Do not append comments after values in this file: Docker treats the comment
-> text as part of the environment-variable value. `AUTH_MODE=none  # no login`
-> arrives in the container as the literal string `none  # no login`, which is
-> not `none` — the app then takes the Supabase path and fails with "Missing
-> Supabase environment variable(s)". Since 2.21 the app tolerates this for
-> AUTH_MODE and logs a warning, but the line is still wrong. Check with:
+> text as part of the environment-variable value. `ADMIN_TOKEN=abc  # my token`
+> arrives in the container as the literal string `abc  # my token`, and the
+> login with `abc` fails. Check a value with:
 >
 > ```bash
-> docker exec tacho printenv AUTH_MODE   # must print exactly: none
+> docker exec tacho printenv DB_HOST   # must print exactly: 127.0.0.1
 > ```
 
 ## 3. TLS certificates
@@ -108,7 +105,7 @@ cd /opt/TDH
 
 mkdir -p ./certs ./pgdata
 cp .env.example .env    # or create it as shown in section 2
-nano .env               # set DOMAIN, DB_PASSWORD, AUTH_MODE=none, ...
+nano .env               # set DOMAIN, DB_PASSWORD, ADMIN_TOKEN, ...
 ```
 
 ### 4.3 Pull and run the image from GHCR
@@ -139,7 +136,7 @@ docker run -d --name tacho \
 
 ### 4.4 The deployment flow via GitHub (ongoing updates)
 
-1. **Lovable → GitHub:** sync/push the project to `main` on
+1. **Push to GitHub:** push the change to `main` on
    `Softhuby99/tachograph-data-hub` (or run the workflow manually via
    `Actions → Build Web Docker image → Run workflow`).
 2. **GitHub Actions** builds the image and pushes it to GHCR
@@ -237,14 +234,15 @@ docker exec tacho pg_dump -U tdh tdh > backup_$(date +%Y%m%d).sql
 docker exec -i tacho psql -U tdh -d tdh < backup_YYYYMMDD.sql
 ```
 
-## 10. Login (planned, step 2)
+## 10. Login
 
-`AUTH_MODE=none` disables all auth — editing and update checks are available to
-everyone. For a later login layer (Authentik/OIDC), set `AUTH_MODE=oidc` and
-provide `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`. No code changes
-to the server functions are required; `optionalAuth` already switches between
-the local identity and Supabase auth. Alternatively, place the container behind
-an Authentik reverse proxy and let it handle auth at the edge.
+Reading is open to everyone who can reach the instance. Editing, update checks
+and the Tools menu need the admin login: "Admin sign in" in the header, with
+the value of `ADMIN_TOKEN`. Every rejected attempt is recorded in the
+operations log. There are no user accounts.
+
+To restrict reading as well, place the container behind a reverse proxy that
+handles authentication (e.g. Authentik) — the app itself has no such layer.
 
 ## Troubleshooting
 

@@ -11,7 +11,6 @@ import {
   getKnownFingerprints,
   insertProposals,
   insertFieldHistoryTx,
-  isLocalDb,
   withTransaction,
   type ProposalRow,
   type TxQuery,
@@ -65,7 +64,6 @@ export async function applyConsistencyFixes(
   opts: { ids?: string[]; allSafe?: boolean },
   userId: string | null,
 ): Promise<RepairResult> {
-  if (!isLocalDb()) throw new Error("Repairs need the local database.");
   const { issues } = await computeConsistency();
   const wanted = new Set(opts.ids ?? []);
   const chosen = issues.filter(

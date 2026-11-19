@@ -30,3 +30,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deployment secrets never belong in the repository; .env.example is the template.
+.env
+.env.*
+!.env.example

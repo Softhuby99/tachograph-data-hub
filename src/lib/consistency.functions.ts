@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { optionalAuth } from "@/lib/auth";
+import { adminAuth } from "@/lib/auth";
 import { logActionFailure, requireAdmin } from "@/lib/events.server";
 
 // v2.77: consistency check with repairs (Tools → Consistency). Admin only,
@@ -12,7 +12,7 @@ export const getConsistency = createServerFn({ method: "POST" }).handler(async (
 });
 
 export const applyConsistencyFixesFn = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { ids?: string[]; allSafe?: boolean }) => ({
     ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id ?? "")).slice(0, 2000) : [],
     allSafe: data?.allSafe === true,
@@ -29,7 +29,7 @@ export const applyConsistencyFixesFn = createServerFn({ method: "POST" })
   );
 
 export const proposeMissingJrcEntriesFn = createServerFn({ method: "POST" })
-  .middleware([optionalAuth])
+  .middleware([adminAuth])
   .inputValidator((data: { ids?: string[] }) => ({
     ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id ?? "")).slice(0, 2000) : [],
   }))

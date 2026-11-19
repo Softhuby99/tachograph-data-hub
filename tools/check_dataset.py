@@ -6,10 +6,8 @@ Länder-Referenzliste (tools/data/laender_alle.csv) ab.
 Der Prüflauf braucht keine Datenbankverbindung.  Stattdessen wird die
 Kartentabelle vorab als JSON exportiert und übergeben:
 
-    # Export (z. B. aus der Datenbank oder der Supabase API):
+    # Export aus der Datenbank:
     #   psql -c "COPY (SELECT row_to_json(t) FROM tachograph_cards t) TO STDOUT" > cards.json
-    # oder:
-    #   curl "$SUPABASE_URL/rest/v1/tachograph_cards?select=*" -H "apikey: $KEY" > cards.json
 
     python3 tools/check_dataset.py --dataset cards.json
     python3 tools/check_dataset.py --dataset cards.json --csv tools/data/laender_alle.csv
@@ -63,7 +61,7 @@ def load_reference(csv_path: Path) -> dict[str, dict]:
 
 def load_dataset(json_path: Path) -> list[dict]:
     data = json.loads(json_path.read_text(encoding="utf-8"))
-    # Accept either a bare array or {data: [...]} (Supabase REST shape).
+    # Accept either a bare array or a wrapped export ({data: [...]}).
     if isinstance(data, dict):
         for key in ("data", "rows", "results"):
             if key in data and isinstance(data[key], list):

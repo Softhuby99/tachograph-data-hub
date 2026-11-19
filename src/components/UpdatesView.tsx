@@ -17,7 +17,6 @@ import {
   getProposals,
   getCheckRuns,
 } from "@/lib/jrc.functions";
-import { getAuthMode } from "@/lib/auth-mode.functions";
 import { documentedCountry, resolveTaCountry, taPrefix } from "@/lib/ta-country";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,8 +39,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/useAuth";
 
 type FieldChange = { field: string; label: string; old: string; new: string };
 
@@ -130,14 +127,6 @@ type CheckRun = {
 
 export function UpdatesView() {
   const qc = useQueryClient();
-  const { session, loading: authLoading } = useAuth();
-  const fetchAuthMode = useServerFn(getAuthMode);
-  const authMode = useQuery({
-    queryKey: ["auth_mode"],
-    queryFn: () => fetchAuthMode(),
-  });
-  const authEnabled = authMode.data?.enabled ?? true;
-  const signedIn = !authEnabled || !!session;
   const [showHandled, setShowHandled] = useState(false);
   // Working through dozens of handled entries needs a way to hide the ones
   // already gone through; without it every pass starts at the top again.
@@ -444,25 +433,13 @@ export function UpdatesView() {
             database until you approve it.
           </p>
         </div>
-        <Button onClick={() => void runCheck()} disabled={running || !signedIn}>
+        <Button onClick={() => void runCheck()} disabled={running}>
           <RefreshCw className={`mr-2 h-4 w-4 ${running ? "animate-spin" : ""}`} />
           {running
             ? `Checking ${activeSource ? SOURCE_LABELS[activeSource] : ""}…`
             : "Check for updates"}
         </Button>
       </div>
-
-      {!authLoading && !signedIn && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed bg-muted/40 px-4 py-3 text-sm">
-          <span className="text-muted-foreground">
-            Sign in to run update checks and approve or dismiss proposals. The list below stays
-            readable without signing in.
-          </span>
-          <Button size="sm" asChild>
-            <Link to="/auth">Sign in</Link>
-          </Button>
-        </div>
-      )}
 
       <div className="rounded-md border">
         <div className="flex items-center justify-between border-b bg-muted/50 px-3 py-2 text-xs font-medium">
@@ -564,7 +541,7 @@ export function UpdatesView() {
         ))}
       </div>
 
-      {selectable.length > 0 && signedIn && (
+      {selectable.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
           <ListChecks className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm">
@@ -712,7 +689,7 @@ export function UpdatesView() {
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    {signedIn && selectable.some((e) => e.id === p.id) && (
+                    {selectable.some((e) => e.id === p.id) && (
                       <Checkbox
                         checked={selected.has(p.id)}
                         onCheckedChange={() => toggleSelected(p.id)}
@@ -868,7 +845,7 @@ export function UpdatesView() {
                       size="sm"
                       variant="outline"
                       onClick={() => reopenMutation.mutate(p.id)}
-                      disabled={reopenMutation.isPending || !signedIn}
+                      disabled={reopenMutation.isPending}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" /> Review again
                     </Button>
@@ -878,7 +855,7 @@ export function UpdatesView() {
                       onClick={() =>
                         reviewMutation.mutate({ ids: [p.id], reviewed: !p.reviewed_at })
                       }
-                      disabled={reviewMutation.isPending || !signedIn}
+                      disabled={reviewMutation.isPending}
                     >
                       {p.reviewed_at ? (
                         <>
@@ -964,7 +941,7 @@ export function UpdatesView() {
                             "",
                         })
                       }
-                      disabled={approveMutation.isPending || !signedIn || !decided(p)}
+                      disabled={approveMutation.isPending || !decided(p)}
                       title={decided(p) ? undefined : "Decide the highlighted fields first"}
                     >
                       <Check className="mr-2 h-4 w-4" />{" "}
@@ -979,7 +956,7 @@ export function UpdatesView() {
                       size="sm"
                       variant="outline"
                       onClick={() => rejectMutation.mutate(p.id)}
-                      disabled={rejectMutation.isPending || !signedIn}
+                      disabled={rejectMutation.isPending}
                     >
                       <X className="mr-2 h-4 w-4" /> Dismiss
                     </Button>

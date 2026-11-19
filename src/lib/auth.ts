@@ -1,21 +1,17 @@
-// Optional-auth middleware. Branches on AUTH_MODE:
-//  - AUTH_MODE=none -> no login (local Docker). Writes require ADMIN_TOKEN;
-//    without it the instance is read-only (an unset token must not mean "open").
-//  - otherwise     -> delegate to requireSupabaseAuth (Lovable preview/published).
+// Write protection. Reading is open to everyone who can reach the instance;
+// every server function that changes something carries this middleware and
+// needs the admin token: ADMIN_TOKEN in the container environment, entered in
+// the app under "Admin sign in" and sent as x-admin-token (see
+// admin-token-middleware.ts). Without a configured token the instance is
+// read-only — an unset token must not mean "open".
 //
-// Auth is a UI/login gate only; data access lives in db.server.ts and does not
-// depend on a user session. When AUTH_MODE=none the app is readable without
-// any backend login; writing needs the admin token (self-contained Docker deployment).
+// Admin-only reads (operations log, settings) use requireAdmin in
+// events.server.ts, which checks the same token.
 //
 // This module is intentionally NOT *.server.* so it can be imported by
-// *.functions.ts files that ship a client stub. AUTH_MODE is a deployment-level
-// flag (set once per image), not a per-request secret, so reading it at module
-// scope is safe: on the client bundle it is undefined -> requireSupabaseAuth,
-// on the Docker server it is "none" -> noneAuth.
+// *.functions.ts files that ship a client stub.
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { envFlag } from "@/lib/env-flag";
 
 /** Timing-safe string comparison without importing node:crypto (client-safe). */
 function safeEqualStr(a: string, b: string): boolean {
@@ -27,8 +23,8 @@ function safeEqualStr(a: string, b: string): boolean {
   return result === 0;
 }
 
-const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  // In local mode every write needs ADMIN_TOKEN. Without a configured token the
+export const adminAuth = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  // Every write needs ADMIN_TOKEN. Without a configured token the
   // instance stays read-only: an unset token must not mean "anyone may write",
   // because the container is reachable from the whole network it is bound to.
   const adminToken = process.env["ADMIN_TOKEN"] ?? "";
@@ -59,5 +55,3 @@ const noneAuth = createMiddleware({ type: "function" }).server(async ({ next }) 
     },
   });
 });
-
-export const optionalAuth = envFlag("AUTH_MODE") === "none" ? noneAuth : requireSupabaseAuth;
