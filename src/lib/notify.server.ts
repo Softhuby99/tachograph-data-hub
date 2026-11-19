@@ -369,7 +369,7 @@ export function composeRunMail(
   for (const f of findings) groups.set(f.source_label, [...(groups.get(f.source_label) ?? []), f]);
 
   const text = [
-    `The update run found ${findings.length} entr${findings.length === 1 ? "y" : "ies"} that wait for your decision.`,
+    `The update run found ${findings.length} entr${findings.length === 1 ? "y that waits" : "ies that wait"} for your decision.`,
     "",
     ...[...groups].flatMap(([label, list]) => [
       `${label} (${list.length})`,
@@ -383,7 +383,7 @@ export function composeRunMail(
 
   const html = [
     `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2937;line-height:1.5">`,
-    `<p>The update run found <strong>${findings.length}</strong> entr${findings.length === 1 ? "y" : "ies"} that wait for your decision.</p>`,
+    `<p>The update run found <strong>${findings.length}</strong> entr${findings.length === 1 ? "y that waits" : "ies that wait"} for your decision.</p>`,
     ...[...groups].map(
       ([label, list]) =>
         `<p style="margin:16px 0 4px;font-weight:bold">${esc(label)} (${list.length})</p>` +
